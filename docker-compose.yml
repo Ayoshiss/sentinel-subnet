@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  sidecar:
+    build: ./sidecar
+    ports:
+      - "8001:8001"
+    environment:
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-unsloth/Llama-3.3-70B-Instruct}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SIDECAR_URL=http://sidecar:8001
+      - API_KEY=${API_KEY:-sk_live_taogateway_dev}
+    depends_on:
+      sidecar:
+        condition: service_healthy

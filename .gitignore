@@ -1,0 +1,6 @@
+.env
+*.bittensor/
+__pycache__/
+*.pyc
+gateway/gateway
+*.sum

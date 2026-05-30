@@ -1,0 +1,38 @@
+# fly.toml — TAO Gateway
+# Deploy with: fly launch --config deploy/fly.toml (from repo root)
+# Then: fly secrets set API_KEY=sk_live_... CHUTES_API_KEY=...
+
+app = "tao-gateway"
+primary_region = "sjc"  # San Jose — close to most Bittensor validators
+
+[build]
+  dockerfile = "../gateway/Dockerfile"
+
+[env]
+  PORT = "8080"
+  SIDECAR_URL = "http://localhost:8001"  # sidecar runs as a process group on same VM
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+
+  [services.concurrency]
+    type = "requests"
+    hard_limit = 500
+    soft_limit = 400
+
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "get"
+    path = "/health"
