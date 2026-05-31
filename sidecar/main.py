@@ -22,7 +22,7 @@ app = FastAPI(title="TAO Sidecar")
 # ---------------------------------------------------------------------------
 CHUTES_API_URL = os.getenv("CHUTES_API_URL", "https://llm.chutes.ai/v1/chat/completions")
 CHUTES_API_KEY = os.getenv("CHUTES_API_KEY", "")  # get from https://chutes.ai
-DEFAULT_MODEL   = os.getenv("DEFAULT_MODEL", "unsloth/Llama-3.3-70B-Instruct")
+DEFAULT_MODEL   = os.getenv("DEFAULT_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
 
 # ---------------------------------------------------------------------------
 # Health
@@ -85,10 +85,17 @@ async def query(request: dict):
 def _normalize_model(model: str) -> str:
     """Map common OpenAI model names to Chutes equivalents."""
     mapping = {
-        "gpt-4o":           "unsloth/Llama-3.3-70B-Instruct",
-        "gpt-4o-mini":      "unsloth/Llama-3.2-3B-Instruct",
-        "gpt-4":            "unsloth/Llama-3.3-70B-Instruct",
-        "gpt-3.5-turbo":    "unsloth/Llama-3.2-3B-Instruct",
+        # OpenAI → Chutes SN64 equivalents (TEE-verified models)
+        "gpt-4o":           "deepseek-ai/DeepSeek-V3.2-TEE",
+        "gpt-4o-mini":      "Qwen/Qwen3.6-27B-TEE",
+        "gpt-4":            "deepseek-ai/DeepSeek-V3.2-TEE",
+        "gpt-3.5-turbo":    "Qwen/Qwen3.6-27B-TEE",
+        "gpt-4-turbo":      "deepseek-ai/DeepSeek-V3.2-TEE",
+        # Friendly shorthand
+        "deepseek":         "deepseek-ai/DeepSeek-V3.2-TEE",
+        "qwen":             "Qwen/Qwen3-32B-TEE",
+        "qwen-coder":       "Qwen/Qwen2.5-Coder-32B-Instruct-TEE",
+        "kimi":             "moonshotai/Kimi-K2.6-TEE",
     }
     return mapping.get(model, model)
 
