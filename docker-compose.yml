@@ -1,13 +1,30 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: tao
+      POSTGRES_PASSWORD: tao
+      POSTGRES_DB: tao
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tao"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   sidecar:
     build: ./sidecar
     ports:
       - "8001:8001"
     environment:
       - CHUTES_API_KEY=${CHUTES_API_KEY:-}
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-unsloth/Llama-3.3-70B-Instruct}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-deepseek-ai/DeepSeek-V3.2-TEE}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 10s
@@ -20,7 +37,12 @@ services:
       - "8080:8080"
     environment:
       - SIDECAR_URL=http://sidecar:8001
-      - API_KEY=${API_KEY:-sk_live_taogateway_dev}
+      - DATABASE_URL=postgres://tao:tao@postgres:5432/tao?sslmode=disable
     depends_on:
+      postgres:
+        condition: service_healthy
       sidecar:
         condition: service_healthy
+
+volumes:
+  postgres_data:
