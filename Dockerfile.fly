@@ -1,0 +1,29 @@
+# ── Stage 1: Build Go gateway ─────────────────────────────────────────────────
+FROM golang:1.26-alpine AS go-builder
+WORKDIR /app
+COPY gateway/go.mod gateway/go.sum ./
+RUN go mod download
+COPY gateway/ .
+RUN CGO_ENABLED=0 go build -o /gateway .
+
+# ── Stage 2: Final image ──────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+# Install supervisord to run both processes
+RUN apt-get update && apt-get install -y supervisor curl && rm -rf /var/lib/apt/lists/*
+
+# Copy Go binary
+COPY --from=go-builder /gateway /gateway
+
+# Install Python deps
+WORKDIR /sidecar
+COPY sidecar/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY sidecar/ .
+
+# Supervisord config — runs gateway + sidecar as two processes
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+EXPOSE 8080
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
