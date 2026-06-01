@@ -9,6 +9,12 @@ type UsageDay = { date: string; tokens: number; requests: number; cost: number }
 type ApiKey = { id: string; prefix: string; name: string; last_used_at: string | null; requests: number };
 type Tab = "tokens" | "requests" | "cost";
 
+const CREDIT_PACKS = [
+  { name: "Starter", price: "$10", credits: "$10", desc: "~20M tokens" },
+  { name: "Builder", price: "$50", credits: "$50", desc: "~100M tokens" },
+  { name: "Scale",   price: "$100", credits: "$100", desc: "~200M tokens" },
+];
+
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -22,6 +28,8 @@ export default function Dashboard() {
   const [email, setEmail] = useState("");
   const [tab, setTab] = useState<Tab>("tokens");
   const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [showTopUp, setShowTopUp] = useState(false);
   const [showNewKey, setShowNewKey] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
 
@@ -40,9 +48,10 @@ export default function Dashboard() {
     const headers = { Authorization: `Bearer ${session}` };
 
     try {
-      const [usageRes, keysRes] = await Promise.all([
+      const [usageRes, keysRes, balanceRes] = await Promise.all([
         fetch(`${gatewayURL}/v1/usage`, { headers }),
         fetch(`${gatewayURL}/v1/keys`, { headers }),
+        fetch(`${gatewayURL}/v1/billing/balance`, { headers }),
       ]);
 
       if (usageRes.status === 401 || keysRes.status === 401) {
@@ -50,9 +59,10 @@ export default function Dashboard() {
         return;
       }
 
-      const [usageData, keysData] = await Promise.all([usageRes.json(), keysRes.json()]);
+      const [usageData, keysData, balanceData] = await Promise.all([usageRes.json(), keysRes.json(), balanceRes.json()]);
       setUsage(usageData);
       setApiKeys(keysData);
+      setBalance(balanceData.balance_usd ?? 0);
     } catch (e) {
       console.error(e);
     } finally {
@@ -78,6 +88,20 @@ export default function Dashboard() {
     if (tab === "cost") return `$${Number(v).toFixed(3)}`;
     return `${v}`;
   };
+
+  async function buyCredits(packName: string) {
+    const session = getCookie("session");
+    if (!session) return;
+    const res = await fetch(`${gatewayURL}/v1/billing/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session}` },
+      body: JSON.stringify({ pack: packName }),
+    });
+    if (res.ok) {
+      const { url } = await res.json();
+      window.location.href = url;
+    }
+  }
 
   async function generateKey() {
     const session = getCookie("session");
@@ -138,6 +162,44 @@ export default function Dashboard() {
             SN64 Chutes · Healthy
           </span>
         </div>
+
+        {/* Balance banner */}
+        <div className={`flex items-center justify-between px-5 py-4 rounded-xl border mb-6 ${balance !== null && balance < 1 ? "bg-red-50 border-red-200" : "bg-white border-gray-200"}`}>
+          <div>
+            <div className="text-xs font-medium text-gray-500 mb-0.5">Credit balance</div>
+            <div className="text-2xl font-bold text-gray-900">
+              {balance !== null ? `$${balance.toFixed(4)}` : "—"}
+            </div>
+            {balance !== null && balance < 1 && (
+              <div className="text-xs text-red-600 mt-0.5">Low balance — top up to keep making requests</div>
+            )}
+          </div>
+          <button
+            onClick={() => setShowTopUp(!showTopUp)}
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-700 transition-colors"
+          >
+            + Add credits
+          </button>
+        </div>
+
+        {/* Credit packs */}
+        {showTopUp && (
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            {CREDIT_PACKS.map((pack) => (
+              <div key={pack.name} className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col">
+                <div className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">{pack.name}</div>
+                <div className="text-3xl font-bold text-gray-900 mb-0.5">{pack.price}</div>
+                <div className="text-xs text-gray-400 mb-4">{pack.desc}</div>
+                <button
+                  onClick={() => buyCredits(pack.name)}
+                  className="mt-auto bg-gray-900 text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
+                >
+                  Buy {pack.price}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/taogateway/gateway/auth"
+	"github.com/taogateway/gateway/billing"
 	"github.com/taogateway/gateway/db"
 	"github.com/taogateway/gateway/keys"
 )
@@ -50,6 +51,11 @@ func main() {
 	// Dashboard API — session required
 	r.With(sessionMiddleware).Get("/v1/usage", handleUsage)
 	r.With(sessionMiddleware).Get("/v1/keys", handleListKeys)
+
+	// Billing routes
+	r.With(sessionMiddleware).Post("/v1/billing/checkout", handleCreateCheckout)
+	r.With(sessionMiddleware).Get("/v1/billing/balance", handleGetBalance)
+	r.Post("/v1/billing/webhook", handleStripeWebhook)
 
 	// Admin routes — protected by ADMIN_SECRET header
 	r.With(adminMiddleware).Post("/admin/customers", handleCreateCustomer)
@@ -275,21 +281,13 @@ func handleAuthVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionToken, err := auth.VerifyMagicLink(r.Context(), token)
 	if err != nil {
-		http.Error(w, "invalid or expired link", http.StatusUnauthorized)
+		appURL := getEnv("APP_URL", "http://localhost:3002")
+		http.Redirect(w, r, appURL+"/login?error=expired", http.StatusFound)
 		return
 	}
-	// Set session cookie and redirect to dashboard
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
-		Value:    sessionToken,
-		Path:     "/",
-		HttpOnly: false, // frontend JS needs to read it
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   86400, // 24h
-	})
-	appURL := getEnv("APP_URL", "http://localhost:3002")
-	http.Redirect(w, r, appURL+"/dashboard", http.StatusFound)
+	// Return token as JSON — frontend sets the cookie on its own domain
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"token": sessionToken})
 }
 
 // ── Session middleware + dashboard API ────────────────────────────────────────
@@ -395,6 +393,54 @@ func handleListKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(keyList)
+}
+
+// ── Billing handlers ──────────────────────────────────────────────────────────
+
+func handleCreateCheckout(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+	var body struct {
+		Pack string `json:"pack"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Pack == "" {
+		http.Error(w, `{"error":"pack required"}`, http.StatusBadRequest)
+		return
+	}
+	appURL := getEnv("APP_URL", "http://localhost:3002")
+	url, err := billing.CreateCheckoutSession(r.Context(), sess.CustomerID, sess.Email, body.Pack, appURL)
+	if err != nil {
+		log.Printf("checkout error: %v", err)
+		http.Error(w, `{"error":"could not create checkout"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"url": url})
+}
+
+func handleGetBalance(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+	balance, err := billing.GetBalance(r.Context(), sess.CustomerID)
+	if err != nil {
+		http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]float64{"balance_usd": balance})
+}
+
+func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
+	payload, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read error", http.StatusBadRequest)
+		return
+	}
+	sig := r.Header.Get("Stripe-Signature")
+	if err := billing.HandleWebhook(payload, sig); err != nil {
+		log.Printf("webhook error: %v", err)
+		http.Error(w, "webhook error", http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func getEnv(key, fallback string) string {

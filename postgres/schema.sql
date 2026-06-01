@@ -63,6 +63,25 @@ CREATE TABLE IF NOT EXISTS magic_links (
 CREATE INDEX IF NOT EXISTS idx_magic_links_token ON magic_links (token_hash);
 CREATE INDEX IF NOT EXISTS idx_magic_links_expires ON magic_links (expires_at);
 
+-- ── Billing ───────────────────────────────────────────────────────────────────
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS balance_usd NUMERIC(12,6) NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS credit_purchases (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id     UUID NOT NULL REFERENCES customers(id),
+    stripe_session_id TEXT NOT NULL UNIQUE,
+    stripe_payment_intent TEXT,
+    amount_usd      NUMERIC(10,2) NOT NULL,
+    credits_usd     NUMERIC(10,2) NOT NULL, -- what was added to balance
+    status          TEXT NOT NULL DEFAULT 'pending', -- pending | paid | failed
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    paid_at         TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchases_customer ON credit_purchases (customer_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_session ON credit_purchases (stripe_session_id);
+
 -- ── Seed: dev key for local testing ──────────────────────────────────────────
 -- Raw key: sk_live_taogateway_dev
 -- SHA-256:  echo -n "sk_live_taogateway_dev" | sha256sum
