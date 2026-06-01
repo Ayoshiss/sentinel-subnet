@@ -6,6 +6,7 @@ The Go gateway treats this as a dumb HTTP service.
 
 import os
 import time
+import asyncio
 import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -17,85 +18,147 @@ log = logging.getLogger("sidecar")
 
 app = FastAPI(title="TAO Sidecar")
 
+# Persistent HTTP client — reuses connections and caches DNS across requests
+_client: httpx.AsyncClient | None = None
+
+@app.on_event("startup")
+async def startup():
+    global _client
+    _client = httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=5.0, read=20.0, write=5.0, pool=5.0),
+        limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+    )
+    log.info("HTTP client initialised")
+
+@app.on_event("shutdown")
+async def shutdown():
+    if _client:
+        await _client.aclose()
+
 # ---------------------------------------------------------------------------
-# Config — all overridable via env
+# Config
 # ---------------------------------------------------------------------------
 CHUTES_API_URL = os.getenv("CHUTES_API_URL", "https://llm.chutes.ai/v1/chat/completions")
-CHUTES_API_KEY = os.getenv("CHUTES_API_KEY", "")  # get from https://chutes.ai
-DEFAULT_MODEL   = os.getenv("DEFAULT_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
+CHUTES_API_KEY = os.getenv("CHUTES_API_KEY", "")
+DEFAULT_MODEL  = os.getenv("DEFAULT_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
+
+# Fallback model chain — all on Chutes SN64, tried in order when primary fails
+FALLBACK_MODELS = [
+    "deepseek-ai/DeepSeek-V3.2-TEE",
+    "Qwen/Qwen3-32B-TEE",
+    "moonshotai/Kimi-K2.6-TEE",
+    "Qwen/Qwen3.6-27B-TEE",
+]
+
+# Retry config
+MAX_RETRIES = 0        # no retries per model — move to next immediately on failure
+RETRY_DELAY = 0.0     # no delay between models
+FIRST_TIMEOUT = 20.0  # 20s — enough for Fly.io → Chutes under load
+RETRY_TIMEOUT = 20.0  # same
 
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 @app.get("/health")
 def health():
-    return {"status": "ok", "subnet": "SN64-Chutes", "mode": _mode()}
-
-def _mode():
-    return "live" if CHUTES_API_KEY else "stub"
+    return {"status": "ok", "subnet": "SN64-Chutes", "mode": "live" if CHUTES_API_KEY else "stub"}
 
 # ---------------------------------------------------------------------------
-# Main query endpoint — called by Go gateway
+# Main query endpoint
 # ---------------------------------------------------------------------------
 @app.post("/query")
 async def query(request: dict):
-    """
-    Accepts OpenAI-shaped JSON from the Go gateway, routes to Chutes SN64,
-    returns an OpenAI-shaped response.
-
-    Phase 1: uses Chutes REST API (no raw dendrite needed — Chutes exposes
-    an OpenAI-compatible endpoint itself, which is why adapter complexity is Low).
-    Phase 2: add raw bittensor dendrite for subnets without REST wrappers.
-    """
-    model = request.get("model", DEFAULT_MODEL)
-
-    # Normalize model names — customers may send openai model names
-    model = _normalize_model(model)
-
-    payload = {**request, "model": model}
-
     if not CHUTES_API_KEY:
-        # Stub mode — return a canned response so the gateway can be tested
-        # without a real Chutes account
         log.warning("CHUTES_API_KEY not set — returning stub response")
         return _stub_response(request)
 
+    # Normalize model name
+    primary_model = _normalize_model(request.get("model", DEFAULT_MODEL))
+
+    # Build the model chain: primary first, then fallbacks (excluding primary)
+    model_chain = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
+
+    last_error = None
+    for model in model_chain:
+        result = await _try_model(request, model)
+        if result is not None:
+            return result
+        log.warning("Model %s failed — trying next in chain", model)
+
+    log.error("All models in chain exhausted")
+    raise HTTPException(status_code=502, detail="all subnets at capacity — please retry in a moment")
+
+
+async def _reset_client():
+    """Recreate the HTTP client to clear stale connections."""
+    global _client
     try:
-        async with httpx.AsyncClient(timeout=25.0) as client:
-            resp = await client.post(
+        await _client.aclose()
+    except Exception:
+        pass
+    _client = httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=5.0, read=FIRST_TIMEOUT, write=5.0, pool=5.0),
+        limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+    )
+
+async def _try_model(request: dict, model: str) -> JSONResponse | None:
+    """Try a specific model with retries. Returns None if all attempts fail."""
+    payload = {**request, "model": model}
+
+    for attempt in range(MAX_RETRIES + 1):
+        timeout = FIRST_TIMEOUT if attempt == 0 else RETRY_TIMEOUT
+        try:
+            resp = await _client.post(
                 CHUTES_API_URL,
                 json=payload,
                 headers={
                     "Authorization": f"Bearer {CHUTES_API_KEY}",
                     "Content-Type": "application/json",
                 },
+                timeout=timeout,
             )
-        resp.raise_for_status()
-        data = resp.json()
-        return JSONResponse(content=data, headers={"X-Routed-Subnet": "SN64-Chutes"})
 
-    except httpx.HTTPStatusError as e:
-        log.error("Chutes error %s: %s", e.response.status_code, e.response.text)
-        raise HTTPException(status_code=502, detail="subnet error")
-    except Exception as e:
-        log.error("Unexpected sidecar error: %s", e)
-        raise HTTPException(status_code=502, detail="sidecar error")
+            if resp.status_code == 429 or resp.status_code >= 500:
+                # Capacity issue — retry after delay
+                if attempt < MAX_RETRIES:
+                    log.warning("Model %s returned %s (attempt %d/%d) — retrying in %.1fs",
+                                model, resp.status_code, attempt + 1, MAX_RETRIES + 1, RETRY_DELAY)
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                else:
+                    log.warning("Model %s exhausted retries with status %s", model, resp.status_code)
+                    return None
+
+            resp.raise_for_status()
+            data = resp.json()
+            log.info("Model %s succeeded (attempt %d)", model, attempt + 1)
+            return JSONResponse(content=data, headers={"X-Routed-Subnet": f"SN64-Chutes/{model}"})
+
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError):
+            log.warning("Model %s timed out — moving to next", model)
+            await _reset_client()
+            return None
+
+        except Exception as e:
+            log.warning("Model %s error: %s", model, e)
+            await _reset_client()
+            return None
+
+    return None
 
 
 def _normalize_model(model: str) -> str:
     """Map common OpenAI model names to Chutes equivalents."""
     mapping = {
-        # OpenAI → Chutes SN64 equivalents (TEE-verified models)
-        "gpt-4o":           "deepseek-ai/DeepSeek-V3.2-TEE",
-        "gpt-4o-mini":      "Qwen/Qwen3.6-27B-TEE",
-        "gpt-4":            "deepseek-ai/DeepSeek-V3.2-TEE",
-        "gpt-3.5-turbo":    "Qwen/Qwen3.6-27B-TEE",
-        "gpt-4-turbo":      "deepseek-ai/DeepSeek-V3.2-TEE",
-        # Friendly shorthand
-        "deepseek":         "deepseek-ai/DeepSeek-V3.2-TEE",
-        "qwen":             "Qwen/Qwen3-32B-TEE",
-        "qwen-coder":       "Qwen/Qwen2.5-Coder-32B-Instruct-TEE",
-        "kimi":             "moonshotai/Kimi-K2.6-TEE",
+        "gpt-4o":        "deepseek-ai/DeepSeek-V3.2-TEE",
+        "gpt-4o-mini":   "Qwen/Qwen3.6-27B-TEE",
+        "gpt-4":         "deepseek-ai/DeepSeek-V3.2-TEE",
+        "gpt-4-turbo":   "deepseek-ai/DeepSeek-V3.2-TEE",
+        "gpt-3.5-turbo": "Qwen/Qwen3.6-27B-TEE",
+        "deepseek":      "deepseek-ai/DeepSeek-V3.2-TEE",
+        "qwen":          "Qwen/Qwen3-32B-TEE",
+        "qwen-coder":    "Qwen/Qwen2.5-Coder-32B-Instruct-TEE",
+        "kimi":          "moonshotai/Kimi-K2.6-TEE",
     }
     return mapping.get(model, model)
 
@@ -112,16 +175,15 @@ def _stub_response(request: dict) -> dict:
             "index": 0,
             "message": {
                 "role": "assistant",
-                "content": f"[STUB — set CHUTES_API_KEY to route to SN64] Echo: {last}",
+                "content": f"[STUB — set CHUTES_API_KEY] Echo: {last}",
             },
             "finish_reason": "stop",
         }],
         "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
-        "x_routed_subnet": "SN64-Chutes-stub",
     }
 
 
 if __name__ == "__main__":
     port = int(os.getenv("SIDECAR_PORT", "8001"))
-    log.info("Sidecar starting on port %d (mode=%s)", port, _mode())
+    log.info("Sidecar starting on port %d", port)
     uvicorn.run(app, host="0.0.0.0", port=port)

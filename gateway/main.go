@@ -18,6 +18,7 @@ import (
 	"github.com/taogateway/gateway/billing"
 	"github.com/taogateway/gateway/db"
 	"github.com/taogateway/gateway/keys"
+	"github.com/taogateway/gateway/ratelimit"
 )
 
 var sidecarURL = getEnv("SIDECAR_URL", "http://localhost:8001")
@@ -34,6 +35,13 @@ func main() {
 		log.Fatalf("database: %v", err)
 	}
 	log.Println("Connected to Postgres")
+
+	// Clean up stale rate limit windows every minute
+	go func() {
+		for range time.Tick(time.Minute) {
+			ratelimit.Cleanup()
+		}
+	}()
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -81,6 +89,25 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	apiKey := r.Context().Value(ctxAPIKey).(*keys.APIKey)
 	start := time.Now()
 
+	// ── Rate limiting ──────────────────────────────────────────────────────────
+	allowed, remaining, resetAt := ratelimit.Allow(apiKey.ID, apiKey.QuotaRPM)
+	if !allowed {
+		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", apiKey.QuotaRPM))
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetAt.Unix()))
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(resetAt).Seconds())))
+		http.Error(w, `{"error":"rate limit exceeded","type":"rate_limit_error"}`, http.StatusTooManyRequests)
+		return
+	}
+	w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+
+	// ── Balance check ──────────────────────────────────────────────────────────
+	balance, err := billing.GetBalance(r.Context(), apiKey.CustomerID)
+	if err == nil && balance <= 0 {
+		http.Error(w, `{"error":"insufficient balance — top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
+		return
+	}
+
 	body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
 	if err != nil {
 		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
@@ -119,6 +146,9 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// Cost: ~$0.50/M input + $1.50/M output (our price to customer, cost-plus 30%)
 	costUSD := (float64(openAIResp.Usage.PromptTokens)*0.50 + float64(openAIResp.Usage.CompletionTokens)*1.50) / 1_000_000
+
+	// ── Deduct balance ─────────────────────────────────────────────────────────
+	go billing.DeductBalance(context.Background(), apiKey.CustomerID, costUSD)
 
 	subnet := resp.Header.Get("X-Routed-Subnet")
 	if subnet == "" {
@@ -217,7 +247,7 @@ func authMiddleware(next http.Handler) http.Handler {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func callSidecar(path string, body []byte) (*http.Response, error) {
-	client := &http.Client{Timeout: 25 * time.Second}
+	client := &http.Client{Timeout: 90 * time.Second} // sidecar handles multi-model retry chain
 	req, err := http.NewRequest("POST", sidecarURL+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -245,7 +275,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Secret")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
