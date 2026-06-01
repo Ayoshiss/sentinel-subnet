@@ -50,6 +50,19 @@ CREATE TABLE IF NOT EXISTS usage_events (
 CREATE INDEX IF NOT EXISTS idx_usage_customer ON usage_events (customer_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_usage_key ON usage_events (api_key_id, ts DESC);
 
+-- ── Magic link tokens ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS magic_links (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    token_hash  TEXT NOT NULL UNIQUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '15 minutes',
+    used_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_magic_links_token ON magic_links (token_hash);
+CREATE INDEX IF NOT EXISTS idx_magic_links_expires ON magic_links (expires_at);
+
 -- ── Seed: dev key for local testing ──────────────────────────────────────────
 -- Raw key: sk_live_taogateway_dev
 -- SHA-256:  echo -n "sk_live_taogateway_dev" | sha256sum

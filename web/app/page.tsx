@@ -61,7 +61,7 @@ export default function Home() {
             </nav>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/signup" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Sign in</Link>
+            <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Sign in</Link>
             <Link href="/signup" className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors">
               Get API key →
             </Link>

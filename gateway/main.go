@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/taogateway/gateway/auth"
 	"github.com/taogateway/gateway/db"
 	"github.com/taogateway/gateway/keys"
 )
@@ -41,6 +42,14 @@ func main() {
 
 	r.Get("/health", handleHealth)
 	r.With(authMiddleware).Post("/v1/chat/completions", handleChatCompletions)
+
+	// Auth routes — magic link
+	r.Post("/auth/request", handleAuthRequest)
+	r.Get("/auth/verify", handleAuthVerify)
+
+	// Dashboard API — session required
+	r.With(sessionMiddleware).Get("/v1/usage", handleUsage)
+	r.With(sessionMiddleware).Get("/v1/keys", handleListKeys)
 
 	// Admin routes — protected by ADMIN_SECRET header
 	r.With(adminMiddleware).Post("/admin/customers", handleCreateCustomer)
@@ -237,6 +246,155 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ── Auth handlers ─────────────────────────────────────────────────────────────
+
+func handleAuthRequest(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
+		http.Error(w, `{"error":"email required"}`, http.StatusBadRequest)
+		return
+	}
+	if err := auth.RequestMagicLink(r.Context(), body.Email); err != nil {
+		log.Printf("magic link error: %v", err)
+		http.Error(w, `{"error":"could not send email"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Check your email"})
+}
+
+func handleAuthVerify(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "missing token", http.StatusBadRequest)
+		return
+	}
+	sessionToken, err := auth.VerifyMagicLink(r.Context(), token)
+	if err != nil {
+		http.Error(w, "invalid or expired link", http.StatusUnauthorized)
+		return
+	}
+	// Set session cookie and redirect to dashboard
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: false, // frontend JS needs to read it
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   86400, // 24h
+	})
+	appURL := getEnv("APP_URL", "http://localhost:3002")
+	http.Redirect(w, r, appURL+"/dashboard", http.StatusFound)
+}
+
+// ── Session middleware + dashboard API ────────────────────────────────────────
+
+type ctxSession string
+const ctxSessionKey ctxSession = "session"
+
+func sessionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Accept session from cookie OR Authorization: Bearer header
+		var tokenStr string
+		if cookie, err := r.Cookie("session"); err == nil {
+			tokenStr = cookie.Value
+		} else {
+			tokenStr = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		}
+		if tokenStr == "" {
+			http.Error(w, `{"error":"not authenticated"}`, http.StatusUnauthorized)
+			return
+		}
+		sess, err := auth.ParseSession(tokenStr)
+		if err != nil {
+			http.Error(w, `{"error":"invalid session"}`, http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), ctxSessionKey, sess)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func handleUsage(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+
+	rows, err := db.Pool.Query(r.Context(), `
+		SELECT
+			DATE(ts)::text AS date,
+			SUM(prompt_tokens + completion_tokens) AS tokens,
+			COUNT(*) AS requests,
+			SUM(cost_usd) AS cost
+		FROM usage_events
+		WHERE customer_id = $1
+		  AND ts >= NOW() - INTERVAL '7 days'
+		GROUP BY DATE(ts)
+		ORDER BY DATE(ts)
+	`, sess.CustomerID)
+	if err != nil {
+		http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type Day struct {
+		Date     string  `json:"date"`
+		Tokens   int64   `json:"tokens"`
+		Requests int64   `json:"requests"`
+		Cost     float64 `json:"cost"`
+	}
+	var days []Day
+	for rows.Next() {
+		var d Day
+		rows.Scan(&d.Date, &d.Tokens, &d.Requests, &d.Cost)
+		days = append(days, d)
+	}
+	if days == nil {
+		days = []Day{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(days)
+}
+
+func handleListKeys(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+
+	rows, err := db.Pool.Query(r.Context(), `
+		SELECT id, key_prefix, name, last_used_at, quota_rpm,
+		       (SELECT COUNT(*) FROM usage_events WHERE api_key_id = api_keys.id) AS requests
+		FROM api_keys
+		WHERE customer_id = $1 AND revoked_at IS NULL
+		ORDER BY created_at
+	`, sess.CustomerID)
+	if err != nil {
+		http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type Key struct {
+		ID         string  `json:"id"`
+		Prefix     string  `json:"prefix"`
+		Name       string  `json:"name"`
+		LastUsed   *string `json:"last_used_at"`
+		QuotaRPM   int     `json:"quota_rpm"`
+		Requests   int64   `json:"requests"`
+	}
+	var keyList []Key
+	for rows.Next() {
+		var k Key
+		rows.Scan(&k.ID, &k.Prefix, &k.Name, &k.LastUsed, &k.QuotaRPM, &k.Requests)
+		keyList = append(keyList, k)
+	}
+	if keyList == nil {
+		keyList = []Key{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(keyList)
 }
 
 func getEnv(key, fallback string) string {
