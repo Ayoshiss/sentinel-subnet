@@ -119,7 +119,7 @@ func sendEmail(to, magicLink string) error {
 	}
 
 	body := map[string]interface{}{
-		"from":    "TAO Gateway <noreply@taogateway.dev>",
+		"from":    "TAO Gateway <noreply@adhyaaya.com>",
 		"to":      []string{to},
 		"subject": "Your TAO Gateway login link",
 		"html": fmt.Sprintf(`
