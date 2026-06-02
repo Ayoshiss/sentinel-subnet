@@ -5,6 +5,7 @@ The Go gateway treats this as a dumb HTTP service.
 """
 
 import os
+import re
 import time
 import asyncio
 import logging
@@ -61,6 +62,60 @@ FIRST_TIMEOUT = 20.0  # 20s — enough for Fly.io → Chutes under load
 RETRY_TIMEOUT = 20.0  # same
 
 # ---------------------------------------------------------------------------
+# Tier-1 dynamic router (zero-cost heuristics)
+# ---------------------------------------------------------------------------
+# Where each complexity tier routes. Cheap, non-reasoning models for simple
+# prompts; the strong reasoning model only when the prompt actually needs it.
+ROUTE_MODELS = {
+    "simple":  "unsloth/Mistral-Nemo-Instruct-2407-TEE",  # $0.02 / $0.10 per M
+    "general": "google/gemma-4-31B-turbo-TEE",             # $0.15 / $0.42 per M
+    "complex": "deepseek-ai/DeepSeek-V3.2-TEE",            # premium reasoning
+}
+
+# Prompt needs a strong reasoning/coding model.
+_COMPLEX_RE = re.compile(
+    r"```|"                                                       # code fences
+    r"\b(def |function |class |import |SELECT |INSERT |UPDATE |DELETE |async |await )|"  # code
+    r"\b(prove|derive|calculate|solve|theorem|integral|derivative|algorithm|optimi[sz]e)\b|"  # math/logic
+    r"\b(step[\s-]?by[\s-]?step|reason through|think through|explain why|debug|refactor)\b|"   # reasoning asks
+    r"[∫∑∏√≤≥≠πθ∂∇]|"                                             # math symbols
+    r"\bO\([^)]*\)",                                               # big-O notation
+    re.IGNORECASE,
+)
+
+# Prompt is trivially simple.
+_SIMPLE_RE = re.compile(
+    r"^\s*(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sup|yo|cool|nice)\b|"
+    r"\b(translate|capital of|what time|how do you spell|define|synonym|antonym|say hi)\b",
+    re.IGNORECASE,
+)
+
+
+def _last_user_text(messages):
+    """Extract the text of the most recent user message (handles multimodal)."""
+    for m in reversed(messages or []):
+        if m.get("role") == "user":
+            content = m.get("content")
+            if isinstance(content, list):  # multimodal: list of parts
+                return " ".join(p.get("text", "") for p in content if isinstance(p, dict))
+            return content or ""
+    return ""
+
+
+def _classify_prompt(messages) -> str:
+    """Tier-1 heuristic classifier → 'simple' | 'general' | 'complex'."""
+    text = _last_user_text(messages)
+    length = len(text)
+
+    # Long prompts or any complexity signal → complex
+    if length > 1500 or _COMPLEX_RE.search(text):
+        return "complex"
+    # Short and clearly trivial → simple
+    if length < 120 and _SIMPLE_RE.search(text):
+        return "simple"
+    return "general"
+
+# ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 @app.get("/health")
@@ -76,10 +131,18 @@ async def query(request: dict):
         log.warning("CHUTES_API_KEY not set — returning stub response")
         return _stub_response(request)
 
-    # Normalize model name
-    primary_model = _normalize_model(request.get("model", DEFAULT_MODEL))
+    # Pick the primary model. "auto" opts into the dynamic router (Tier 1
+    # heuristics); any other name is honored / normalized as before.
+    requested = request.get("model", DEFAULT_MODEL)
+    if requested in ("auto", "tao-auto"):
+        tier = _classify_prompt(request.get("messages", []))
+        primary_model = ROUTE_MODELS[tier]
+        log.info("Auto-router: prompt classified '%s' → %s", tier, primary_model)
+    else:
+        primary_model = _normalize_model(requested)
 
-    # Build the model chain: primary first, then fallbacks (excluding primary)
+    # Build the model chain: primary first, then fallbacks (excluding primary).
+    # The fallback chain is a reliability safety net, not a cost optimizer.
     model_chain = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
 
     # Streaming path — Server-Sent Events
