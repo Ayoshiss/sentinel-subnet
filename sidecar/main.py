@@ -44,6 +44,12 @@ CHUTES_API_URL = os.getenv("CHUTES_API_URL", "https://llm.chutes.ai/v1/chat/comp
 CHUTES_API_KEY = os.getenv("CHUTES_API_KEY", "")
 DEFAULT_MODEL  = os.getenv("DEFAULT_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
 
+# Groq — invisible last-resort backstop (centralized). Fires ONLY when every
+# decentralized SN64 option is exhausted or the global budget is blown.
+GROQ_API_URL   = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_API_KEY   = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL     = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
 # Fallback model chain — all on Chutes SN64, tried in order when primary fails.
 # CRITICAL: fallbacks must be NON-REASONING, permanently-hot models. A reasoning
 # model (e.g. Qwen3) silently burns output tokens on internal <think> compute,
@@ -55,11 +61,14 @@ FALLBACK_MODELS = [
     "moonshotai/Kimi-K2.6-TEE",               # last resort
 ]
 
-# Retry config
-MAX_RETRIES = 0        # no retries per model — move to next immediately on failure
-RETRY_DELAY = 0.0     # no delay between models
-FIRST_TIMEOUT = 20.0  # 20s — enough for Fly.io → Chutes under load
-RETRY_TIMEOUT = 20.0  # same
+# ── Failover budget ladder ────────────────────────────────────────────────────
+# Two clocks: a per-attempt TTFT cap (abandon a stalling miner fast) and a
+# global wall-clock budget across all decentralized attempts (the ripcord).
+TTFT_CAP             = 5.0   # streaming: max seconds to first token per SN64 attempt
+ATTEMPT_TIMEOUT      = 8.0   # non-streaming: max seconds per SN64 attempt
+DECENTRALIZED_BUDGET = 12.0  # global seconds across SN64 before ripcord → Groq
+STREAM_IDLE          = 15.0  # max seconds between chunks once a stream is flowing
+GROQ_TIMEOUT         = 10.0  # backstop hard cap (Groq TTFT is typically <0.5s)
 
 # ---------------------------------------------------------------------------
 # Tier-1 dynamic router (zero-cost heuristics)
@@ -144,50 +153,65 @@ async def query(request: dict):
     # Build the model chain: primary first, then fallbacks (excluding primary).
     # The fallback chain is a reliability safety net, not a cost optimizer.
     model_chain = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
+    is_stream = bool(request.get("stream"))
 
-    # Streaming path — Server-Sent Events
-    if request.get("stream"):
-        return await _stream_query(request, model_chain)
+    # ── Phase 1: decentralized (SN64) — TTFT caps + global budget ───────────────
+    if is_stream:
+        result = await _route_streaming(request, model_chain)
+    else:
+        result = await _route_buffered(request, model_chain)
+    if result is not None:
+        return result
 
-    # Non-streaming path
-    for model in model_chain:
-        result = await _try_model(request, model)
-        if result is not None:
-            return result
-        log.warning("Model %s failed — trying next in chain", model)
+    # ── Phase 2: invisible centralized backstop (Groq) ──────────────────────────
+    if GROQ_API_KEY:
+        log.warning("SN64 exhausted/budget blown — failing over to Groq backstop")
+        backstop = await _groq_backstop(request, is_stream)
+        if backstop is not None:
+            return backstop
 
-    log.error("All models in chain exhausted")
-    raise HTTPException(status_code=502, detail="all subnets at capacity — please retry in a moment")
+    log.error("All providers exhausted (SN64 + Groq)")
+    raise HTTPException(status_code=502, detail="all providers at capacity — please retry in a moment")
 
 
 # ---------------------------------------------------------------------------
 # Streaming
 # ---------------------------------------------------------------------------
-async def _stream_query(request: dict, model_chain: List[str]):
-    """Open a streaming connection, peek the first chunk to confirm the model
-    is alive, then forward the SSE stream through. Falls back across models
-    until one starts streaming successfully."""
-
-    # Ensure usage is included in the final SSE chunk (for billing)
+async def _route_streaming(request: dict, model_chain: List[str]):
+    """Stream from SN64 with a per-attempt TTFT cap and a global wall-clock
+    budget. Peeks the first chunk to confirm a miner is alive before committing
+    to its lane. Returns None if all models fail or the budget is blown
+    (caller then pulls the ripcord to Groq)."""
     base = {**request, "stream": True, "stream_options": {"include_usage": True}}
+    phase_start = time.monotonic()
 
     for model in model_chain:
+        elapsed = time.monotonic() - phase_start
+        if elapsed > DECENTRALIZED_BUDGET:
+            log.warning("Decentralized budget (%.0fs) blown after %.1fs — ripcord to Groq",
+                        DECENTRALIZED_BUDGET, elapsed)
+            return None
+
         payload = {**base, "model": model}
         gen = _open_stream(payload, model)
         try:
-            first_chunk = await gen.__anext__()   # peek — raises if model is down
-        except StopAsyncIteration:
-            log.warning("Model %s streamed nothing — trying next", model)
+            # TTFT cap — abandon a stalling miner fast
+            first_chunk = await asyncio.wait_for(gen.__anext__(), timeout=TTFT_CAP)
+        except (asyncio.TimeoutError, StopAsyncIteration):
+            log.warning("Model %s — no first token within %.0fs, next", model, TTFT_CAP)
+            await _safe_aclose(gen)
             continue
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as e:
-            log.warning("Model %s stream failed (%s) — trying next", model, type(e).__name__)
+            log.warning("Model %s stream failed (%s) — next", model, type(e).__name__)
+            await _safe_aclose(gen)
             await _reset_client()
             continue
         except Exception as e:
-            log.warning("Model %s stream error: %s — trying next", model, e)
+            log.warning("Model %s stream error: %s — next", model, e)
+            await _safe_aclose(gen)
             continue
 
-        log.info("Streaming from model %s", model)
+        log.info("Streaming from SN64 %s (TTFT %.1fs)", model, time.monotonic() - phase_start)
 
         async def body():
             yield first_chunk
@@ -200,13 +224,28 @@ async def _stream_query(request: dict, model_chain: List[str]):
             headers={"X-Routed-Subnet": f"SN64-Chutes/{model}"},
         )
 
-    log.error("All models in chain exhausted (streaming)")
-    raise HTTPException(status_code=502, detail="all subnets at capacity — please retry in a moment")
+    return None
+
+
+async def _route_buffered(request: dict, model_chain: List[str]):
+    """Non-streaming SN64 routing with per-attempt timeout and global budget."""
+    phase_start = time.monotonic()
+    for model in model_chain:
+        elapsed = time.monotonic() - phase_start
+        if elapsed > DECENTRALIZED_BUDGET:
+            log.warning("Decentralized budget (%.0fs) blown after %.1fs — ripcord to Groq",
+                        DECENTRALIZED_BUDGET, elapsed)
+            return None
+        result = await _try_model(request, model)
+        if result is not None:
+            return result
+    return None
 
 
 async def _open_stream(payload: dict, model: str):
-    """Async generator yielding raw SSE bytes from Chutes. Raises if the
-    upstream returns a non-200 status before any bytes are sent."""
+    """Async generator yielding raw SSE bytes from Chutes. The read timeout
+    (STREAM_IDLE) governs gaps once the stream is flowing; the first-token TTFT
+    cap is enforced by the caller via asyncio.wait_for."""
     async with _client.stream(
         "POST",
         CHUTES_API_URL,
@@ -215,11 +254,98 @@ async def _open_stream(payload: dict, model: str):
             "Authorization": f"Bearer {CHUTES_API_KEY}",
             "Content-Type": "application/json",
         },
-        timeout=FIRST_TIMEOUT,
+        timeout=httpx.Timeout(connect=5.0, read=STREAM_IDLE, write=5.0, pool=5.0),
     ) as resp:
         if resp.status_code != 200:
             log.warning("Model %s stream returned status %s", model, resp.status_code)
             raise httpx.RemoteProtocolError(f"status {resp.status_code}")
+        async for chunk in resp.aiter_bytes():
+            yield chunk
+
+
+async def _try_model(request: dict, model: str) -> Optional[JSONResponse]:
+    """Single non-streaming attempt against an SN64 model. None on failure."""
+    payload = {**request, "model": model}
+    try:
+        resp = await _client.post(
+            CHUTES_API_URL,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {CHUTES_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            timeout=ATTEMPT_TIMEOUT,
+        )
+        if resp.status_code == 429 or resp.status_code >= 500:
+            log.warning("Model %s returned %s — next", model, resp.status_code)
+            return None
+        resp.raise_for_status()
+        log.info("SN64 %s succeeded", model)
+        return JSONResponse(content=resp.json(), headers={"X-Routed-Subnet": f"SN64-Chutes/{model}"})
+    except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError):
+        log.warning("Model %s timed out (%.0fs) — next", model, ATTEMPT_TIMEOUT)
+        await _reset_client()
+        return None
+    except Exception as e:
+        log.warning("Model %s error: %s — next", model, e)
+        await _reset_client()
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Groq backstop (invisible centralized last resort)
+# ---------------------------------------------------------------------------
+async def _groq_backstop(request: dict, is_stream: bool):
+    """Last-resort failover to Groq. Stamps X-Routed-Subnet: groq-backstop for
+    full transparency. Returns None if Groq also fails."""
+    payload = {k: v for k, v in request.items() if k != "model"}
+    payload["model"] = GROQ_MODEL
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+
+    if is_stream:
+        payload["stream"] = True
+        payload.setdefault("stream_options", {"include_usage": True})
+        gen = _open_groq_stream(payload)
+        try:
+            first = await asyncio.wait_for(gen.__anext__(), timeout=GROQ_TIMEOUT)
+        except Exception as e:
+            log.error("Groq backstop stream failed: %s", e)
+            await _safe_aclose(gen)
+            return None
+        log.info("Groq backstop streaming (%s)", GROQ_MODEL)
+
+        async def body():
+            yield first
+            async for chunk in gen:
+                yield chunk
+
+        return StreamingResponse(
+            body(),
+            media_type="text/event-stream",
+            headers={"X-Routed-Subnet": "groq-backstop"},
+        )
+
+    payload.pop("stream", None)
+    try:
+        resp = await _client.post(GROQ_API_URL, json=payload, headers=headers, timeout=GROQ_TIMEOUT)
+        resp.raise_for_status()
+        log.info("Groq backstop succeeded (%s)", GROQ_MODEL)
+        return JSONResponse(content=resp.json(), headers={"X-Routed-Subnet": "groq-backstop"})
+    except Exception as e:
+        log.error("Groq backstop failed: %s", e)
+        return None
+
+
+async def _open_groq_stream(payload: dict):
+    async with _client.stream(
+        "POST",
+        GROQ_API_URL,
+        json=payload,
+        headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+        timeout=httpx.Timeout(connect=5.0, read=STREAM_IDLE, write=5.0, pool=5.0),
+    ) as resp:
+        if resp.status_code != 200:
+            raise httpx.RemoteProtocolError(f"groq status {resp.status_code}")
         async for chunk in resp.aiter_bytes():
             yield chunk
 
@@ -232,54 +358,16 @@ async def _reset_client():
     except Exception:
         pass
     _client = httpx.AsyncClient(
-        timeout=httpx.Timeout(connect=5.0, read=FIRST_TIMEOUT, write=5.0, pool=5.0),
+        timeout=httpx.Timeout(connect=5.0, read=STREAM_IDLE, write=5.0, pool=5.0),
         limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
     )
 
-async def _try_model(request: dict, model: str) -> Optional[JSONResponse]:
-    """Try a specific model with retries. Returns None if all attempts fail."""
-    payload = {**request, "model": model}
 
-    for attempt in range(MAX_RETRIES + 1):
-        timeout = FIRST_TIMEOUT if attempt == 0 else RETRY_TIMEOUT
-        try:
-            resp = await _client.post(
-                CHUTES_API_URL,
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {CHUTES_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                timeout=timeout,
-            )
-
-            if resp.status_code == 429 or resp.status_code >= 500:
-                # Capacity issue — retry after delay
-                if attempt < MAX_RETRIES:
-                    log.warning("Model %s returned %s (attempt %d/%d) — retrying in %.1fs",
-                                model, resp.status_code, attempt + 1, MAX_RETRIES + 1, RETRY_DELAY)
-                    await asyncio.sleep(RETRY_DELAY)
-                    continue
-                else:
-                    log.warning("Model %s exhausted retries with status %s", model, resp.status_code)
-                    return None
-
-            resp.raise_for_status()
-            data = resp.json()
-            log.info("Model %s succeeded (attempt %d)", model, attempt + 1)
-            return JSONResponse(content=data, headers={"X-Routed-Subnet": f"SN64-Chutes/{model}"})
-
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError):
-            log.warning("Model %s timed out — moving to next", model)
-            await _reset_client()
-            return None
-
-        except Exception as e:
-            log.warning("Model %s error: %s", model, e)
-            await _reset_client()
-            return None
-
-    return None
+async def _safe_aclose(agen):
+    try:
+        await agen.aclose()
+    except Exception:
+        pass
 
 
 def _normalize_model(model: str) -> str:
