@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -114,14 +115,21 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse request to extract model + token estimate for billing
+	// Parse request to extract model + stream flag for billing
 	var req struct {
 		Model    string `json:"model"`
+		Stream   bool   `json:"stream"`
 		Messages []struct {
 			Content string `json:"content"`
 		} `json:"messages"`
 	}
 	json.Unmarshal(body, &req)
+
+	// ── Streaming path (SSE) ─────────────────────────────────────────────────────
+	if req.Stream {
+		handleStreaming(w, apiKey, body, req.Model, start)
+		return
+	}
 
 	resp, err := callSidecar("/query", body)
 	if err != nil {
@@ -163,6 +171,84 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Latency-Ms", fmt.Sprintf("%d", latency))
 	w.WriteHeader(resp.StatusCode)
 	w.Write(respBody)
+}
+
+// ── Streaming (SSE) ───────────────────────────────────────────────────────────
+
+func handleStreaming(w http.ResponseWriter, apiKey *keys.APIKey, body []byte, model string, start time.Time) {
+	resp, err := callSidecar("/query", body)
+	if err != nil {
+		log.Printf("sidecar stream error: %v", err)
+		keys.RecordUsage(apiKey.ID, apiKey.CustomerID, "SN64-Chutes", model, "error", 0, 0, int(time.Since(start).Milliseconds()), 0)
+		http.Error(w, `{"error":"subnet unavailable"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// If the sidecar failed before streaming, forward the error
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(resp.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
+		w.Write(errBody)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, `{"error":"streaming unsupported"}`, http.StatusInternalServerError)
+		return
+	}
+
+	subnet := resp.Header.Get("X-Routed-Subnet")
+	if subnet == "" {
+		subnet = "SN64-Chutes"
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Routed-Subnet", subnet)
+	w.WriteHeader(http.StatusOK)
+
+	// Scan the SSE stream line by line: forward each line to the client
+	// immediately, and capture usage from the final chunk for billing.
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024) // up to 4 MB per line
+
+	var promptTok, completionTok int
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
+		// Forward the line to the client and flush so it streams in real time
+		w.Write(line)
+		w.Write([]byte("\n"))
+		flusher.Flush()
+
+		// Capture usage from data chunks (include_usage gives it in the last one)
+		if bytes.HasPrefix(line, []byte("data: ")) {
+			payload := bytes.TrimSpace(line[6:])
+			if !bytes.Equal(payload, []byte("[DONE]")) {
+				var chunk struct {
+					Usage *struct {
+						PromptTokens     int `json:"prompt_tokens"`
+						CompletionTokens int `json:"completion_tokens"`
+					} `json:"usage"`
+				}
+				if json.Unmarshal(payload, &chunk) == nil && chunk.Usage != nil {
+					promptTok = chunk.Usage.PromptTokens
+					completionTok = chunk.Usage.CompletionTokens
+				}
+			}
+		}
+	}
+
+	latency := int(time.Since(start).Milliseconds())
+	costUSD := (float64(promptTok)*0.50 + float64(completionTok)*1.50) / 1_000_000
+
+	go billing.DeductBalance(context.Background(), apiKey.CustomerID, costUSD)
+	go keys.RecordUsage(apiKey.ID, apiKey.CustomerID, subnet, model, "ok",
+		promptTok, completionTok, latency, costUSD)
 }
 
 // ── Admin: create customer ────────────────────────────────────────────────────

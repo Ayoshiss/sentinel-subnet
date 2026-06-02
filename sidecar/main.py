@@ -8,8 +8,9 @@ import os
 import time
 import asyncio
 import logging
+from typing import Optional, List
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 import httpx
 import uvicorn
 
@@ -19,7 +20,7 @@ log = logging.getLogger("sidecar")
 app = FastAPI(title="TAO Sidecar")
 
 # Persistent HTTP client — reuses connections and caches DNS across requests
-_client: httpx.AsyncClient | None = None
+_client: Optional[httpx.AsyncClient] = None
 
 @app.on_event("startup")
 async def startup():
@@ -42,12 +43,15 @@ CHUTES_API_URL = os.getenv("CHUTES_API_URL", "https://llm.chutes.ai/v1/chat/comp
 CHUTES_API_KEY = os.getenv("CHUTES_API_KEY", "")
 DEFAULT_MODEL  = os.getenv("DEFAULT_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
 
-# Fallback model chain — all on Chutes SN64, tried in order when primary fails
+# Fallback model chain — all on Chutes SN64, tried in order when primary fails.
+# CRITICAL: fallbacks must be NON-REASONING, permanently-hot models. A reasoning
+# model (e.g. Qwen3) silently burns output tokens on internal <think> compute,
+# which we pay for at full output rates — a margin killer under heavy load.
 FALLBACK_MODELS = [
-    "deepseek-ai/DeepSeek-V3.2-TEE",
-    "Qwen/Qwen3-32B-TEE",
-    "moonshotai/Kimi-K2.6-TEE",
-    "Qwen/Qwen3.6-27B-TEE",
+    "deepseek-ai/DeepSeek-V3.2-TEE",          # primary — best quality
+    "google/gemma-4-31B-turbo-TEE",           # hot, non-reasoning, $0.15/$0.42 per M
+    "unsloth/Mistral-Nemo-Instruct-2407-TEE", # cheapest, non-reasoning, $0.02/$0.10 per M
+    "moonshotai/Kimi-K2.6-TEE",               # last resort
 ]
 
 # Retry config
@@ -78,7 +82,11 @@ async def query(request: dict):
     # Build the model chain: primary first, then fallbacks (excluding primary)
     model_chain = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
 
-    last_error = None
+    # Streaming path — Server-Sent Events
+    if request.get("stream"):
+        return await _stream_query(request, model_chain)
+
+    # Non-streaming path
     for model in model_chain:
         result = await _try_model(request, model)
         if result is not None:
@@ -87,6 +95,70 @@ async def query(request: dict):
 
     log.error("All models in chain exhausted")
     raise HTTPException(status_code=502, detail="all subnets at capacity — please retry in a moment")
+
+
+# ---------------------------------------------------------------------------
+# Streaming
+# ---------------------------------------------------------------------------
+async def _stream_query(request: dict, model_chain: List[str]):
+    """Open a streaming connection, peek the first chunk to confirm the model
+    is alive, then forward the SSE stream through. Falls back across models
+    until one starts streaming successfully."""
+
+    # Ensure usage is included in the final SSE chunk (for billing)
+    base = {**request, "stream": True, "stream_options": {"include_usage": True}}
+
+    for model in model_chain:
+        payload = {**base, "model": model}
+        gen = _open_stream(payload, model)
+        try:
+            first_chunk = await gen.__anext__()   # peek — raises if model is down
+        except StopAsyncIteration:
+            log.warning("Model %s streamed nothing — trying next", model)
+            continue
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as e:
+            log.warning("Model %s stream failed (%s) — trying next", model, type(e).__name__)
+            await _reset_client()
+            continue
+        except Exception as e:
+            log.warning("Model %s stream error: %s — trying next", model, e)
+            continue
+
+        log.info("Streaming from model %s", model)
+
+        async def body():
+            yield first_chunk
+            async for chunk in gen:
+                yield chunk
+
+        return StreamingResponse(
+            body(),
+            media_type="text/event-stream",
+            headers={"X-Routed-Subnet": f"SN64-Chutes/{model}"},
+        )
+
+    log.error("All models in chain exhausted (streaming)")
+    raise HTTPException(status_code=502, detail="all subnets at capacity — please retry in a moment")
+
+
+async def _open_stream(payload: dict, model: str):
+    """Async generator yielding raw SSE bytes from Chutes. Raises if the
+    upstream returns a non-200 status before any bytes are sent."""
+    async with _client.stream(
+        "POST",
+        CHUTES_API_URL,
+        json=payload,
+        headers={
+            "Authorization": f"Bearer {CHUTES_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        timeout=FIRST_TIMEOUT,
+    ) as resp:
+        if resp.status_code != 200:
+            log.warning("Model %s stream returned status %s", model, resp.status_code)
+            raise httpx.RemoteProtocolError(f"status {resp.status_code}")
+        async for chunk in resp.aiter_bytes():
+            yield chunk
 
 
 async def _reset_client():
@@ -101,7 +173,7 @@ async def _reset_client():
         limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
     )
 
-async def _try_model(request: dict, model: str) -> JSONResponse | None:
+async def _try_model(request: dict, model: str) -> Optional[JSONResponse]:
     """Try a specific model with retries. Returns None if all attempts fail."""
     payload = {**request, "model": model}
 
@@ -150,13 +222,17 @@ async def _try_model(request: dict, model: str) -> JSONResponse | None:
 def _normalize_model(model: str) -> str:
     """Map common OpenAI model names to Chutes equivalents."""
     mapping = {
+        # Premium tier → best quality
         "gpt-4o":        "deepseek-ai/DeepSeek-V3.2-TEE",
-        "gpt-4o-mini":   "Qwen/Qwen3.6-27B-TEE",
         "gpt-4":         "deepseek-ai/DeepSeek-V3.2-TEE",
         "gpt-4-turbo":   "deepseek-ai/DeepSeek-V3.2-TEE",
-        "gpt-3.5-turbo": "Qwen/Qwen3.6-27B-TEE",
+        # Cheap tier → fast non-reasoning models (price-aligned)
+        "gpt-4o-mini":   "google/gemma-4-31B-turbo-TEE",
+        "gpt-3.5-turbo": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
+        # Friendly shorthands
         "deepseek":      "deepseek-ai/DeepSeek-V3.2-TEE",
-        "qwen":          "Qwen/Qwen3-32B-TEE",
+        "gemma":         "google/gemma-4-31B-turbo-TEE",
+        "mistral":       "unsloth/Mistral-Nemo-Instruct-2407-TEE",
         "qwen-coder":    "Qwen/Qwen2.5-Coder-32B-Instruct-TEE",
         "kimi":          "moonshotai/Kimi-K2.6-TEE",
     }
