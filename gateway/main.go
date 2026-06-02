@@ -60,6 +60,7 @@ func main() {
 	// Dashboard API — session required
 	r.With(sessionMiddleware).Get("/v1/usage", handleUsage)
 	r.With(sessionMiddleware).Get("/v1/keys", handleListKeys)
+	r.With(sessionMiddleware).Delete("/v1/keys/{id}", handleRevokeKey)
 
 	// Billing routes
 	r.With(sessionMiddleware).Post("/v1/billing/checkout", handleCreateCheckout)
@@ -360,7 +361,7 @@ func adminMiddleware(next http.Handler) http.Handler {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Secret")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -509,6 +510,40 @@ func handleListKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(keyList)
+}
+
+func handleRevokeKey(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+	keyID := chi.URLParam(r, "id")
+	if keyID == "" {
+		http.Error(w, `{"error":"key id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Scope the update to the session's own customer_id — this prevents one
+	// customer from revoking another's key (IDOR). Revocation is a soft delete:
+	// setting revoked_at makes keys.Lookup (WHERE revoked_at IS NULL) reject the
+	// key on the very next request. No cache to evict — Lookup hits Postgres
+	// directly, so the kill is effective immediately.
+	tag, err := db.Pool.Exec(r.Context(), `
+		UPDATE api_keys
+		SET revoked_at = NOW()
+		WHERE id = $1 AND customer_id = $2 AND revoked_at IS NULL
+	`, keyID, sess.CustomerID)
+	if err != nil {
+		// Likely a malformed UUID or db error — don't leak details
+		http.Error(w, `{"error":"could not revoke key"}`, http.StatusBadRequest)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		// Not found, not owned by this customer, or already revoked
+		http.Error(w, `{"error":"key not found"}`, http.StatusNotFound)
+		return
+	}
+
+	log.Printf("revoked key %s for customer %s", keyID, sess.CustomerID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "revoked", "id": keyID})
 }
 
 // ── Billing handlers ──────────────────────────────────────────────────────────

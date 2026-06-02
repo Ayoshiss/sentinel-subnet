@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [showTopUp, setShowTopUp] = useState(false);
   const [showNewKey, setShowNewKey] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
+  const [revoking, setRevoking] = useState<string | null>(null);
 
   const gatewayURL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080";
 
@@ -121,6 +122,31 @@ export default function Dashboard() {
       setShowNewKey(false);
       setNewKeyName("");
       fetchData();
+    }
+  }
+
+  async function revokeKey(id: string, name: string) {
+    const session = getCookie("session");
+    if (!session) return;
+    if (!confirm(`Revoke "${name}"? Any app using this key will stop working immediately. This cannot be undone.`)) return;
+
+    setRevoking(id);
+    try {
+      const res = await fetch(`${gatewayURL}/v1/keys/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session}` },
+      });
+      if (res.ok) {
+        // Optimistically drop it from the list, then refresh from server
+        setApiKeys((prev) => prev.filter((k) => k.id !== id));
+        fetchData();
+      } else if (res.status === 401) {
+        router.push("/login");
+      } else {
+        alert("Could not revoke key. Please try again.");
+      }
+    } finally {
+      setRevoking(null);
     }
   }
 
@@ -305,8 +331,15 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-6 text-sm">
+                <div className="flex items-center gap-5 text-sm">
                   <span className="text-gray-500 text-xs">{key.requests.toLocaleString()} requests</span>
+                  <button
+                    onClick={() => revokeKey(key.id, key.name)}
+                    disabled={revoking === key.id}
+                    className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors"
+                  >
+                    {revoking === key.id ? "Revoking…" : "Revoke"}
+                  </button>
                 </div>
               </div>
             ))}
