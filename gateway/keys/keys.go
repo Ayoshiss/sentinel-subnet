@@ -72,14 +72,18 @@ func Lookup(ctx context.Context, rawKey string) (*APIKey, error) {
 }
 
 // RecordUsage writes a usage event to Postgres (async — best effort).
-func RecordUsage(keyID, customerID, subnet, model, status string, promptTok, completionTok, latencyMs int, costUSD float64) {
+// costUSD is retail (what we billed); wholesaleUSD is our COGS for the model
+// that actually served the request (servedModel).
+func RecordUsage(keyID, customerID, subnet, model, status string, promptTok, completionTok, latencyMs int, costUSD, wholesaleUSD float64, servedModel string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	db.Pool.Exec(ctx, `
 		INSERT INTO usage_events
-			(api_key_id, customer_id, subnet, model, prompt_tokens, completion_tokens, latency_ms, status, cost_usd)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-	`, keyID, customerID, subnet, model, promptTok, completionTok, latencyMs, status, costUSD)
+			(api_key_id, customer_id, subnet, model, prompt_tokens, completion_tokens,
+			 latency_ms, status, cost_usd, wholesale_cost_usd, served_model)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+	`, keyID, customerID, subnet, model, promptTok, completionTok,
+		latencyMs, status, costUSD, wholesaleUSD, servedModel)
 }
 
 func hashKey(raw string) string {

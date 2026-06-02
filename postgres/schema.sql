@@ -44,8 +44,13 @@ CREATE TABLE IF NOT EXISTS usage_events (
     completion_tokens INT NOT NULL DEFAULT 0,
     latency_ms      INT,
     status          TEXT NOT NULL DEFAULT 'ok', -- ok | error | fallback
-    cost_usd        NUMERIC(12, 8)          -- what we charged
+    cost_usd        NUMERIC(12, 8)          -- retail: what we charged the customer
 );
+
+-- Wholesale cost (our COGS) per request, keyed off the model that actually
+-- served it. retail (cost_usd) minus this = gross margin per request.
+ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS wholesale_cost_usd NUMERIC(12, 8);
+ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS served_model TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_usage_customer ON usage_events (customer_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_usage_key ON usage_events (api_key_id, ts DESC);

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/taogateway/gateway/billing"
 	"github.com/taogateway/gateway/db"
 	"github.com/taogateway/gateway/keys"
+	"github.com/taogateway/gateway/pricing"
 	"github.com/taogateway/gateway/ratelimit"
 )
 
@@ -70,6 +72,7 @@ func main() {
 	// Admin routes — protected by ADMIN_SECRET header
 	r.With(adminMiddleware).Post("/admin/customers", handleCreateCustomer)
 	r.With(adminMiddleware).Post("/admin/keys", handleCreateKey)
+	r.With(adminMiddleware).Get("/admin/margin", handleMargin)
 
 	addr := ":" + getEnv("PORT", "8080")
 	log.Printf("TAO Gateway listening on %s", addr)
@@ -135,7 +138,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	resp, err := callSidecar("/query", body)
 	if err != nil {
 		log.Printf("sidecar error: %v", err)
-		keys.RecordUsage(apiKey.ID, apiKey.CustomerID, "SN64-Chutes", req.Model, "error", 0, 0, int(time.Since(start).Milliseconds()), 0)
+		keys.RecordUsage(apiKey.ID, apiKey.CustomerID, "SN64-Chutes", req.Model, "error", 0, 0, int(time.Since(start).Milliseconds()), 0, 0, "")
 		http.Error(w, `{"error":"subnet unavailable"}`, http.StatusBadGateway)
 		return
 	}
@@ -144,17 +147,22 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	respBody, _ := io.ReadAll(resp.Body)
 	latency := int(time.Since(start).Milliseconds())
 
-	// Parse response to get real token counts
+	// Parse response for token counts AND the model that actually served it
+	// (router/fallback/backstop may differ from what the customer requested).
 	var openAIResp struct {
+		Model string `json:"model"`
 		Usage struct {
 			PromptTokens     int `json:"prompt_tokens"`
 			CompletionTokens int `json:"completion_tokens"`
 		} `json:"usage"`
 	}
 	json.Unmarshal(respBody, &openAIResp)
+	promptTok := openAIResp.Usage.PromptTokens
+	completionTok := openAIResp.Usage.CompletionTokens
 
-	// Cost: ~$0.50/M input + $1.50/M output (our price to customer, cost-plus 30%)
-	costUSD := (float64(openAIResp.Usage.PromptTokens)*0.50 + float64(openAIResp.Usage.CompletionTokens)*1.50) / 1_000_000
+	// Retail = what we bill the customer. Wholesale = our COGS for the served model.
+	costUSD := pricing.Retail(promptTok, completionTok)
+	wholesaleUSD := pricing.Wholesale(openAIResp.Model, promptTok, completionTok)
 
 	// ── Deduct balance ─────────────────────────────────────────────────────────
 	go billing.DeductBalance(context.Background(), apiKey.CustomerID, costUSD)
@@ -165,7 +173,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go keys.RecordUsage(apiKey.ID, apiKey.CustomerID, subnet, req.Model, "ok",
-		openAIResp.Usage.PromptTokens, openAIResp.Usage.CompletionTokens, latency, costUSD)
+		promptTok, completionTok, latency, costUSD, wholesaleUSD, openAIResp.Model)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Routed-Subnet", subnet)
@@ -180,7 +188,7 @@ func handleStreaming(w http.ResponseWriter, apiKey *keys.APIKey, body []byte, mo
 	resp, err := callSidecar("/query", body)
 	if err != nil {
 		log.Printf("sidecar stream error: %v", err)
-		keys.RecordUsage(apiKey.ID, apiKey.CustomerID, "SN64-Chutes", model, "error", 0, 0, int(time.Since(start).Milliseconds()), 0)
+		keys.RecordUsage(apiKey.ID, apiKey.CustomerID, "SN64-Chutes", model, "error", 0, 0, int(time.Since(start).Milliseconds()), 0, 0, "")
 		http.Error(w, `{"error":"subnet unavailable"}`, http.StatusBadGateway)
 		return
 	}
@@ -218,6 +226,7 @@ func handleStreaming(w http.ResponseWriter, apiKey *keys.APIKey, body []byte, mo
 	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024) // up to 4 MB per line
 
 	var promptTok, completionTok int
+	var servedModel string
 	for scanner.Scan() {
 		line := scanner.Bytes()
 
@@ -226,30 +235,38 @@ func handleStreaming(w http.ResponseWriter, apiKey *keys.APIKey, body []byte, mo
 		w.Write([]byte("\n"))
 		flusher.Flush()
 
-		// Capture usage from data chunks (include_usage gives it in the last one)
+		// Capture usage + served model from data chunks (include_usage puts the
+		// final usage in the last chunk; model is on every chunk)
 		if bytes.HasPrefix(line, []byte("data: ")) {
 			payload := bytes.TrimSpace(line[6:])
 			if !bytes.Equal(payload, []byte("[DONE]")) {
 				var chunk struct {
+					Model string `json:"model"`
 					Usage *struct {
 						PromptTokens     int `json:"prompt_tokens"`
 						CompletionTokens int `json:"completion_tokens"`
 					} `json:"usage"`
 				}
-				if json.Unmarshal(payload, &chunk) == nil && chunk.Usage != nil {
-					promptTok = chunk.Usage.PromptTokens
-					completionTok = chunk.Usage.CompletionTokens
+				if json.Unmarshal(payload, &chunk) == nil {
+					if chunk.Model != "" {
+						servedModel = chunk.Model
+					}
+					if chunk.Usage != nil {
+						promptTok = chunk.Usage.PromptTokens
+						completionTok = chunk.Usage.CompletionTokens
+					}
 				}
 			}
 		}
 	}
 
 	latency := int(time.Since(start).Milliseconds())
-	costUSD := (float64(promptTok)*0.50 + float64(completionTok)*1.50) / 1_000_000
+	costUSD := pricing.Retail(promptTok, completionTok)
+	wholesaleUSD := pricing.Wholesale(servedModel, promptTok, completionTok)
 
 	go billing.DeductBalance(context.Background(), apiKey.CustomerID, costUSD)
 	go keys.RecordUsage(apiKey.ID, apiKey.CustomerID, subnet, model, "ok",
-		promptTok, completionTok, latency, costUSD)
+		promptTok, completionTok, latency, costUSD, wholesaleUSD, servedModel)
 }
 
 // ── Admin: create customer ────────────────────────────────────────────────────
@@ -301,6 +318,83 @@ func handleCreateKey(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"key":  rawKey,
 		"note": "Store this key — it will not be shown again.",
+	})
+}
+
+// handleMargin reports retail vs wholesale (COGS) per served model over the
+// last N days — the hard data that proves the Tier-1 router is preserving margin
+// by down-routing simple prompts to cheaper models. ?days=7 (default).
+func handleMargin(w http.ResponseWriter, r *http.Request) {
+	days := 7
+	if d := r.URL.Query().Get("days"); d != "" {
+		if n, err := strconv.Atoi(d); err == nil && n > 0 && n <= 90 {
+			days = n
+		}
+	}
+
+	rows, err := db.Pool.Query(r.Context(), `
+		SELECT
+			COALESCE(served_model, '(unknown)') AS model,
+			COUNT(*)                            AS requests,
+			COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS tokens,
+			COALESCE(SUM(cost_usd), 0)          AS retail,
+			COALESCE(SUM(wholesale_cost_usd), 0) AS wholesale
+		FROM usage_events
+		WHERE status = 'ok' AND ts >= NOW() - make_interval(days => $1)
+		GROUP BY served_model
+		ORDER BY retail DESC
+	`, days)
+	if err != nil {
+		http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type Row struct {
+		Model     string  `json:"model"`
+		Requests  int64   `json:"requests"`
+		Tokens    int64   `json:"tokens"`
+		Retail    float64 `json:"retail_usd"`
+		Wholesale float64 `json:"wholesale_usd"`
+		Margin    float64 `json:"margin_usd"`
+		MarginPct float64 `json:"margin_pct"`
+	}
+	var breakdown []Row
+	var totRetail, totWholesale float64
+	var totReq int64
+	for rows.Next() {
+		var x Row
+		rows.Scan(&x.Model, &x.Requests, &x.Tokens, &x.Retail, &x.Wholesale)
+		x.Margin = x.Retail - x.Wholesale
+		if x.Retail > 0 {
+			x.MarginPct = x.Margin / x.Retail * 100
+		}
+		totRetail += x.Retail
+		totWholesale += x.Wholesale
+		totReq += x.Requests
+		breakdown = append(breakdown, x)
+	}
+	if breakdown == nil {
+		breakdown = []Row{}
+	}
+
+	totMargin := totRetail - totWholesale
+	var totMarginPct float64
+	if totRetail > 0 {
+		totMarginPct = totMargin / totRetail * 100
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"days": days,
+		"totals": map[string]interface{}{
+			"requests":      totReq,
+			"retail_usd":    totRetail,
+			"wholesale_usd": totWholesale,
+			"margin_usd":    totMargin,
+			"margin_pct":    totMarginPct,
+		},
+		"by_model": breakdown,
 	})
 }
 
