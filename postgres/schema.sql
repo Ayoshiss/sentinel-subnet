@@ -65,7 +65,11 @@ CREATE INDEX IF NOT EXISTS idx_magic_links_expires ON magic_links (expires_at);
 
 -- ── Billing ───────────────────────────────────────────────────────────────────
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
-ALTER TABLE customers ADD COLUMN IF NOT EXISTS balance_usd NUMERIC(12,6) NOT NULL DEFAULT 0;
+-- Free tier: every new customer is granted $0.10 (~100k tokens at our blended
+-- rate). The default fires once at row creation on BOTH creation paths
+-- (signup + magic-link login). ON CONFLICT upserts never touch balance, so a
+-- returning user cannot re-farm the grant.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS balance_usd NUMERIC(12,6) NOT NULL DEFAULT 0.10;
 
 CREATE TABLE IF NOT EXISTS credit_purchases (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

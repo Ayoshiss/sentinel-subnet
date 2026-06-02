@@ -6,7 +6,7 @@ const PRICING = [
     price: "$0",
     period: "",
     description: "Try it out",
-    features: ["100k tokens / month", "SN64 Chutes access", "Community support"],
+    features: ["100k free tokens to start", "SN64 Chutes access", "Community support"],
     cta: "Get started",
     href: "/signup",
     highlight: false,

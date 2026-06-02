@@ -193,33 +193,26 @@ async def _route_streaming(request: dict, model_chain: List[str]):
             return None
 
         payload = {**base, "model": model}
-        gen = _open_stream(payload, model)
+        headers = {"Authorization": f"Bearer {CHUTES_API_KEY}", "Content-Type": "application/json"}
         try:
-            # TTFT cap — abandon a stalling miner fast
-            first_chunk = await asyncio.wait_for(gen.__anext__(), timeout=TTFT_CAP)
+            # TTFT cap — abandon a stalling miner fast. _open_upstream_stream
+            # guarantees the connection is closed on any failure.
+            resp, aiter, first_chunk = await _open_upstream_stream(
+                CHUTES_API_URL, headers, payload, TTFT_CAP)
         except (asyncio.TimeoutError, StopAsyncIteration):
             log.warning("Model %s — no first token within %.0fs, next", model, TTFT_CAP)
-            await _safe_aclose(gen)
             continue
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as e:
             log.warning("Model %s stream failed (%s) — next", model, type(e).__name__)
-            await _safe_aclose(gen)
             await _reset_client()
             continue
         except Exception as e:
             log.warning("Model %s stream error: %s — next", model, e)
-            await _safe_aclose(gen)
             continue
 
         log.info("Streaming from SN64 %s (TTFT %.1fs)", model, time.monotonic() - phase_start)
-
-        async def body():
-            yield first_chunk
-            async for chunk in gen:
-                yield chunk
-
         return StreamingResponse(
-            body(),
+            _stream_body(resp, aiter, first_chunk),
             media_type="text/event-stream",
             headers={"X-Routed-Subnet": f"SN64-Chutes/{model}"},
         )
@@ -242,25 +235,45 @@ async def _route_buffered(request: dict, model_chain: List[str]):
     return None
 
 
-async def _open_stream(payload: dict, model: str):
-    """Async generator yielding raw SSE bytes from Chutes. The read timeout
-    (STREAM_IDLE) governs gaps once the stream is flowing; the first-token TTFT
-    cap is enforced by the caller via asyncio.wait_for."""
-    async with _client.stream(
-        "POST",
-        CHUTES_API_URL,
-        json=payload,
-        headers={
-            "Authorization": f"Bearer {CHUTES_API_KEY}",
-            "Content-Type": "application/json",
-        },
+async def _open_upstream_stream(url: str, headers: dict, payload: dict, ttft: float):
+    """Send a streaming POST and return (response, byte_iterator, first_chunk)
+    once the first token arrives within `ttft` seconds.
+
+    Robustness contract:
+    - The first-token wait is bounded by `ttft` via asyncio.wait_for.
+    - On ANY failure (timeout, bad status, empty stream, or cancellation) the
+      underlying connection is EXPLICITLY closed via resp.aclose() before the
+      exception propagates — we never rely on async-generator GC to release it.
+    - On success the caller owns `response` and must close it (done in
+      _stream_body's finally block, which also runs on client disconnect)."""
+    req = _client.build_request(
+        "POST", url, json=payload, headers=headers,
         timeout=httpx.Timeout(connect=5.0, read=STREAM_IDLE, write=5.0, pool=5.0),
-    ) as resp:
+    )
+    resp = await asyncio.wait_for(_client.send(req, stream=True), timeout=ttft)
+    try:
         if resp.status_code != 200:
-            log.warning("Model %s stream returned status %s", model, resp.status_code)
             raise httpx.RemoteProtocolError(f"status {resp.status_code}")
-        async for chunk in resp.aiter_bytes():
+        aiter = resp.aiter_bytes()
+        first = await asyncio.wait_for(aiter.__anext__(), timeout=ttft)
+        return resp, aiter, first
+    except BaseException:
+        # Covers TimeoutError, status errors, StopAsyncIteration, and
+        # CancelledError — explicit, deterministic connection release.
+        await resp.aclose()
+        raise
+
+
+async def _stream_body(resp, aiter, first_chunk):
+    """Forward SSE bytes, guaranteeing the upstream connection is closed when
+    the stream ends OR the client disconnects (FastAPI cancels this generator,
+    and the finally runs on that cancellation)."""
+    try:
+        yield first_chunk
+        async for chunk in aiter:
             yield chunk
+    finally:
+        await resp.aclose()
 
 
 async def _try_model(request: dict, model: str) -> Optional[JSONResponse]:
@@ -305,22 +318,15 @@ async def _groq_backstop(request: dict, is_stream: bool):
     if is_stream:
         payload["stream"] = True
         payload.setdefault("stream_options", {"include_usage": True})
-        gen = _open_groq_stream(payload)
         try:
-            first = await asyncio.wait_for(gen.__anext__(), timeout=GROQ_TIMEOUT)
+            resp, aiter, first = await _open_upstream_stream(
+                GROQ_API_URL, headers, payload, GROQ_TIMEOUT)
         except Exception as e:
             log.error("Groq backstop stream failed: %s", e)
-            await _safe_aclose(gen)
             return None
         log.info("Groq backstop streaming (%s)", GROQ_MODEL)
-
-        async def body():
-            yield first
-            async for chunk in gen:
-                yield chunk
-
         return StreamingResponse(
-            body(),
+            _stream_body(resp, aiter, first),
             media_type="text/event-stream",
             headers={"X-Routed-Subnet": "groq-backstop"},
         )
@@ -336,20 +342,6 @@ async def _groq_backstop(request: dict, is_stream: bool):
         return None
 
 
-async def _open_groq_stream(payload: dict):
-    async with _client.stream(
-        "POST",
-        GROQ_API_URL,
-        json=payload,
-        headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-        timeout=httpx.Timeout(connect=5.0, read=STREAM_IDLE, write=5.0, pool=5.0),
-    ) as resp:
-        if resp.status_code != 200:
-            raise httpx.RemoteProtocolError(f"groq status {resp.status_code}")
-        async for chunk in resp.aiter_bytes():
-            yield chunk
-
-
 async def _reset_client():
     """Recreate the HTTP client to clear stale connections."""
     global _client
@@ -361,13 +353,6 @@ async def _reset_client():
         timeout=httpx.Timeout(connect=5.0, read=STREAM_IDLE, write=5.0, pool=5.0),
         limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
     )
-
-
-async def _safe_aclose(agen):
-    try:
-        await agen.aclose()
-    except Exception:
-        pass
 
 
 def _normalize_model(model: str) -> str:
