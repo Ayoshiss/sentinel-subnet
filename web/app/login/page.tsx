@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Logo, EyeMark } from "@/components/brand";
 
 type Step = "form" | "loading" | "sent" | "error";
 
@@ -29,10 +30,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <header className="border-b border-gray-100 px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="font-semibold text-gray-900 tracking-tight">TAO Gateway</Link>
-        <Link href="/signup" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+    <div className="min-h-screen bg-[#0A0A0B] text-[#ECECEC] flex flex-col antialiased selection:bg-[#E5392B]/30">
+      <header className="border-b border-[#1E1E20] px-6 h-16 flex items-center justify-between">
+        <Link href="/"><Logo /></Link>
+        <Link href="/signup" className="text-sm text-[#8A8A8F] hover:text-[#ECECEC] transition-colors">
           No account? Sign up →
         </Link>
       </header>
@@ -42,24 +43,24 @@ export default function Login() {
 
           {(step === "form" || step === "loading") && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Sign in</h1>
-              <p className="text-sm text-gray-500 mb-8">We&apos;ll email you a magic link — no password needed.</p>
+              <h1 className="text-2xl font-semibold tracking-tight mb-1">Sign in</h1>
+              <p className="text-sm text-[#8A8A8F] mb-8">We&apos;ll email you a magic link — no password needed.</p>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Email</label>
+                  <label className="block text-xs font-medium text-[#8A8A8F] mb-1.5">Email</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@company.com"
-                    className="w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
+                    className="w-full bg-[#111113] border border-[#1E1E20] rounded-lg px-3.5 py-2.5 text-sm text-[#ECECEC] placeholder-[#55555B] focus:outline-none focus:border-[#E5392B]/50 transition"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={step === "loading" || !email}
-                  className="w-full bg-gray-900 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full bg-[#E5392B] text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-[#cf3325] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {step === "loading" ? (
                     <span className="flex items-center justify-center gap-2">
@@ -77,19 +78,12 @@ export default function Login() {
 
           {step === "sent" && (
             <div className="text-center">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                </svg>
-              </div>
-              <h1 className="text-xl font-bold text-gray-900 mb-2">Check your email</h1>
-              <p className="text-sm text-gray-500 mb-1">We sent a magic link to</p>
-              <p className="text-sm font-medium text-gray-900 mb-6">{email}</p>
-              <p className="text-xs text-gray-400">Link expires in 15 minutes. Check your spam folder if you don&apos;t see it.</p>
-              <button
-                onClick={() => setStep("form")}
-                className="mt-6 text-sm text-gray-500 hover:text-gray-900 transition-colors"
-              >
+              <EyeMark size={44} className="mx-auto mb-5" />
+              <h1 className="text-xl font-semibold tracking-tight mb-2">Check your email</h1>
+              <p className="text-sm text-[#8A8A8F] mb-1">We sent a magic link to</p>
+              <p className="text-sm font-medium text-[#ECECEC] mb-6">{email}</p>
+              <p className="text-xs text-[#55555B]">Link expires in 15 minutes. Check spam if you don&apos;t see it.</p>
+              <button onClick={() => setStep("form")} className="mt-6 text-sm text-[#8A8A8F] hover:text-[#ECECEC] transition-colors">
                 Use a different email
               </button>
             </div>
@@ -97,9 +91,9 @@ export default function Login() {
 
           {step === "error" && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 mb-6">Something went wrong</h1>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700 mb-6">{error}</div>
-              <button onClick={() => setStep("form")} className="w-full border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:border-gray-400 transition-colors">
+              <h1 className="text-2xl font-semibold tracking-tight mb-6">Something went wrong</h1>
+              <div className="bg-[#E5392B]/10 border border-[#E5392B]/30 rounded-lg p-4 text-sm text-[#E5827B] mb-6">{error}</div>
+              <button onClick={() => setStep("form")} className="w-full border border-[#1E1E20] text-[#ECECEC] py-2.5 rounded-lg text-sm font-medium hover:border-[#33333A] transition-colors">
                 Try again
               </button>
             </>

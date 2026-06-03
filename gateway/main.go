@@ -64,9 +64,15 @@ func main() {
 	r.With(sessionMiddleware).Get("/v1/keys", handleListKeys)
 	r.With(sessionMiddleware).Delete("/v1/keys/{id}", handleRevokeKey)
 
+	// Account
+	r.With(sessionMiddleware).Get("/v1/account", handleGetAccount)
+	r.With(sessionMiddleware).Patch("/v1/account", handleUpdateAccount)
+
 	// Billing routes
 	r.With(sessionMiddleware).Post("/v1/billing/checkout", handleCreateCheckout)
 	r.With(sessionMiddleware).Get("/v1/billing/balance", handleGetBalance)
+	r.With(sessionMiddleware).Get("/v1/billing/history", handleBillingHistory)
+	r.With(sessionMiddleware).Post("/v1/billing/portal", handleBillingPortal)
 	r.Post("/v1/billing/webhook", handleStripeWebhook)
 
 	// Admin routes — protected by ADMIN_SECRET header
@@ -455,7 +461,7 @@ func adminMiddleware(next http.Handler) http.Handler {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Secret")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -530,6 +536,7 @@ func sessionMiddleware(next http.Handler) http.Handler {
 }
 
 func handleUsage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
 
 	rows, err := db.Pool.Query(r.Context(), `
@@ -570,6 +577,7 @@ func handleUsage(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleListKeys(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
 
 	rows, err := db.Pool.Query(r.Context(), `
@@ -663,6 +671,7 @@ func handleCreateCheckout(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetBalance(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
 	balance, err := billing.GetBalance(r.Context(), sess.CustomerID)
 	if err != nil {
@@ -671,6 +680,113 @@ func handleGetBalance(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]float64{"balance_usd": balance})
+}
+
+// ── Account ───────────────────────────────────────────────────────────────────
+
+func handleGetAccount(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+
+	var email string
+	var name *string
+	var createdAt time.Time
+	err := db.Pool.QueryRow(r.Context(),
+		`SELECT email, name, created_at FROM customers WHERE id = $1`, sess.CustomerID,
+	).Scan(&email, &name, &createdAt)
+	if err != nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	displayName := ""
+	if name != nil {
+		displayName = *name
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"email":      email,
+		"name":       displayName,
+		"created_at": createdAt.Format(time.RFC3339),
+	})
+}
+
+func handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+		return
+	}
+	if _, err := db.Pool.Exec(r.Context(),
+		`UPDATE customers SET name = $1 WHERE id = $2`, body.Name, sess.CustomerID); err != nil {
+		http.Error(w, `{"error":"could not update"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": body.Name})
+}
+
+// ── Billing: history + portal ─────────────────────────────────────────────────
+
+func handleBillingHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+
+	rows, err := db.Pool.Query(r.Context(), `
+		SELECT amount_usd, credits_usd, status, created_at, paid_at
+		FROM credit_purchases
+		WHERE customer_id = $1
+		ORDER BY created_at DESC
+		LIMIT 50
+	`, sess.CustomerID)
+	if err != nil {
+		http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type Purchase struct {
+		AmountUSD  float64 `json:"amount_usd"`
+		CreditsUSD float64 `json:"credits_usd"`
+		Status     string  `json:"status"`
+		CreatedAt  string  `json:"created_at"`
+		PaidAt     *string `json:"paid_at"`
+	}
+	var out []Purchase
+	for rows.Next() {
+		var p Purchase
+		var created time.Time
+		var paid *time.Time
+		rows.Scan(&p.AmountUSD, &p.CreditsUSD, &p.Status, &created, &paid)
+		p.CreatedAt = created.Format(time.RFC3339)
+		if paid != nil {
+			s := paid.Format(time.RFC3339)
+			p.PaidAt = &s
+		}
+		out = append(out, p)
+	}
+	if out == nil {
+		out = []Purchase{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
+}
+
+func handleBillingPortal(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(ctxSessionKey).(*auth.Session)
+	appURL := getEnv("APP_URL", "http://localhost:3002")
+	url, err := billing.CreatePortalSession(r.Context(), sess.CustomerID, sess.Email, appURL+"/settings")
+	if err != nil {
+		log.Printf("portal error: %v", err)
+		// Most common cause in test mode: the Customer Portal hasn't been
+		// activated in the Stripe dashboard yet.
+		http.Error(w, `{"error":"billing portal unavailable — enable the Customer Portal in Stripe settings"}`, http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"url": url})
 }
 
 func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {

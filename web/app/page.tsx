@@ -1,199 +1,190 @@
 import Link from "next/link";
+import { EyeMark, Logo } from "@/components/brand";
+import { AuthNav, HeroCTA } from "@/components/auth-nav";
 
-const PRICING = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "",
-    description: "Try it out",
-    features: ["100k free tokens to start", "SN64 Chutes access", "Community support"],
-    cta: "Get started",
-    href: "/signup",
-    highlight: false,
-  },
-  {
-    name: "Builder",
-    price: "$29",
-    period: "/mo",
-    description: "For production apps",
-    features: ["10M tokens / month", "All subnets", "Smart routing", "Email support", "Usage dashboard"],
-    cta: "Start building",
-    href: "/signup",
-    highlight: true,
-  },
-  {
-    name: "Scale",
-    price: "$199",
-    period: "/mo",
-    description: "High-volume workloads",
-    features: ["Unlimited tokens", "Priority routing", "SLA guarantee", "Dedicated support", "Custom models"],
-    cta: "Contact us",
-    href: "mailto:hello@taogateway.dev",
-    highlight: false,
-  },
-];
+const API_HOST = "https://tao-gateway.fly.dev"; // swaps to api.bhairab.ai in Phase 2
 
 const COMPARISON = [
-  { label: "GPT-4o", provider: "OpenAI", input: "$5.00", output: "$15.00", highlight: false },
-  { label: "Claude Sonnet", provider: "Anthropic", input: "$3.00", output: "$15.00", highlight: false },
-  { label: "DeepSeek V3 via SN64", provider: "TAO Gateway", input: "$0.50", output: "$1.50", highlight: true },
+  { label: "GPT-4o", provider: "OpenAI", input: "$5.00", output: "$15.00", us: false },
+  { label: "Claude Sonnet", provider: "Anthropic", input: "$3.00", output: "$15.00", us: false },
+  { label: "Bhairab", provider: "Bittensor SN64", input: "$0.50", output: "$1.50", us: true },
+];
+
+const PILLARS = [
+  {
+    k: "01",
+    title: "10× cheaper",
+    body: "Inference runs on Bittensor's decentralized GPU network — no data-center markup, no brand premium. You pay a fraction of OpenAI's rate.",
+  },
+  {
+    k: "02",
+    title: "Never down",
+    body: "Decentralized nodes are chaotic. Bhairab guards against it — a sub-5s failover ladder and an invisible backstop keep your app online when the network isn't.",
+  },
+  {
+    k: "03",
+    title: "No crypto",
+    body: "Pay with a credit card. No wallet, no TAO, no staking, no Subtensor node. The entire decentralized machinery stays invisible.",
+  },
 ];
 
 const STEPS = [
-  { num: "1", title: "Get an API key", desc: "Sign up with your email. No wallet, no crypto, no TAO required." },
-  { num: "2", title: "Change one line", desc: "Point your existing OpenAI SDK at our endpoint. Zero other changes." },
-  { num: "3", title: "We handle everything", desc: "We route to the best subnet, pay miners in TAO, and bill you in USD." },
+  { n: "1", t: "Get a key", d: "Sign up with an email. 100k tokens free, no card." },
+  { n: "2", t: "Change one line", d: "Point your OpenAI SDK at our endpoint. Nothing else changes." },
+  { n: "3", t: "We guard the rest", d: "Routing, failover, paying miners in TAO, fiat billing — handled." },
+];
+
+const PRICING = [
+  { name: "Free", price: "$0", period: "", desc: "Try it", features: ["100k tokens", "SN64 access", "Community support"], cta: "Get started", href: "/signup", hl: false },
+  { name: "Builder", price: "$29", period: "/mo", desc: "For production", features: ["10M tokens", "Smart routing", "Failover backstop", "Usage dashboard"], cta: "Start building", href: "/signup", hl: true },
+  { name: "Scale", price: "$199", period: "/mo", desc: "High volume", features: ["Unlimited tokens", "Priority routing", "SLA guarantee", "Dedicated support"], cta: "Contact", href: "mailto:hello@bhairab.ai", hl: false },
 ];
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white text-gray-900">
-
+    <div className="min-h-screen bg-[#0A0A0B] text-[#ECECEC] antialiased selection:bg-[#E5392B]/30">
       {/* Nav */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <span className="font-semibold text-gray-900 tracking-tight">TAO Gateway</span>
-            <nav className="hidden md:flex items-center gap-6 text-sm text-gray-500">
-              <a href="#how" className="hover:text-gray-900 transition-colors">How it works</a>
-              <a href="#pricing" className="hover:text-gray-900 transition-colors">Pricing</a>
-              <a href="https://github.com/Ayoshiss/tao-gateway" target="_blank" className="hover:text-gray-900 transition-colors">Docs</a>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Sign in</Link>
-            <Link href="/signup" className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors">
-              Get API key →
-            </Link>
-          </div>
+      <header className="sticky top-0 z-50 bg-[#0A0A0B]/80 backdrop-blur border-b border-[#1E1E20]">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/"><Logo /></Link>
+          <nav className="hidden md:flex items-center gap-8 text-sm text-[#8A8A8F]">
+            <a href="#how" className="hover:text-[#ECECEC] transition-colors">How it works</a>
+            <a href="#pricing" className="hover:text-[#ECECEC] transition-colors">Pricing</a>
+            <Link href="/docs" className="hover:text-[#ECECEC] transition-colors">Docs</Link>
+          </nav>
+          <AuthNav />
         </div>
       </header>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
-        <div className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-4 py-1.5 text-xs text-gray-500 mb-8">
-          <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-          Now live — SN64 Chutes inference
+      <section className="max-w-6xl mx-auto px-6 pt-24 pb-20 text-center">
+        <div className="flex justify-center mb-10">
+          <EyeMark size={64} />
         </div>
-
-        <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-gray-900 mb-6 leading-[1.1]">
-          Bittensor AI.<br />
-          <span className="text-gray-400">One API. Fiat billing.</span>
+        <div className="inline-flex items-center gap-2 border border-[#1E1E20] rounded-full px-3.5 py-1.5 text-xs text-[#8A8A8F] mb-8">
+          <span className="w-1.5 h-1.5 bg-[#E5392B] rounded-full" />
+          Live on Bittensor SN64
+        </div>
+        <h1 className="text-5xl md:text-7xl font-semibold tracking-tight leading-[1.05] mb-6">
+          The guardian of<br />
+          <span className="text-[#8A8A8F]">decentralized AI.</span>
         </h1>
-
-        <p className="text-lg text-gray-500 max-w-xl mx-auto mb-10 leading-relaxed">
-          Access Bittensor&apos;s decentralized AI subnets with a standard REST API and a credit card.
-          No wallet. No TAO. No crypto setup.
+        <p className="text-lg text-[#8A8A8F] max-w-xl mx-auto mb-10 leading-relaxed">
+          One API to Bittensor&apos;s decentralized inference network. 10× cheaper than OpenAI,
+          fiat billing, and an SLA the network can&apos;t break on its own.
         </p>
-
-        <div className="flex items-center justify-center gap-3 mb-16">
-          <Link href="/signup" className="bg-gray-900 text-white px-6 py-3 rounded-lg text-sm font-semibold hover:bg-gray-700 transition-colors">
-            Get free API key
-          </Link>
-          <a href="#how" className="border border-gray-200 text-gray-600 px-6 py-3 rounded-lg text-sm font-medium hover:border-gray-400 transition-colors">
-            See how it works
-          </a>
-        </div>
+        <HeroCTA />
 
         {/* Code block */}
-        <div className="max-w-2xl mx-auto text-left rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <div className="flex items-center justify-between bg-gray-50 border-b border-gray-200 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-red-400" />
-              <span className="w-3 h-3 rounded-full bg-yellow-400" />
-              <span className="w-3 h-3 rounded-full bg-green-400" />
+        <div className="max-w-2xl mx-auto text-left rounded-xl border border-[#1E1E20] overflow-hidden">
+          <div className="flex items-center justify-between bg-[#111113] border-b border-[#1E1E20] px-4 py-3">
+            <div className="flex items-center gap-2 text-[#8A8A8F]">
+              <EyeMark size={14} />
+              <span className="text-xs tracking-widest uppercase">Drop-in for OpenAI</span>
             </div>
-            <span className="text-xs text-gray-400 font-mono">Python</span>
+            <span className="text-xs text-[#8A8A8F] font-mono">python</span>
           </div>
-          <pre className="bg-white p-5 text-sm font-mono text-gray-700 overflow-x-auto leading-relaxed">{`from openai import OpenAI
+          <pre className="bg-[#0C0C0D] p-5 text-sm font-mono text-[#B7B7BC] overflow-x-auto leading-relaxed">{`from openai import OpenAI
 
 client = OpenAI(
-    api_key=`}<span className="text-green-600">{`"sk_live_..."`}</span>{`,
-    base_url=`}<span className="text-blue-600">{`"https://api.taogateway.dev/v1"`}</span>{`  # ← only change
+    api_key=`}<span className="text-[#E5392B]">{`"sk_live_..."`}</span>{`,
+    base_url=`}<span className="text-[#C9A227]">{`"${API_HOST}/v1"`}</span>{`  # only change
 )
 
-response = client.chat.completions.create(
-    model=`}<span className="text-orange-500">{`"gpt-4o"`}</span>{`,
-    messages=[{`}<span className="text-purple-600">{`"role"`}</span>{`: `}<span className="text-green-600">{`"user"`}</span>{`, `}<span className="text-purple-600">{`"content"`}</span>{`: `}<span className="text-green-600">{`"Hello!"`}</span>{`}]
-)
-`}<span className="text-gray-400">{`# Routes to Bittensor SN64 · 90% cheaper than OpenAI`}</span></pre>
+resp = client.chat.completions.create(
+    model=`}<span className="text-[#C9A227]">{`"auto"`}</span>{`,
+    messages=[{`}<span className="text-[#8A8A8F]">{`"role"`}</span>{`: `}<span className="text-[#C9A227]">{`"user"`}</span>{`, `}<span className="text-[#8A8A8F]">{`"content"`}</span>{`: `}<span className="text-[#C9A227]">{`"Hello"`}</span>{`}]
+)`}</pre>
         </div>
       </section>
 
       {/* Price comparison */}
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-gray-100">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest text-center mb-8">Price per 1M tokens</p>
-        <div className="max-w-2xl mx-auto divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden">
-          {COMPARISON.map((row) => (
-            <div key={row.label} className={`flex items-center justify-between px-6 py-4 ${row.highlight ? "bg-gray-50" : "bg-white"}`}>
-              <div>
-                <span className="text-sm font-medium text-gray-900">{row.label}</span>
-                <span className="ml-2 text-xs text-gray-400">{row.provider}</span>
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-[#1E1E20]">
+        <p className="text-xs font-medium text-[#8A8A8F] uppercase tracking-[0.2em] text-center mb-8">Price per 1M tokens</p>
+        <div className="max-w-2xl mx-auto border border-[#1E1E20] rounded-xl divide-y divide-[#1E1E20] overflow-hidden">
+          {COMPARISON.map((r) => (
+            <div key={r.label} className={`flex items-center justify-between px-6 py-4 ${r.us ? "bg-[#111113]" : ""}`}>
+              <div className="flex items-center gap-2.5">
+                {r.us && <EyeMark size={16} />}
+                <span className={r.us ? "text-sm font-medium text-[#ECECEC]" : "text-sm text-[#8A8A8F]"}>{r.label}</span>
+                <span className="text-xs text-[#55555B]">{r.provider}</span>
               </div>
               <div className="flex gap-6 text-sm">
-                <span className="text-gray-500">In: <span className={row.highlight ? "font-semibold text-green-600" : "text-gray-900"}>{row.input}</span></span>
-                <span className="text-gray-500">Out: <span className={row.highlight ? "font-semibold text-green-600" : "text-gray-900"}>{row.output}</span></span>
+                <span className="text-[#55555B]">in <span className={r.us ? "text-[#E5392B] font-semibold" : "text-[#ECECEC]"}>{r.input}</span></span>
+                <span className="text-[#55555B]">out <span className={r.us ? "text-[#E5392B] font-semibold" : "text-[#ECECEC]"}>{r.output}</span></span>
               </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Pillars */}
+      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-[#1E1E20]">
+        <div className="grid md:grid-cols-3 gap-px bg-[#1E1E20] border border-[#1E1E20] rounded-xl overflow-hidden">
+          {PILLARS.map((p) => (
+            <div key={p.k} className="bg-[#0A0A0B] p-8">
+              <div className="text-xs font-mono text-[#E5392B] mb-6">{p.k}</div>
+              <h3 className="text-lg font-semibold mb-3">{p.title}</h3>
+              <p className="text-sm text-[#8A8A8F] leading-relaxed">{p.body}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* How it works */}
-      <section id="how" className="max-w-6xl mx-auto px-6 py-16 border-t border-gray-100">
-        <h2 className="text-2xl font-bold text-center mb-2">How it works</h2>
-        <p className="text-gray-500 text-sm text-center mb-12">Three steps from zero to decentralized AI</p>
-        <div className="grid md:grid-cols-3 gap-8">
-          {STEPS.map((step) => (
-            <div key={step.num} className="relative p-6 rounded-xl border border-gray-100 bg-gray-50">
-              <div className="w-8 h-8 bg-gray-900 text-white rounded-lg flex items-center justify-center text-xs font-bold mb-4">{step.num}</div>
-              <h3 className="font-semibold text-gray-900 mb-2">{step.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{step.desc}</p>
+      <section id="how" className="max-w-6xl mx-auto px-6 py-20 border-t border-[#1E1E20]">
+        <h2 className="text-3xl font-semibold tracking-tight text-center mb-2">How it works</h2>
+        <p className="text-[#8A8A8F] text-sm text-center mb-14">Three steps to decentralized inference</p>
+        <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          {STEPS.map((s) => (
+            <div key={s.n} className="text-center">
+              <div className="w-9 h-9 mx-auto mb-5 border border-[#1E1E20] rounded-lg flex items-center justify-center text-sm font-mono text-[#E5392B]">{s.n}</div>
+              <h3 className="font-semibold mb-2">{s.t}</h3>
+              <p className="text-sm text-[#8A8A8F] leading-relaxed">{s.d}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* What is Bittensor */}
-      <section className="bg-gray-50 border-y border-gray-100 py-16">
+      {/* Guardian / Bittensor */}
+      <section className="border-y border-[#1E1E20] py-20">
         <div className="max-w-3xl mx-auto px-6 text-center">
-          <h2 className="text-2xl font-bold mb-4">Built on Bittensor</h2>
-          <p className="text-gray-500 text-sm leading-relaxed mb-4">
-            Bittensor is a decentralized AI network with 256 specialized subnets — each a marketplace of GPU miners competing to deliver the best output.
-            Subnet 64 (Chutes) provides LLM inference at 90% below AWS. Subnet 62 (Ridges) beats Claude on coding benchmarks.
+          <EyeMark size={40} className="mx-auto mb-8" />
+          <h2 className="text-2xl font-semibold tracking-tight mb-5">Named for the guardian</h2>
+          <p className="text-[#8A8A8F] text-sm leading-relaxed mb-4">
+            Bhairab is the fierce protector deity of Kathmandu — the watchful guardian who never sleeps.
+            Bittensor is a $3.3B decentralized AI network of GPU miners, 10× cheaper than the cloud — but
+            chaotic, unreliable, and walled behind crypto.
           </p>
-          <p className="text-gray-500 text-sm leading-relaxed">
-            TAO Gateway routes your requests to the right subnet, pays miners in TAO on your behalf, and bills you in USD.
-            You get decentralized AI without ever touching crypto.
+          <p className="text-[#8A8A8F] text-sm leading-relaxed">
+            Bhairab stands between you and that chaos. It routes to the right subnet, pays miners in TAO,
+            fails over when the network stalls, and bills you in fiat. Always watching. Never down.
           </p>
         </div>
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="max-w-6xl mx-auto px-6 py-20">
-        <h2 className="text-2xl font-bold text-center mb-2">Simple pricing</h2>
-        <p className="text-gray-500 text-sm text-center mb-12">Cost-plus 30% above subnet wholesale. Always cheaper than OpenAI.</p>
-        <div className="grid md:grid-cols-3 gap-6">
-          {PRICING.map((plan) => (
-            <div key={plan.name} className={`rounded-xl p-8 flex flex-col border ${plan.highlight ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 bg-white"}`}>
-              <div className={`text-xs font-medium uppercase tracking-widest mb-4 ${plan.highlight ? "text-gray-400" : "text-gray-400"}`}>{plan.name}</div>
+      <section id="pricing" className="max-w-6xl mx-auto px-6 py-24">
+        <h2 className="text-3xl font-semibold tracking-tight text-center mb-2">Pricing</h2>
+        <p className="text-[#8A8A8F] text-sm text-center mb-14">Always cheaper than the cloud.</p>
+        <div className="grid md:grid-cols-3 gap-5 max-w-4xl mx-auto">
+          {PRICING.map((p) => (
+            <div key={p.name} className={`rounded-xl p-8 flex flex-col border ${p.hl ? "border-[#E5392B]/40 bg-[#111113]" : "border-[#1E1E20]"}`}>
+              <div className="text-xs font-medium uppercase tracking-[0.2em] text-[#8A8A8F] mb-4">{p.name}</div>
               <div className="mb-1">
-                <span className="text-4xl font-bold">{plan.price}</span>
-                <span className={`text-sm ${plan.highlight ? "text-gray-400" : "text-gray-400"}`}>{plan.period}</span>
+                <span className="text-4xl font-semibold">{p.price}</span>
+                <span className="text-sm text-[#55555B]">{p.period}</span>
               </div>
-              <div className={`text-sm mb-6 ${plan.highlight ? "text-gray-400" : "text-gray-500"}`}>{plan.description}</div>
+              <div className="text-sm text-[#8A8A8F] mb-6">{p.desc}</div>
               <ul className="space-y-2.5 mb-8 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className={`text-sm flex items-center gap-2 ${plan.highlight ? "text-gray-300" : "text-gray-600"}`}>
-                    <svg className={`w-4 h-4 shrink-0 ${plan.highlight ? "text-gray-400" : "text-gray-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {f}
+                {p.features.map((f) => (
+                  <li key={f} className="text-sm text-[#B7B7BC] flex items-center gap-2.5">
+                    <span className="text-[#E5392B] text-xs">◆</span> {f}
                   </li>
                 ))}
               </ul>
-              <Link href={plan.href} className={`text-center py-2.5 rounded-lg text-sm font-semibold transition-colors ${plan.highlight ? "bg-white text-gray-900 hover:bg-gray-100" : "bg-gray-900 text-white hover:bg-gray-700"}`}>
-                {plan.cta}
+              <Link href={p.href} className={`text-center py-2.5 rounded-md text-sm font-semibold transition-colors ${p.hl ? "bg-[#E5392B] text-white hover:bg-[#cf3325]" : "border border-[#1E1E20] text-[#ECECEC] hover:border-[#33333A]"}`}>
+                {p.cta}
               </Link>
             </div>
           ))}
@@ -201,13 +192,15 @@ response = client.chat.completions.create(
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-100 py-10">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-400">
-          <span>TAO Gateway © 2026</span>
+      <footer className="border-t border-[#1E1E20] py-10">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-[#55555B]">
+          <div className="flex items-center gap-2.5">
+            <EyeMark size={18} />
+            <span>Bhairab © 2026 — The guardian of decentralized AI</span>
+          </div>
           <div className="flex gap-6">
-            <a href="https://github.com/Ayoshiss/tao-gateway" target="_blank" className="hover:text-gray-900 transition-colors">GitHub</a>
-            <a href="mailto:hello@taogateway.dev" className="hover:text-gray-900 transition-colors">Contact</a>
-            <a href="#" className="hover:text-gray-900 transition-colors">Terms</a>
+            <Link href="/docs" className="hover:text-[#ECECEC] transition-colors">Docs</Link>
+            <a href="mailto:hello@bhairab.ai" className="hover:text-[#ECECEC] transition-colors">Contact</a>
           </div>
         </div>
       </footer>

@@ -39,26 +39,26 @@ function VerifyInner() {
   }, [params, router]);
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
+    <div className="min-h-screen bg-[#0A0A0B] text-[#ECECEC] flex items-center justify-center antialiased">
       <div className="text-center">
         {status === "verifying" ? (
           <>
-            <svg className="animate-spin w-8 h-8 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin w-8 h-8 text-[#55555B] mx-auto mb-4" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              <path className="opacity-75" fill="#E5392B" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
             </svg>
-            <p className="text-sm text-gray-500">Signing you in…</p>
+            <p className="text-sm text-[#8A8A8F]">Signing you in…</p>
           </>
         ) : (
           <>
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-[#E5392B]/10 border border-[#E5392B]/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-5 h-5 text-[#E5392B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
               </svg>
             </div>
-            <p className="text-sm text-gray-700 font-medium mb-1">Link expired</p>
-            <p className="text-xs text-gray-400 mb-4">{errorMsg}</p>
-            <a href="/login" className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+            <p className="text-sm text-[#ECECEC] font-medium mb-1">Link expired</p>
+            <p className="text-xs text-[#55555B] mb-4">{errorMsg}</p>
+            <a href="/login" className="text-sm bg-[#E5392B] text-white px-4 py-2 rounded-lg hover:bg-[#cf3325] transition-colors">
               Request a new link
             </a>
           </>

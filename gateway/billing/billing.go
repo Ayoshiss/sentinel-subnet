@@ -6,11 +6,29 @@ import (
 	"os"
 
 	"github.com/stripe/stripe-go/v82"
+	portalsession "github.com/stripe/stripe-go/v82/billingportal/session"
 	"github.com/stripe/stripe-go/v82/checkout/session"
 	"github.com/stripe/stripe-go/v82/customer"
 	"github.com/stripe/stripe-go/v82/webhook"
 	"github.com/taogateway/gateway/db"
 )
+
+// CreatePortalSession returns a Stripe-hosted Customer Portal URL where the
+// customer can manage payment methods, view invoices, and download receipts.
+func CreatePortalSession(ctx context.Context, customerID, email, returnURL string) (string, error) {
+	stripeCustomerID, err := ensureStripeCustomer(ctx, customerID, email)
+	if err != nil {
+		return "", fmt.Errorf("stripe customer: %w", err)
+	}
+	s, err := portalsession.New(&stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(stripeCustomerID),
+		ReturnURL: stripe.String(returnURL),
+	})
+	if err != nil {
+		return "", fmt.Errorf("portal session: %w", err)
+	}
+	return s.URL, nil
+}
 
 func init() {
 	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
