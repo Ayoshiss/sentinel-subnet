@@ -22,6 +22,8 @@ import (
 	"github.com/taogateway/gateway/keys"
 	"github.com/taogateway/gateway/pricing"
 	"github.com/taogateway/gateway/ratelimit"
+	"github.com/taogateway/gateway/x402"
+	"sync"
 )
 
 var sidecarURL = getEnv("SIDECAR_URL", "http://localhost:8001")
@@ -53,7 +55,9 @@ func main() {
 	r.Use(corsMiddleware)
 
 	r.Get("/health", handleHealth)
-	r.With(authMiddleware).Post("/v1/chat/completions", handleChatCompletions)
+	// Accepts EITHER a prepaid API key OR an x402 crypto payment (no middleware;
+	// resolveCaller handles both inside the handler).
+	r.Post("/v1/chat/completions", handleChatCompletions)
 
 	// Auth routes — magic link
 	r.Post("/auth/request", handleAuthRequest)
@@ -94,16 +98,120 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "subnet": "SN64-Chutes"})
 }
 
+// ── Caller: prepaid API key OR x402 crypto payment ────────────────────────────
+
+const x402Resource = "/v1/chat/completions"
+
+// caller is whoever authorized this request — a prepaid key holder or an x402 payer.
+type caller struct {
+	method     string // "prepaid" | "x402"
+	apiKeyID   string // prepaid only
+	customerID string // prepaid only
+	quotaRPM   int
+	rlKey      string // rate-limit bucket
+	payer      string // x402 payer pubkey (logging)
+}
+
+func x402PriceMicro() int64 {
+	if v := os.Getenv("X402_PRICE_MICRO"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return n
+		}
+	}
+	return 1000 // 0.001 USDC default (matches Lattice)
+}
+
+// In-memory single-use nonce store with TTL (v1 — multi-instance needs Redis).
+var (
+	nonceMu    sync.Mutex
+	nonceStore = map[string]time.Time{}
+)
+
+func issueNonce(n string) {
+	nonceMu.Lock()
+	nonceStore[n] = time.Now().Add(5 * time.Minute)
+	nonceMu.Unlock()
+}
+
+func consumeNonce(n string) bool {
+	nonceMu.Lock()
+	defer nonceMu.Unlock()
+	exp, ok := nonceStore[n]
+	delete(nonceStore, n) // single-use regardless
+	return ok && time.Now().Before(exp)
+}
+
+// write402 issues an x402 Payment Required challenge.
+func write402(w http.ResponseWriter) {
+	header, nonce := x402.Build402(x402Resource, x402PriceMicro())
+	issueNonce(nonce)
+	w.Header().Set("X-Payment-Required", header)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusPaymentRequired)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error": "payment required",
+		"type":  "x402",
+		"hint":  "pay via x402 (Solana USDC) and retry with X-PAYMENT, or use a Bearer API key",
+	})
+}
+
+// resolveCaller authorizes the request. Returns (caller,true) or writes 401/402.
+func resolveCaller(w http.ResponseWriter, r *http.Request) (*caller, bool) {
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		k, err := keys.Lookup(r.Context(), strings.TrimPrefix(auth, "Bearer "))
+		if err != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return nil, false
+		}
+		if k == nil {
+			http.Error(w, `{"error":"invalid api key"}`, http.StatusUnauthorized)
+			return nil, false
+		}
+		return &caller{method: "prepaid", apiKeyID: k.ID, customerID: k.CustomerID, quotaRPM: k.QuotaRPM, rlKey: k.ID}, true
+	}
+	if pay := r.Header.Get("X-Payment"); pay != "" {
+		proof, ok := x402.ParseProof(pay)
+		if !ok || !x402.Verify(proof, x402Resource, "", x402PriceMicro()) || !consumeNonce(proof.Nonce) {
+			write402(w)
+			return nil, false
+		}
+		log.Printf("x402 payment accepted: payer=%s amount=%s", proof.Pubkey, proof.Amount)
+		return &caller{method: "x402", quotaRPM: 60, rlKey: "x402:" + proof.Pubkey, payer: proof.Pubkey}, true
+	}
+	// No key, no payment → invite payment.
+	write402(w)
+	return nil, false
+}
+
+// bill records the charge. Prepaid → deduct balance + usage event. x402 → log
+// (a proper x402 ledger is a fast-follow).
+func bill(c *caller, subnet, reqModel, servedModel string, prompt, completion, latency int, status string) {
+	costUSD := pricing.Retail(prompt, completion)
+	wholesaleUSD := pricing.Wholesale(servedModel, prompt, completion)
+	if c.method == "prepaid" {
+		go billing.DeductBalance(context.Background(), c.customerID, costUSD)
+		go keys.RecordUsage(c.apiKeyID, c.customerID, subnet, reqModel, status,
+			prompt, completion, latency, costUSD, wholesaleUSD, servedModel)
+		return
+	}
+	log.Printf("x402 usage: payer=%s served=%s status=%s tokens=%d/%d retail=$%.6f wholesale=$%.6f",
+		c.payer, servedModel, status, prompt, completion, costUSD, wholesaleUSD)
+}
+
 // ── Chat completions ──────────────────────────────────────────────────────────
 
 func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
-	apiKey := r.Context().Value(ctxAPIKey).(*keys.APIKey)
 	start := time.Now()
 
+	c, ok := resolveCaller(w, r)
+	if !ok {
+		return
+	}
+
 	// ── Rate limiting ──────────────────────────────────────────────────────────
-	allowed, remaining, resetAt := ratelimit.Allow(apiKey.ID, apiKey.QuotaRPM)
+	allowed, remaining, resetAt := ratelimit.Allow(c.rlKey, c.quotaRPM)
 	if !allowed {
-		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", apiKey.QuotaRPM))
+		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", c.quotaRPM))
 		w.Header().Set("X-RateLimit-Remaining", "0")
 		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetAt.Unix()))
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(resetAt).Seconds())))
@@ -112,11 +220,13 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 
-	// ── Balance check ──────────────────────────────────────────────────────────
-	balance, err := billing.GetBalance(r.Context(), apiKey.CustomerID)
-	if err == nil && balance <= 0 {
-		http.Error(w, `{"error":"insufficient balance — top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
-		return
+	// ── Balance check (prepaid only; x402 already paid for this call) ────────────
+	if c.method == "prepaid" {
+		balance, err := billing.GetBalance(r.Context(), c.customerID)
+		if err == nil && balance <= 0 {
+			http.Error(w, `{"error":"insufficient balance — top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
+			return
+		}
 	}
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
@@ -137,14 +247,14 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// ── Streaming path (SSE) ─────────────────────────────────────────────────────
 	if req.Stream {
-		handleStreaming(w, apiKey, body, req.Model, start)
+		handleStreaming(w, c, body, req.Model, start)
 		return
 	}
 
 	resp, err := callSidecar("/query", body)
 	if err != nil {
 		log.Printf("sidecar error: %v", err)
-		keys.RecordUsage(apiKey.ID, apiKey.CustomerID, "SN64-Chutes", req.Model, "error", 0, 0, int(time.Since(start).Milliseconds()), 0, 0, "")
+		bill(c, "SN64-Chutes", req.Model, "", 0, 0, int(time.Since(start).Milliseconds()), "error")
 		http.Error(w, `{"error":"subnet unavailable"}`, http.StatusBadGateway)
 		return
 	}
@@ -166,20 +276,13 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	promptTok := openAIResp.Usage.PromptTokens
 	completionTok := openAIResp.Usage.CompletionTokens
 
-	// Retail = what we bill the customer. Wholesale = our COGS for the served model.
-	costUSD := pricing.Retail(promptTok, completionTok)
-	wholesaleUSD := pricing.Wholesale(openAIResp.Model, promptTok, completionTok)
-
-	// ── Deduct balance ─────────────────────────────────────────────────────────
-	go billing.DeductBalance(context.Background(), apiKey.CustomerID, costUSD)
-
 	subnet := resp.Header.Get("X-Routed-Subnet")
 	if subnet == "" {
 		subnet = "SN64-Chutes"
 	}
 
-	go keys.RecordUsage(apiKey.ID, apiKey.CustomerID, subnet, req.Model, "ok",
-		promptTok, completionTok, latency, costUSD, wholesaleUSD, openAIResp.Model)
+	// Bill the caller (prepaid → deduct + record; x402 → log).
+	bill(c, subnet, req.Model, openAIResp.Model, promptTok, completionTok, latency, "ok")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Routed-Subnet", subnet)
@@ -190,11 +293,11 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 // ── Streaming (SSE) ───────────────────────────────────────────────────────────
 
-func handleStreaming(w http.ResponseWriter, apiKey *keys.APIKey, body []byte, model string, start time.Time) {
+func handleStreaming(w http.ResponseWriter, c *caller, body []byte, model string, start time.Time) {
 	resp, err := callSidecar("/query", body)
 	if err != nil {
 		log.Printf("sidecar stream error: %v", err)
-		keys.RecordUsage(apiKey.ID, apiKey.CustomerID, "SN64-Chutes", model, "error", 0, 0, int(time.Since(start).Milliseconds()), 0, 0, "")
+		bill(c, "SN64-Chutes", model, "", 0, 0, int(time.Since(start).Milliseconds()), "error")
 		http.Error(w, `{"error":"subnet unavailable"}`, http.StatusBadGateway)
 		return
 	}
@@ -267,12 +370,7 @@ func handleStreaming(w http.ResponseWriter, apiKey *keys.APIKey, body []byte, mo
 	}
 
 	latency := int(time.Since(start).Milliseconds())
-	costUSD := pricing.Retail(promptTok, completionTok)
-	wholesaleUSD := pricing.Wholesale(servedModel, promptTok, completionTok)
-
-	go billing.DeductBalance(context.Background(), apiKey.CustomerID, costUSD)
-	go keys.RecordUsage(apiKey.ID, apiKey.CustomerID, subnet, model, "ok",
-		promptTok, completionTok, latency, costUSD, wholesaleUSD, servedModel)
+	bill(c, subnet, model, servedModel, promptTok, completionTok, latency, "ok")
 }
 
 // ── Admin: create customer ────────────────────────────────────────────────────
@@ -462,7 +560,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Secret")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Secret, X-Payment")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Payment-Required, X-Routed-Subnet, X-RateLimit-Remaining")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
