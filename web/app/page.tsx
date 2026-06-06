@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EyeMark, Logo } from "@/components/brand";
 import { AuthNav, HeroCTA } from "@/components/auth-nav";
+import { HeroBeams } from "@/components/hero-beams";
 
 const API_HOST = "https://tao-gateway.fly.dev"; // swaps to api.bhairab.ai in Phase 2
 
@@ -57,9 +58,10 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-24 pb-20 text-center">
-        <div className="flex justify-center mb-10">
-          <EyeMark size={64} />
+      <section className="max-w-6xl mx-auto px-6 pt-24 pb-20 text-center overflow-hidden">
+        <div className="relative flex justify-center mb-10">
+          <HeroBeams />
+          <EyeMark size={76} className="relative z-10" />
         </div>
         <div className="inline-flex items-center gap-2 border border-[#1E1E20] rounded-full px-3.5 py-1.5 text-xs text-[#8A8A8F] mb-8">
           <span className="w-1.5 h-1.5 bg-[#E5392B] rounded-full" />
