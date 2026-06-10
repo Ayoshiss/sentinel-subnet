@@ -6,7 +6,7 @@ import { HeroBeams } from "@/components/hero-beams";
 const API_HOST = "https://tao-gateway.fly.dev"; // swaps to api.bhairab.ai in Phase 2
 
 const COMPARISON = [
-  { label: "GPT-4o", provider: "OpenAI", input: "$5.00", output: "$15.00", us: false },
+  { label: "GPT-4o", provider: "OpenAI", input: "$2.50", output: "$10.00", us: false },
   { label: "Claude Sonnet", provider: "Anthropic", input: "$3.00", output: "$15.00", us: false },
   { label: "Bhairab", provider: "Bittensor SN64", input: "$0.50", output: "$1.50", us: true },
 ];
