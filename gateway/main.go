@@ -59,6 +59,10 @@ func main() {
 	// resolveCaller handles both inside the handler).
 	r.Post("/v1/chat/completions", handleChatCompletions)
 
+	// Pre-transaction risk scan — AI guardian that reads LIVE signals and returns
+	// a verdict before money moves. Same prepaid-or-x402 auth (agents pay to scan).
+	r.Post("/v1/risk/scan", handleRiskScan)
+
 	// Auth routes — magic link
 	r.Post("/auth/request", handleAuthRequest)
 	r.Get("/auth/verify", handleAuthVerify)
@@ -141,9 +145,9 @@ func consumeNonce(n string) bool {
 	return ok && time.Now().Before(exp)
 }
 
-// write402 issues an x402 Payment Required challenge.
-func write402(w http.ResponseWriter) {
-	header, nonce := x402.Build402(x402Resource, x402PriceMicro())
+// write402 issues an x402 Payment Required challenge for a specific resource.
+func write402(w http.ResponseWriter, resource string) {
+	header, nonce := x402.Build402(resource, x402PriceMicro())
 	issueNonce(nonce)
 	w.Header().Set("X-Payment-Required", header)
 	w.Header().Set("Content-Type", "application/json")
@@ -155,8 +159,9 @@ func write402(w http.ResponseWriter) {
 	})
 }
 
-// resolveCaller authorizes the request. Returns (caller,true) or writes 401/402.
-func resolveCaller(w http.ResponseWriter, r *http.Request) (*caller, bool) {
+// resolveCaller authorizes the request for a given x402 resource (the endpoint the
+// payment must be scoped to). Returns (caller,true) or writes 401/402.
+func resolveCaller(w http.ResponseWriter, r *http.Request, resource string) (*caller, bool) {
 	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 		k, err := keys.Lookup(r.Context(), strings.TrimPrefix(auth, "Bearer "))
 		if err != nil {
@@ -171,15 +176,15 @@ func resolveCaller(w http.ResponseWriter, r *http.Request) (*caller, bool) {
 	}
 	if pay := r.Header.Get("X-Payment"); pay != "" {
 		proof, ok := x402.ParseProof(pay)
-		if !ok || !x402.Verify(proof, x402Resource, "", x402PriceMicro()) || !consumeNonce(proof.Nonce) {
-			write402(w)
+		if !ok || !x402.Verify(proof, resource, "", x402PriceMicro()) || !consumeNonce(proof.Nonce) {
+			write402(w, resource)
 			return nil, false
 		}
-		log.Printf("x402 payment accepted: payer=%s amount=%s", proof.Pubkey, proof.Amount)
+		log.Printf("x402 payment accepted: payer=%s amount=%s resource=%s", proof.Pubkey, proof.Amount, resource)
 		return &caller{method: "x402", quotaRPM: 60, rlKey: "x402:" + proof.Pubkey, payer: proof.Pubkey}, true
 	}
 	// No key, no payment → invite payment.
-	write402(w)
+	write402(w, resource)
 	return nil, false
 }
 
@@ -203,7 +208,7 @@ func bill(c *caller, subnet, reqModel, servedModel string, prompt, completion, l
 func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
-	c, ok := resolveCaller(w, r)
+	c, ok := resolveCaller(w, r, x402Resource)
 	if !ok {
 		return
 	}
