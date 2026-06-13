@@ -41,6 +41,47 @@ function fmt(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+// The verdict made physical: three lights. While scanning they chase in a loop
+// (the guardian deciding); when the verdict lands, one locks on and glows.
+function TrafficLight({ active, cycling = false, size = 13 }: {
+  active?: "stop" | "caution" | "proceed" | null;
+  cycling?: boolean;
+  size?: number;
+}) {
+  const lights: Array<{ k: "stop" | "caution" | "proceed"; c: string }> = [
+    { k: "stop",    c: "#E5392B" },
+    { k: "caution", c: "#f59e0b" },
+    { k: "proceed", c: "#4ade80" },
+  ];
+  return (
+    <div className="flex flex-col items-center gap-2 border border-[#1E1E20] rounded-full px-2 py-2.5 bg-[#0A0A0B]">
+      {lights.map((l, i) => {
+        const on = active === l.k;
+        return (
+          <span
+            key={l.k}
+            className={cycling ? "tl-cycle" : ""}
+            style={{
+              width: size,
+              height: size,
+              borderRadius: "50%",
+              background: l.c,
+              opacity: cycling ? undefined : on ? 1 : 0.1,
+              boxShadow: on && !cycling ? `0 0 10px ${l.c}, 0 0 22px ${l.c}55` : "none",
+              animationDelay: cycling ? `${i * 0.35}s` : undefined,
+              transition: "opacity 0.5s ease, box-shadow 0.5s ease",
+            }}
+          />
+        );
+      })}
+      <style>{`
+        @keyframes tlPulse { 0%, 100% { opacity: 0.1; } 30% { opacity: 1; } }
+        .tl-cycle { animation: tlPulse 1.05s ease-in-out infinite; }
+      `}</style>
+    </div>
+  );
+}
+
 function SignalRow({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-[#1E1E20] last:border-0">
@@ -104,13 +145,13 @@ export default function ScanPage() {
           </div>
           <div className="inline-flex items-center gap-2 border border-[#1E1E20] rounded-full px-3 py-1 text-[10px] tracking-widest text-[#555] mb-5">
             <span className="w-1 h-1 rounded-full bg-[#E5392B]" />
-            PRE-TRANSACTION RISK SCANNER
+            THE GUARDIAN
           </div>
           <h1 className="text-3xl font-semibold tracking-tight mb-3">
-            Scan before you sign.
+            Is it safe?
           </h1>
           <p className="text-sm text-[#555] leading-relaxed max-w-sm">
-            Paste a Solana token mint. Bhairab fetches live market signals and returns an AI verdict before money moves.
+            Paste any Solana token. Bhairab checks the live market and answers in one word — before your money moves.
           </p>
         </div>
 
@@ -128,7 +169,7 @@ export default function ScanPage() {
           <div className="p-6 space-y-5">
             {/* Token input */}
             <div>
-              <label className="block text-[10px] tracking-widest text-[#444] mb-2">TOKEN MINT ADDRESS</label>
+              <label className="block text-[10px] tracking-widest text-[#444] mb-2">TOKEN ADDRESS</label>
               <input
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
@@ -187,15 +228,18 @@ export default function ScanPage() {
                   : "bg-[#E5392B] text-white hover:bg-[#c72e22] cursor-pointer"
               }`}
             >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-3 h-3 border border-[#555] border-t-[#ECECEC] rounded-full animate-spin" />
-                  SCANNING LIVE SIGNALS…
-                </span>
-              ) : "RUN SCAN"}
+              {loading ? "ASKING…" : "ASK BHAIRAB"}
             </button>
           </div>
         </div>
+
+        {/* Deciding — lights chase until the verdict lands */}
+        {loading && (
+          <div className="border border-[#1E1E20] rounded-lg bg-[#0D0D0F] p-8 flex flex-col items-center gap-4">
+            <TrafficLight cycling />
+            <p className="text-[10px] tracking-widest text-[#444]">LOOKING BOTH WAYS…</p>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -211,8 +255,8 @@ export default function ScanPage() {
             {/* Verdict */}
             <div className={`border ${vc.border} ${vc.bg} rounded-lg p-6`}>
               <div className="flex items-start gap-4">
-                <div className={`w-10 h-10 rounded-full border ${vc.border} flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                  <span className={`text-lg font-bold ${vc.color}`}>{vc.icon}</span>
+                <div className="flex-shrink-0">
+                  <TrafficLight active={result.verdict} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-1">
@@ -276,8 +320,9 @@ export default function ScanPage() {
 
         {/* Empty state hint */}
         {!result && !loading && !error && (
-          <div className="border border-dashed border-[#1E1E20] rounded-lg p-8 text-center">
-            <p className="text-xs tracking-widest text-[#333]">VERDICT WILL APPEAR HERE</p>
+          <div className="border border-dashed border-[#1E1E20] rounded-lg p-8 flex flex-col items-center gap-4">
+            <TrafficLight active={null} />
+            <p className="text-xs tracking-widest text-[#333]">ONE WORD. GREEN, YELLOW, OR RED.</p>
           </div>
         )}
       </main>
