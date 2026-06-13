@@ -41,7 +41,34 @@ type scanResponse struct {
 	Model      string        `json:"model"`
 	LatencyMs  int           `json:"latencyMs"`
 	Source     string        `json:"verdictSource"` // "ai" | "deterministic"
+	Tier       string        `json:"tier"`          // "free" | "keyed"
+	Upgrade    string        `json:"upgrade,omitempty"`
 	Disclaimer string        `json:"disclaimer"`
+}
+
+// Free keyless tier: heuristics-only (no LLM cost), rate-limited by IP. Lets the
+// scan ship inside agent frameworks with zero friction; a BHAIRAB_API_KEY unlocks
+// the AI-reasoned verdict.
+const freeScanRPM = 20
+
+const upgradeHint = "Set BHAIRAB_API_KEY for AI-reasoned verdicts and higher limits — free at https://tao-gateway.vercel.app"
+
+// clientIP extracts the caller's IP for free-tier rate limiting (Fly sets
+// Fly-Client-IP / X-Forwarded-For in front of the app).
+func clientIP(r *http.Request) string {
+	if ip := r.Header.Get("Fly-Client-IP"); ip != "" {
+		return ip
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i > 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if i := strings.LastIndexByte(r.RemoteAddr, ':'); i > 0 {
+		return r.RemoteAddr[:i]
+	}
+	return r.RemoteAddr
 }
 
 const scanDisclaimer = "Risk insight, not financial advice. Bhairab scans available signals; absence of a flag is not a guarantee of safety."
@@ -62,24 +89,44 @@ Respond with STRICT JSON ONLY (no markdown, no prose) matching exactly:
 func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
-	c, ok := resolveCaller(w, r, riskResource)
-	if !ok {
-		return
-	}
+	// Tier check: a Bearer key or x402 payment gets the AI verdict; no credentials
+	// falls through to the free keyless tier (heuristics-only, IP rate-limited).
+	hasKey := strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ")
+	hasPay := r.Header.Get("X-Payment") != ""
+	freeTier := !hasKey && !hasPay
 
-	allowed, remaining, resetAt := ratelimit.Allow(c.rlKey, c.quotaRPM)
-	if !allowed {
-		w.Header().Set("X-RateLimit-Remaining", "0")
-		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(resetAt).Seconds())))
-		http.Error(w, `{"error":"rate limit exceeded","type":"rate_limit_error"}`, http.StatusTooManyRequests)
-		return
-	}
-	w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
-
-	if c.method == "prepaid" {
-		if bal, err := billing.GetBalance(r.Context(), c.customerID); err == nil && bal <= 0 {
-			http.Error(w, `{"error":"insufficient balance — top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
+	var c *caller
+	if freeTier {
+		key := "free-scan:" + clientIP(r)
+		allowed, remaining, resetAt := ratelimit.Allow(key, freeScanRPM)
+		if !allowed {
+			w.Header().Set("X-RateLimit-Remaining", "0")
+			w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(resetAt).Seconds())))
+			http.Error(w, `{"error":"free-tier rate limit exceeded — set BHAIRAB_API_KEY for higher limits","type":"rate_limit_error"}`, http.StatusTooManyRequests)
 			return
+		}
+		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+		c = &caller{method: "free", rlKey: key, quotaRPM: freeScanRPM}
+	} else {
+		var ok bool
+		c, ok = resolveCaller(w, r, riskResource)
+		if !ok {
+			return
+		}
+		allowed, remaining, resetAt := ratelimit.Allow(c.rlKey, c.quotaRPM)
+		if !allowed {
+			w.Header().Set("X-RateLimit-Remaining", "0")
+			w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(resetAt).Seconds())))
+			http.Error(w, `{"error":"rate limit exceeded","type":"rate_limit_error"}`, http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+
+		if c.method == "prepaid" {
+			if bal, err := billing.GetBalance(r.Context(), c.customerID); err == nil && bal <= 0 {
+				http.Error(w, `{"error":"insufficient balance — top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
+				return
+			}
 		}
 	}
 
@@ -99,27 +146,44 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 		log.Printf("risk: signal gather error for %s/%s: %v", req.Chain, req.Token, sigErr)
 	}
 
-	// 2) AI synthesis over the signals (reuses the inference plumbing).
-	verdict, servedModel, promptTok, completionTok, source := synthesizeVerdict(req, signals)
+	var (
+		verdict       scanVerdict
+		servedModel   = "heuristic"
+		source        = "deterministic"
+		promptTok     int
+		completionTok int
+	)
 
-	// 3) Severe deterministic facts override an over-optimistic model.
-	if signals.Severe() && verdict.Verdict == "proceed" {
-		verdict.Verdict = "stop"
-		verdict.Confidence = 0.9
-		verdict.Reasons = append([]string{"deterministic override: signals indicate severe risk"}, verdict.Reasons...)
-		source = "deterministic-override"
+	if freeTier {
+		// Heuristics only — zero LLM cost. The deterministic floor is the
+		// high-signal layer; the AI narrative is the keyed upsell.
+		verdict = deterministicVerdict(signals)
+	} else {
+		// 2) AI synthesis over the signals (reuses the inference plumbing).
+		verdict, servedModel, promptTok, completionTok, source = synthesizeVerdict(req, signals)
+
+		// 3) Severe deterministic facts override an over-optimistic model.
+		if signals.Severe() && verdict.Verdict == "proceed" {
+			verdict.Verdict = "stop"
+			verdict.Confidence = 0.9
+			verdict.Reasons = append([]string{"deterministic override: signals indicate severe risk"}, verdict.Reasons...)
+			source = "deterministic-override"
+		}
+		bill(c, "SN64-Chutes", "risk-scan", servedModel, promptTok, completionTok, int(time.Since(start).Milliseconds()), "ok")
 	}
 
 	latency := int(time.Since(start).Milliseconds())
-	bill(c, "SN64-Chutes", "risk-scan", servedModel, promptTok, completionTok, latency, "ok")
-
 	resp := scanResponse{
 		scanVerdict: verdict,
 		Signals:     signals,
 		Model:       servedModel,
 		LatencyMs:   latency,
 		Source:      source,
+		Tier:        map[bool]string{true: "free", false: "keyed"}[freeTier],
 		Disclaimer:  scanDisclaimer,
+	}
+	if freeTier {
+		resp.Upgrade = upgradeHint
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Latency-Ms", fmt.Sprintf("%d", latency))
