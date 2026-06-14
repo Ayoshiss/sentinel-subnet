@@ -16,8 +16,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,20 +29,34 @@ const dexScreenerBase = "https://api.dexscreener.com/latest/dex/tokens/"
 // Signals is the ground-truth packet the AI (and the deterministic fallback)
 // reason over.
 type Signals struct {
-	Chain          string   `json:"chain"`
-	Token          string   `json:"token"`
-	Found          bool     `json:"found"`
-	Symbol         string   `json:"symbol,omitempty"`
-	Name           string   `json:"name,omitempty"`
-	PriceUSD       float64  `json:"priceUsd"`
-	PriceChange24h float64  `json:"priceChange24hPct"`
-	LiquidityUSD   float64  `json:"liquidityUsd"`
-	Volume24hUSD   float64  `json:"volume24hUsd"`
-	PairCount      int      `json:"pairCount"`
-	AgeDays        float64  `json:"ageDays"`
-	TopDex         string   `json:"topDex,omitempty"`
-	Heuristics     []string `json:"heuristics"`
-	Source         string   `json:"source"`
+	Chain          string  `json:"chain"`
+	Token          string  `json:"token"`
+	Found          bool    `json:"found"`
+	Symbol         string  `json:"symbol,omitempty"`
+	Name           string  `json:"name,omitempty"`
+	PriceUSD       float64 `json:"priceUsd"`
+	PriceChange24h float64 `json:"priceChange24hPct"`
+	LiquidityUSD   float64 `json:"liquidityUsd"`
+	Volume24hUSD   float64 `json:"volume24hUsd"`
+	PairCount      int     `json:"pairCount"`
+	AgeDays        float64 `json:"ageDays"`
+	TopDex         string  `json:"topDex,omitempty"`
+
+	// On-chain authority checks (the honeypot axis). OnChainChecked is false if
+	// the RPC lookup failed — distinguish "safe" from "unknown".
+	OnChainChecked bool `json:"onChainChecked"`
+	MintRenounced  bool `json:"mintRenounced"` // mint authority revoked → no inflation rug
+	Freezable      bool `json:"freezable"`     // freeze authority active → can freeze holders
+
+	Heuristics []string `json:"heuristics"`
+	Source     string   `json:"source"`
+}
+
+// established tokens (deep liquidity + age) legitimately hold freeze/mint
+// authority for compliance (USDC, USDT). Authority flags only signal danger on
+// young or thin tokens — this is what keeps the scanner from crying wolf.
+func (s *Signals) established() bool {
+	return s.AgeDays >= 30 && s.LiquidityUSD >= 100000
 }
 
 type dexResp struct {
@@ -64,29 +81,43 @@ type dexResp struct {
 	} `json:"pairs"`
 }
 
-// Gather pulls live signals for a token. It never returns a nil *Signals on a
-// recoverable miss — "no data" is itself a risk signal the caller should surface.
+// Gather pulls live signals for a token: market data (DexScreener) and on-chain
+// authorities (Solana RPC) fetched in parallel. It never returns a nil *Signals
+// on a recoverable miss — "no data" is itself a risk signal.
 func Gather(chain, token string) (*Signals, error) {
-	s := &Signals{Chain: chain, Token: token, Source: "dexscreener"}
+	s := &Signals{Chain: chain, Token: token, Source: "dexscreener+rpc"}
 
-	client := &http.Client{Timeout: 8 * time.Second}
+	var (
+		wg        sync.WaitGroup
+		marketErr error
+	)
+	wg.Add(2)
+	go func() { defer wg.Done(); marketErr = fetchMarket(token, s) }()
+	go func() { defer wg.Done(); fetchOnChain(token, s) }()
+	wg.Wait()
+
+	s.Heuristics = heuristics(s)
+	return s, marketErr
+}
+
+// fetchMarket populates the market-data fields (writes a disjoint set of fields
+// from fetchOnChain, so the two are safe to run concurrently).
+func fetchMarket(token string, s *Signals) error {
+	client := &http.Client{Timeout: 6 * time.Second}
 	resp, err := client.Get(dexScreenerBase + token)
 	if err != nil {
-		s.Heuristics = []string{"signal_fetch_failed: could not reach market-data source — treat as unknown risk"}
-		return s, err
+		return err
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 
 	var dr dexResp
 	if err := json.Unmarshal(b, &dr); err != nil {
-		s.Heuristics = []string{"signal_parse_failed: market-data source returned unexpected shape"}
-		return s, err
+		return err
 	}
 	if len(dr.Pairs) == 0 {
 		s.Found = false
-		s.Heuristics = []string{"no_market_data: token not listed on any tracked DEX — unknown or illiquid (high risk)"}
-		return s, nil
+		return nil
 	}
 
 	// The deepest-liquidity pair is the most representative venue.
@@ -107,14 +138,85 @@ func Gather(chain, token string) (*Signals, error) {
 	if top.PairCreatedAt > 0 {
 		s.AgeDays = time.Since(time.UnixMilli(top.PairCreatedAt)).Hours() / 24
 	}
-	s.Heuristics = heuristics(s)
-	return s, nil
+	return nil
+}
+
+const defaultSolanaRPC = "https://api.mainnet-beta.solana.com"
+
+func solanaRPC() string {
+	if v := os.Getenv("RISK_SOLANA_RPC"); v != "" {
+		return v
+	}
+	return defaultSolanaRPC
+}
+
+type rpcAccountResp struct {
+	Result struct {
+		Value *struct {
+			Data struct {
+				Parsed struct {
+					Info struct {
+						MintAuthority   *string `json:"mintAuthority"`
+						FreezeAuthority *string `json:"freezeAuthority"`
+					} `json:"info"`
+					Type string `json:"type"`
+				} `json:"parsed"`
+			} `json:"data"`
+		} `json:"value"`
+	} `json:"result"`
+}
+
+// fetchOnChain reads the SPL mint account to learn whether the deployer can still
+// mint (inflation rug) or freeze holders (honeypot — buy but can't sell). On any
+// failure it leaves OnChainChecked=false so the caller treats it as unknown, not safe.
+func fetchOnChain(token string, s *Signals) {
+	body := fmt.Sprintf(
+		`{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["%s",{"encoding":"jsonParsed"}]}`,
+		token,
+	)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Post(solanaRPC(), "application/json", strings.NewReader(body))
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+
+	var rr rpcAccountResp
+	if json.Unmarshal(b, &rr) != nil || rr.Result.Value == nil {
+		return
+	}
+	if rr.Result.Value.Data.Parsed.Type != "mint" {
+		return // not an SPL mint account
+	}
+	info := rr.Result.Value.Data.Parsed.Info
+	s.OnChainChecked = true
+	s.MintRenounced = info.MintAuthority == nil
+	s.Freezable = info.FreezeAuthority != nil
 }
 
 // heuristics derives deterministic red flags from the raw signals. These are the
 // non-negotiable facts; the LLM may add nuance but must not override them.
 func heuristics(s *Signals) []string {
 	var h []string
+
+	// ── Honeypot / authority axis (on-chain) — listed first; the scariest risk.
+	// Only flagged on young/thin tokens: established tokens (USDC, USDT) hold
+	// these authorities for compliance, so flagging them would be crying wolf.
+	if s.OnChainChecked && !s.established() {
+		if s.Freezable {
+			h = append(h, "honeypot_risk: freeze authority is active — the deployer can freeze your token account, so you may be able to buy but never sell")
+		}
+		if !s.MintRenounced {
+			h = append(h, "mint_authority_active: the deployer can mint unlimited new supply — dilution / inflation rug risk")
+		}
+	}
+
+	// ── Market axis.
+	if !s.Found {
+		h = append(h, "no_market_data: token not listed on any tracked DEX — unknown or illiquid (high risk)")
+		return h
+	}
 	if s.LiquidityUSD > 0 && s.LiquidityUSD < 10000 {
 		h = append(h, "low_liquidity: pool <$10k — trivially manipulated and hard to exit (rug risk)")
 	}
@@ -130,6 +232,7 @@ func heuristics(s *Signals) []string {
 	if s.AgeDays > 0 && s.AgeDays < 3 {
 		h = append(h, fmt.Sprintf("new_token: pair only %.1f days old — elevated rug risk", s.AgeDays))
 	}
+
 	if len(h) == 0 {
 		h = append(h, "no_red_flags_in_market_data")
 	}
@@ -139,6 +242,11 @@ func heuristics(s *Signals) []string {
 // Severe reports whether the deterministic signals alone justify a hard stop —
 // the floor that holds even if the LLM is unavailable or over-optimistic.
 func (s *Signals) Severe() bool {
+	// Honeypot: freeze authority active on a token that isn't an established,
+	// deep-liquidity asset. The single scariest on-chain signal.
+	if s.OnChainChecked && s.Freezable && !s.established() {
+		return true
+	}
 	if !s.Found {
 		return false // unknown ≠ severe; that's a caution
 	}

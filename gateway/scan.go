@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,6 +51,11 @@ type scanResponse struct {
 // scan ship inside agent frameworks with zero friction; a BHAIRAB_API_KEY unlocks
 // the AI-reasoned verdict.
 const freeScanRPM = 20
+
+// scanAITimeout caps how long an ambiguous (non-severe, keyed) scan waits on the
+// model before falling back to the deterministic verdict. Severe/honeypot cases
+// never reach the model — they return instantly.
+const scanAITimeout = 9 * time.Second
 
 const upgradeHint = "Set BHAIRAB_API_KEY for AI-reasoned verdicts and higher limits — free at https://tao-gateway.vercel.app"
 
@@ -154,21 +160,24 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 		completionTok int
 	)
 
-	if freeTier {
+	switch {
+	case freeTier:
 		// Heuristics only — zero LLM cost. The deterministic floor is the
 		// high-signal layer; the AI narrative is the keyed upsell.
 		verdict = deterministicVerdict(signals)
-	} else {
-		// 2) AI synthesis over the signals (reuses the inference plumbing).
-		verdict, servedModel, promptTok, completionTok, source = synthesizeVerdict(req, signals)
 
-		// 3) Severe deterministic facts override an over-optimistic model.
-		if signals.Severe() && verdict.Verdict == "proceed" {
-			verdict.Verdict = "stop"
-			verdict.Confidence = 0.9
-			verdict.Reasons = append([]string{"deterministic override: signals indicate severe risk"}, verdict.Reasons...)
-			source = "deterministic-override"
-		}
+	case signals.Severe():
+		// Danger is unambiguous (honeypot, crash, near-zero liquidity) — return
+		// the verdict INSTANTLY from the deterministic floor. Never make the user
+		// wait on the model for a STOP, and never spend an inference on an obvious
+		// trap. This is what makes the scary verdict fast.
+		verdict = deterministicVerdict(signals)
+		source = "deterministic-severe"
+
+	default:
+		// Only the genuinely ambiguous tokens reach the AI, where reasoning earns
+		// its latency. Capped + falls back to the deterministic verdict on timeout.
+		verdict, servedModel, promptTok, completionTok, source = synthesizeVerdict(req, signals)
 		bill(c, "SN64-Chutes", "risk-scan", servedModel, promptTok, completionTok, int(time.Since(start).Milliseconds()), "ok")
 	}
 
@@ -201,16 +210,21 @@ func synthesizeVerdict(req scanRequest, s *risk.Signals) (v scanVerdict, model s
 	chatBody, _ := json.Marshal(map[string]any{
 		"model":       "auto",
 		"temperature": 0,
+		"max_tokens":  220, // a verdict is short — bound generation time
 		"messages": []map[string]string{
 			{"role": "system", "content": scanSystemPrompt},
 			{"role": "user", "content": "Assess this transaction:\n" + string(ctx)},
 		},
 	})
 
-	resp, err := callSidecar("/query", chatBody)
+	// Hard latency cap: a guardian slower than the trade is theater. If the model
+	// doesn't answer in time, fall back to the (honeypot-aware) deterministic floor.
+	client := &http.Client{Timeout: scanAITimeout}
+	httpResp, err := client.Post(sidecarURL+"/query", "application/json", bytes.NewReader(chatBody))
 	if err != nil {
 		return deterministicVerdict(s), "deterministic", 0, 0, "deterministic"
 	}
+	resp := httpResp
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
