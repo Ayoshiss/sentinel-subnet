@@ -11,7 +11,7 @@ const PRESETS = [
   { label: "SOL",     mint: "So11111111111111111111111111111111111111112" },
   { label: "BONK",   mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" },
   { label: "USDC",   mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
-  { label: "Unknown",mint: "1nvalidMintThatDoesNotExist1111111111111111" },
+  { label: "⛔ Risky", mint: "831f8cKgPcS7gnZSA9RBTF5uTDAtkKs7kuiYs4M1fdkA" },
 ];
 
 type Signals = {
@@ -19,6 +19,7 @@ type Signals = {
   priceUsd: number; priceChange24hPct: number;
   liquidityUsd: number; volume24hUsd: number;
   ageDays: number; pairCount: number; topDex?: string;
+  onChainChecked?: boolean; mintRenounced?: boolean; freezable?: boolean;
   heuristics: string[]; source: string;
 };
 
@@ -82,12 +83,13 @@ function TrafficLight({ active, cycling = false, size = 13 }: {
   );
 }
 
-function SignalRow({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function SignalRow({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "bad" }) {
+  const valueColor = tone === "bad" ? "text-[#E5392B]" : tone === "good" ? "text-[#4ade80]" : "text-[#ECECEC]";
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-[#1E1E20] last:border-0">
       <span className="text-xs tracking-widest text-[#555] uppercase">{label}</span>
       <div className="text-right">
-        <span className="text-sm font-medium text-[#ECECEC]">{value}</span>
+        <span className={`text-sm font-medium ${valueColor}`}>{value}</span>
         {sub && <span className="text-xs text-[#555] ml-2">{sub}</span>}
       </div>
     </div>
@@ -307,6 +309,22 @@ export default function ScanPage() {
                   <SignalRow label="24h Volume" value={fmt(result.signals.volume24hUsd)} />
                   <SignalRow label="Token Age" value={`${Math.round(result.signals.ageDays)} days`} />
                   <SignalRow label="Pairs"      value={String(result.signals.pairCount)} sub={result.signals.topDex ?? ""} />
+                  {result.signals.onChainChecked && (
+                    <>
+                      <SignalRow
+                        label="Mint Authority"
+                        value={result.signals.mintRenounced ? "Renounced" : "Active"}
+                        sub={result.signals.mintRenounced ? "" : "can mint more"}
+                        tone={result.signals.mintRenounced ? "good" : "bad"}
+                      />
+                      <SignalRow
+                        label="Freeze Authority"
+                        value={result.signals.freezable ? "Active" : "None"}
+                        sub={result.signals.freezable ? "can freeze your wallet" : ""}
+                        tone={result.signals.freezable ? "bad" : "good"}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             )}
