@@ -174,6 +174,11 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 		verdict = deterministicVerdict(signals)
 		source = "deterministic-severe"
 
+	case signals.ClearlySafe():
+		// Obviously-safe blue chip — also instant. The AI adds nothing here.
+		verdict = deterministicVerdict(signals)
+		source = "deterministic-clear"
+
 	default:
 		// Only the genuinely ambiguous tokens reach the AI, where reasoning earns
 		// its latency. Capped + falls back to the deterministic verdict on timeout.

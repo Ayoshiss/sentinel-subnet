@@ -59,6 +59,14 @@ func (s *Signals) established() bool {
 	return s.AgeDays >= 30 && s.LiquidityUSD >= 100000
 }
 
+// ClearlySafe reports an established, deep-liquidity token with no red flags. As
+// unambiguous as a honeypot is in the other direction — so it returns instantly
+// without spending an inference; the AI is reserved for the murky middle.
+func (s *Signals) ClearlySafe() bool {
+	return s.Found && s.established() &&
+		len(s.Heuristics) == 1 && s.Heuristics[0] == "no_red_flags_in_market_data"
+}
+
 type dexResp struct {
 	Pairs []struct {
 		ChainID     string `json:"chainId"`
