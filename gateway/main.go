@@ -89,6 +89,7 @@ func main() {
 	r.With(adminMiddleware).Post("/admin/keys", handleCreateKey)
 	r.With(adminMiddleware).Get("/admin/margin", handleMargin)
 	r.With(adminMiddleware).Get("/admin/scan-stats", handleScanStats)
+	r.With(adminMiddleware).Get("/admin/user-stats", handleUserStats)
 
 	addr := ":" + getEnv("PORT", "8080")
 	log.Printf("TAO Gateway listening on %s", addr)

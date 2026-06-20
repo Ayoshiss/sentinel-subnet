@@ -46,6 +46,27 @@ func recordScan(tier, verdict, source, caller, token string) {
 	}()
 }
 
+// handleUserStats returns the real account numbers (admin-only): how many people
+// entered an email (signups), how many actually clicked the magic link (logins),
+// and how many API keys exist.
+func handleUserStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var signups, loggedIn, apiKeys, signups7d int64
+
+	db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM customers`).Scan(&signups)
+	db.Pool.QueryRow(ctx, `SELECT COUNT(DISTINCT customer_id) FROM magic_links WHERE used_at IS NOT NULL`).Scan(&loggedIn)
+	db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM api_keys`).Scan(&apiKeys)
+	db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM customers WHERE created_at > NOW() - INTERVAL '7 days'`).Scan(&signups7d)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int64{
+		"signups":       signups,  // entered an email
+		"loggedIn":      loggedIn, // clicked the magic link
+		"apiKeys":       apiKeys,  // created a key
+		"signupsLast7d": signups7d,
+	})
+}
+
 // handleScanStats returns aggregate scan telemetry (admin-only). The headline
 // numbers for a milestone email: total scans, distinct callers, recent activity.
 func handleScanStats(w http.ResponseWriter, r *http.Request) {
