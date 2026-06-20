@@ -5,11 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +40,7 @@ func main() {
 		log.Fatalf("database: %v", err)
 	}
 	log.Println("Connected to Postgres")
+	ensureScanTable(ctx)
 
 	// Clean up stale rate limit windows every minute
 	go func() {
@@ -87,6 +88,7 @@ func main() {
 	r.With(adminMiddleware).Post("/admin/customers", handleCreateCustomer)
 	r.With(adminMiddleware).Post("/admin/keys", handleCreateKey)
 	r.With(adminMiddleware).Get("/admin/margin", handleMargin)
+	r.With(adminMiddleware).Get("/admin/scan-stats", handleScanStats)
 
 	addr := ":" + getEnv("PORT", "8080")
 	log.Printf("TAO Gateway listening on %s", addr)
@@ -614,6 +616,7 @@ func handleAuthVerify(w http.ResponseWriter, r *http.Request) {
 // ── Session middleware + dashboard API ────────────────────────────────────────
 
 type ctxSession string
+
 const ctxSessionKey ctxSession = "session"
 
 func sessionMiddleware(next http.Handler) http.Handler {
@@ -698,12 +701,12 @@ func handleListKeys(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type Key struct {
-		ID         string  `json:"id"`
-		Prefix     string  `json:"prefix"`
-		Name       string  `json:"name"`
-		LastUsed   *string `json:"last_used_at"`
-		QuotaRPM   int     `json:"quota_rpm"`
-		Requests   int64   `json:"requests"`
+		ID       string  `json:"id"`
+		Prefix   string  `json:"prefix"`
+		Name     string  `json:"name"`
+		LastUsed *string `json:"last_used_at"`
+		QuotaRPM int     `json:"quota_rpm"`
+		Requests int64   `json:"requests"`
 	}
 	var keyList []Key
 	for rows.Next() {
@@ -914,4 +917,3 @@ func getEnv(key, fallback string) string {
 	}
 	return fallback
 }
-

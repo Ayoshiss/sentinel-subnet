@@ -92,6 +92,19 @@ Rules:
 Respond with STRICT JSON ONLY (no markdown, no prose) matching exactly:
 {"verdict":"proceed|caution|stop","confidence":0.0,"summary":"one sentence","reasons":["...","..."]}`
 
+// scanCaller derives a stable identifier for "distinct callers" telemetry:
+// the IP for free scans, the key id for prepaid, the wallet for x402.
+func scanCaller(c *caller, r *http.Request, freeTier bool) string {
+	switch {
+	case freeTier:
+		return "ip:" + clientIP(r)
+	case c.method == "x402":
+		return "wallet:" + c.payer
+	default:
+		return "key:" + c.apiKeyID
+	}
+}
+
 func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
@@ -187,13 +200,18 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	latency := int(time.Since(start).Milliseconds())
+	tier := map[bool]string{true: "free", false: "keyed"}[freeTier]
+
+	// Persist the engagement signal (async, never blocks the response).
+	recordScan(tier, verdict.Verdict, source, scanCaller(c, r, freeTier), req.Token)
+
 	resp := scanResponse{
 		scanVerdict: verdict,
 		Signals:     signals,
 		Model:       servedModel,
 		LatencyMs:   latency,
 		Source:      source,
-		Tier:        map[bool]string{true: "free", false: "keyed"}[freeTier],
+		Tier:        tier,
 		Disclaimer:  scanDisclaimer,
 	}
 	if freeTier {
