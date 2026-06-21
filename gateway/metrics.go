@@ -25,6 +25,9 @@ func ensureScanTable(ctx context.Context) {
 			token      TEXT
 		);
 		CREATE INDEX IF NOT EXISTS scan_events_created_idx ON scan_events (created_at);
+		-- IP lets us count distinct VISITORS even when the public page shares one
+		-- demo key (so all web scans would otherwise look like a single caller).
+		ALTER TABLE scan_events ADD COLUMN IF NOT EXISTS ip TEXT;
 	`)
 	if err != nil {
 		log.Printf("metrics: could not ensure scan_events table: %v", err)
@@ -33,13 +36,13 @@ func ensureScanTable(ctx context.Context) {
 
 // recordScan persists one scan event. Fire-and-forget: never block or fail a
 // scan because telemetry hiccuped.
-func recordScan(tier, verdict, source, caller, token string) {
+func recordScan(tier, verdict, source, caller, token, ip string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, err := db.Pool.Exec(ctx,
-			`INSERT INTO scan_events (tier, verdict, source, caller, token) VALUES ($1,$2,$3,$4,$5)`,
-			tier, verdict, source, caller, token)
+			`INSERT INTO scan_events (tier, verdict, source, caller, token, ip) VALUES ($1,$2,$3,$4,$5,$6)`,
+			tier, verdict, source, caller, token, ip)
 		if err != nil {
 			log.Printf("metrics: record scan failed: %v", err)
 		}
@@ -73,25 +76,29 @@ func handleScanStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	type stats struct {
-		TotalScans      int64            `json:"totalScans"`
-		DistinctCallers int64            `json:"distinctCallers"`
-		Last24h         int64            `json:"last24h"`
-		Last7d          int64            `json:"last7d"`
-		Callers24h      int64            `json:"distinctCallers24h"`
-		ByVerdict       map[string]int64 `json:"byVerdict"`
-		ByTier          map[string]int64 `json:"byTier"`
+		TotalScans       int64            `json:"totalScans"`
+		DistinctVisitors int64            `json:"distinctVisitors"` // by IP — the real "how many people" number
+		Visitors24h      int64            `json:"distinctVisitors24h"`
+		DistinctCallers  int64            `json:"distinctCallers"` // by key/wallet (web shares one demo key)
+		Last24h          int64            `json:"last24h"`
+		Last7d           int64            `json:"last7d"`
+		Callers24h       int64            `json:"distinctCallers24h"`
+		ByVerdict        map[string]int64 `json:"byVerdict"`
+		ByTier           map[string]int64 `json:"byTier"`
 	}
 	s := stats{ByVerdict: map[string]int64{}, ByTier: map[string]int64{}}
 
 	row := db.Pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*),
+			COUNT(DISTINCT ip),
+			COUNT(DISTINCT ip) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours'),
 			COUNT(DISTINCT caller),
 			COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours'),
 			COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'),
 			COUNT(DISTINCT caller) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')
 		FROM scan_events`)
-	if err := row.Scan(&s.TotalScans, &s.DistinctCallers, &s.Last24h, &s.Last7d, &s.Callers24h); err != nil {
+	if err := row.Scan(&s.TotalScans, &s.DistinctVisitors, &s.Visitors24h, &s.DistinctCallers, &s.Last24h, &s.Last7d, &s.Callers24h); err != nil {
 		http.Error(w, `{"error":"stats query failed"}`, http.StatusInternalServerError)
 		log.Printf("metrics: stats query: %v", err)
 		return

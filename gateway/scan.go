@@ -202,8 +202,10 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 	latency := int(time.Since(start).Milliseconds())
 	tier := map[bool]string{true: "free", false: "keyed"}[freeTier]
 
-	// Persist the engagement signal (async, never blocks the response).
-	recordScan(tier, verdict.Verdict, source, scanCaller(c, r, freeTier), req.Token)
+	// Persist the engagement signal (async, never blocks the response). IP is
+	// recorded separately so distinct visitors are countable even when the public
+	// page authenticates everyone with one shared demo key.
+	recordScan(tier, verdict.Verdict, source, scanCaller(c, r, freeTier), req.Token, clientIP(r))
 
 	resp := scanResponse{
 		scanVerdict: verdict,
