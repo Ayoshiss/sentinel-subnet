@@ -90,6 +90,7 @@ func main() {
 	r.With(adminMiddleware).Get("/admin/margin", handleMargin)
 	r.With(adminMiddleware).Get("/admin/scan-stats", handleScanStats)
 	r.With(adminMiddleware).Get("/admin/user-stats", handleUserStats)
+	r.With(adminMiddleware).Get("/admin/scan-recent", handleScanRecent)
 
 	addr := ":" + getEnv("PORT", "8080")
 	log.Printf("TAO Gateway listening on %s", addr)

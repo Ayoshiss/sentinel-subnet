@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/taogateway/gateway/db"
@@ -68,6 +69,54 @@ func handleUserStats(w http.ResponseWriter, r *http.Request) {
 		"apiKeys":       apiKeys,  // created a key
 		"signupsLast7d": signups7d,
 	})
+}
+
+// handleScanRecent lists the most recent scans with timestamps (admin-only), so
+// we can see WHEN each scan happened and whether it's a new visitor.
+func handleScanRecent(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Pool.Query(r.Context(), `
+		SELECT created_at, tier, verdict, COALESCE(ip,''), COALESCE(token,'')
+		FROM scan_events ORDER BY created_at DESC LIMIT 25`)
+	if err != nil {
+		http.Error(w, `{"error":"query failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type ev struct {
+		At      string `json:"at"`
+		Ago     string `json:"ago"`
+		Tier    string `json:"tier"`
+		Verdict string `json:"verdict"`
+		IPTail  string `json:"ipTail"` // last octet only (privacy) — enough to tell visitors apart
+		Token   string `json:"token"`
+	}
+	var out []ev
+	for rows.Next() {
+		var t time.Time
+		var tier, verdict, ip, token string
+		if rows.Scan(&t, &tier, &verdict, &ip, &token) != nil {
+			continue
+		}
+		tail := ip
+		if i := strings.LastIndexByte(ip, '.'); i >= 0 {
+			tail = "…" + ip[i:]
+		}
+		d := time.Since(t).Round(time.Minute)
+		out = append(out, ev{
+			At: t.UTC().Format("2006-01-02 15:04 MST"), Ago: d.String(),
+			Tier: tier, Verdict: verdict, IPTail: tail,
+			Token: token[:min(len(token), 10)],
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // handleScanStats returns aggregate scan telemetry (admin-only). The headline
