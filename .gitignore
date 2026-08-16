@@ -9,3 +9,5 @@ CONTEXT_JOURNAL.md
 .snapshot-cron.log
 snapshot-context.sh
 GO_TO_MARKET.md
+.venv/
+.DS_Store
