@@ -9,5 +9,6 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install pytest -r requirements.txt
-      - run: python -m pytest tests/ -q
+      - run: python -m pytest -q
       - run: python scripts/demo.py
+      - run: python scripts/demo_mcp.py

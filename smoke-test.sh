@@ -3,12 +3,22 @@
 # Exercises every shipped feature against PRODUCTION and prints a status report.
 #
 # Usage:  ADMIN_SECRET=... ./smoke-test.sh
-# (ADMIN_SECRET defaults to the dev value if not set)
+#
+# ADMIN_SECRET is required and deliberately has no default: this script creates
+# a customer and an API key, so a committed fallback would be a live credential
+# sitting in the repository.
 
 set -u
 GW="https://tao-gateway.fly.dev"
 WEB="https://tao-gateway.vercel.app"
-ADMIN="${ADMIN_SECRET:-02586f560fca9c0bb34db667e3ff53aef60e718620c2eebb5ce247b19dc2cdc5}"
+ADMIN="${ADMIN_SECRET:-}"
+
+if [ -z "$ADMIN" ]; then
+  echo "ADMIN_SECRET is not set."
+  echo "This script creates a customer and an API key, so it needs the admin secret:"
+  echo "  ADMIN_SECRET=<secret> ./smoke-test.sh"
+  exit 1
+fi
 
 pass=0; fail=0
 ok()   { echo "  ✅ $1"; pass=$((pass+1)); }

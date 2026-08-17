@@ -3,6 +3,10 @@
 # Required now: Ed25519 signing/verification in the attestation core.
 cryptography>=42
 
+# Real Postgres client for the postgres.query MCP tool. Imported lazily, so the
+# mock-backed tests, CI and demos run without a database driver present.
+psycopg[binary]>=3.1
+
 # Pinned during testnet build.
 # bittensor>=6.0
 # fastapi>=0.110

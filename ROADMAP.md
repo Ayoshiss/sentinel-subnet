@@ -14,11 +14,19 @@ The differentiator. Prove that a response came from genuine, unmodified code.
 - [x] `scripts/demo.py` — end-to-end attested query, verifiable independently
 - [ ] Swap `MockSilicon` for real `/dev/sev-guest` + AMD VCEK cert chain (needs EPYC hardware — first-hire task)
 
-## Milestone 2 — MCP tool + enclave execution
-- [ ] Wire existing `postgres/` code into an MCP `postgres.query` handler
-- [ ] Credential store: fetch from a Key Broker Service (start with local Vault/mock, then Trustee)
-- [ ] Run the MCP server inside a confidential VM (simulate with a container first)
-- [ ] End-to-end: request → enclave executes query → returns result + attestation
+## Milestone 2 — MCP tool + enclave execution ✅ mostly done
+- [x] MCP `postgres.query` handler (`sentinel/mcp/`), read-only by default
+- [x] Key Broker Service (`sentinel/kbs.py`) — releases credentials only to an
+      attested enclave; chip registry stands in for AMD's cert directory
+- [x] `Database` seam: `MockDatabase` for tests/CI, `PostgresDatabase` for real use
+- [x] End-to-end: request → enclave unlocks → query → result + attestation (`scripts/demo_mcp.py`)
+- [x] Integration test against real Postgres, skipped unless `DATABASE_URL` is set
+- [ ] Run the MCP server inside an actual confidential VM (container first, then SEV-SNP)
+
+> Note: the existing `postgres/` directory is only `schema.sql` for the gateway's
+> own billing tables (customers, api_keys, usage_events). That is Sentinel's SaaS
+> backend, deliberately **not** what a miner queries — the MCP tool connects to a
+> *customer's* database using KBS-released credentials.
 
 ## Milestone 3 — Gateway + x402 payments
 - [ ] Gateway routes agent request to a miner (reuse existing `gateway/`)
@@ -37,8 +45,10 @@ The differentiator. Prove that a response came from genuine, unmodified code.
 
 ---
 
-## Immediate next commits (this week)
-1. Merge Milestone 1 (attestation core + tests + demo) — **done, push it**
-2. CI: GitHub Actions running `pytest` on every push (fast credibility win)
-3. `docs/development.md` with run instructions
-4. Open Milestone 2 issues; start the Postgres MCP handler from existing code
+## Immediate next commits
+1. ~~Merge Milestone 1 (attestation core + tests + demo)~~ — done
+2. ~~CI: GitHub Actions running `pytest` on every push~~ — done
+3. ~~`docs/development.md` with run instructions~~ — done
+4. ~~Postgres MCP handler + Key Broker~~ — done
+5. Containerise the enclave (Dockerfile for the miner image, measured at build)
+6. Milestone 3: gateway routes an agent request to a miner, x402 payment flow
