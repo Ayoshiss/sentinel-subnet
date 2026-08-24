@@ -104,6 +104,60 @@ class MockDatabase:
         self.closed = True
 
 
+# --- SQLite backend (dev / CI with real SQL) ----------------------------------
+
+class SqliteDatabase:
+    """A real SQL engine with no server to run.
+
+    Sits between `MockDatabase` and `PostgresDatabase`: unlike the mock it
+    actually parses SQL, binds parameters and enforces types, so a malformed
+    query fails here rather than surviving until production. Unlike Postgres it
+    needs no service, so CI keeps running in milliseconds.
+
+    Dialect differences remain — SQLite is not Postgres. Use
+    `PostgresDatabase` (see `tests/test_postgres_integration.py`) for anything
+    that depends on real dialect behaviour.
+    """
+
+    def __init__(
+        self,
+        credentials: Credentials,
+        path: str = ":memory:",
+        seed_sql: str | None = None,
+    ) -> None:
+        import sqlite3
+
+        self.credentials = credentials
+        self.closed = False
+        try:
+            self._conn = sqlite3.connect(path)
+        except Exception as exc:
+            raise QueryError(f"could not open {credentials.resource}: {exc}") from exc
+        self._conn.row_factory = sqlite3.Row
+        if seed_sql:
+            try:
+                self._conn.executescript(seed_sql)
+            except Exception as exc:
+                raise QueryError(f"seed failed: {exc}") from exc
+
+    def query(self, sql: str, params: Sequence[Any] = ()) -> QueryResult:
+        if self.closed:
+            raise QueryError("query on a closed database")
+        try:
+            cur = self._conn.execute(sql, tuple(params))
+        except Exception as exc:
+            raise QueryError(f"query failed: {exc}") from exc
+        if cur.description is None:  # non-SELECT
+            return QueryResult(columns=[], rows=[])
+        columns = [d[0] for d in cur.description]
+        return QueryResult(columns=columns, rows=[list(r) for r in cur.fetchall()])
+
+    def close(self) -> None:
+        if not self.closed:
+            self._conn.close()
+            self.closed = True
+
+
 # --- Real backend -------------------------------------------------------------
 
 class PostgresDatabase:

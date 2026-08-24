@@ -10,18 +10,29 @@ Sentinel is a Bittensor subnet where AI agents act on real systems — databases
 
 ## Status
 
-**Pre-registration.** The system architecture, threat model, Bittensor mechanics, and go-to-market are complete. The testnet build is the next milestone. This repository holds the design corpus and the miner/validator/gateway scaffolding that the testnet will grow from.
+**Pre-registration, with the trust mechanism working end to end.** The protocol —
+attestation, credential release, attested tool execution, independent verification —
+runs today and is covered by 50 tests. What it does not yet have is real silicon or a
+subnet. Run `python scripts/demo_mcp.py` to watch a miner running modified code be
+refused a customer credential.
 
 | Area | State |
 |---|---|
-| Architecture spec | Complete (`docs/`) |
-| Threat register (19 threats, scored) | Complete (`docs/`) |
-| Bittensor / Yuma mechanics | Complete (`docs/`) |
-| Litepaper v0.1 | Complete (`docs/`) |
-| Miner scaffolding | Skeleton (`miner/`) |
-| Validator scaffolding | Skeleton (`validator/`) |
-| Gateway | Carried forward from prior work (`gateway/`) |
-| Testnet | Next milestone |
+| Attestation core | **Working** (`sentinel/attestation.py`) — Ed25519, publicly verifiable |
+| Key Broker (credential release) | **Working** (`sentinel/kbs.py`) — every refusal path tested |
+| MCP `postgres.query` tool | **Working** (`sentinel/mcp/`) — read-only by default |
+| Attested query, end to end | **Working** (`scripts/demo_mcp.py`), 50 tests, CI on every push |
+| Gateway stack | **Live in production** (`gateway/`, `sidecar/`, `web/`) — routes paid inference to SN64 |
+| Architecture, threat register, Yuma mechanics, litepaper | Complete (`docs/`) |
+| SEV-SNP hardware | **Simulated.** `MockSilicon` signs in software; real VCEK drops in behind the same interface |
+| Miner / validator neurons | Scaffolding — Bittensor integration not built |
+| Testnet | Not launched |
+
+**What "simulated" means here.** `MockSilicon` signs with a software Ed25519 key that has
+the same trust shape as a real VCEK — public verifiability, no shared secret — but it is
+not silicon-resident and AMD-certified. It proves the protocol, not the hardware root of
+trust. The `Silicon` and `Verifier` interfaces are what the real backend implements, so
+that swap changes no callers.
 
 ---
 
@@ -74,28 +85,51 @@ Full component inventory, request/payment/attestation flows, failure modes, and 
 
 ## Repository layout
 
+Three layers at different maturities. Being precise about which is which matters
+more than making the tree look finished.
+
+**Sentinel core — working, tested (50 tests, CI on every push)**
 ```
 sentinel/
-├── README.md
-├── LICENSE
-├── requirements.txt
-├── docs/
-│   ├── architecture.md          # full engineering spec
-│   ├── litepaper.md             # litepaper v0.1
-│   ├── threat-register.md       # 19 threats, scored impact × likelihood
-│   └── bittensor-mechanics.md   # Yuma, commit-reveal, emissions, Taoflow
-├── miner/
-│   ├── miner.py                 # neuron entrypoint (skeleton)
-│   ├── mcp_server.py            # in-enclave MCP tool handlers (stub)
-│   ├── attestation.py           # SEV-SNP report generation (stub)
-│   └── config.py
-├── validator/
-│   ├── validator.py             # challenge / verify / score loop (skeleton)
-│   ├── challenge.py             # nonce challenge (stub)
-│   └── scoring.py               # 40/30/20/5/5 rubric (stub)
-└── gateway/
-    ├── README.md                # carried forward from Bhairab
-    └── gateway.py               # routing / billing / attestation cache (stub)
+├── attestation.py            # reports, response binding, verification
+├── kbs.py                    # Key Broker — releases secrets only to attested code
+├── enclave.py                # unlock → execute → attest the result
+├── database.py               # Database seam: Mock / Sqlite / Postgres backends
+└── mcp/
+    ├── server.py             # MCP tool registry and dispatch
+    └── tools/postgres.py     # postgres.query, read-only by default
+tests/                        # 50 tests, weighted toward the refusal paths
+scripts/
+├── demo.py                   # attestation, verification, tamper detection
+└── demo_mcp.py               # credential release → attested query → refusals
+```
+
+**Inherited gateway stack — live in production, carried forward from TAO Gateway**
+```
+gateway/                      # Go: auth, billing, x402, rate limiting, risk scan
+sidecar/                      # Python: model routing to Bittensor SN64 + backstop
+web/                          # Next.js frontend
+postgres/schema.sql           # gateway's own billing tables (not customer data)
+deploy/ · demo/ · chat.py · smoke-test.sh
+Dockerfile.fly · docker-compose.yml · fly.toml · supervisord.conf
+```
+
+**Neuron scaffolding — interfaces defined, Bittensor integration not built**
+```
+miner/                        # neuron wrapper around the working enclave;
+                              #   registration + serving loop raise NotImplementedError
+validator/                    # challenge / verify / score loop; 40/30/20/5/5 rubric
+```
+
+**Docs**
+```
+docs/
+├── architecture.md           # full engineering spec
+├── litepaper.md              # litepaper v0.1
+├── threat-register.md        # 19 threats, scored impact × likelihood
+├── bittensor-mechanics.md    # Yuma, commit-reveal, emissions, Taoflow
+└── development.md            # setup, tests, demos, how the pieces fit
+ROADMAP.md                    # milestone plan and what is still open
 ```
 
 ---

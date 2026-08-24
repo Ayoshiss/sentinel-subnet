@@ -18,6 +18,13 @@ SEV-SNP report against a policy before releasing a secret from Vault. Here the
 chip registry stands in for AMD's certificate directory, and `MockSilicon`
 stands in for the processor. The interfaces are the same, so the real backend
 drops in without changing callers.
+
+Known limitation: once the decision to release is made, the credential is
+returned in the clear, so it is only as private as the channel carrying it.
+Production should encrypt it to the enclave's ephemeral public key (PK_TEE),
+carried in the attestation report, so that nothing but that enclave can decrypt
+it. That hardens what happens *after* the gate; the gating logic below is
+unchanged either way. Tracked in ROADMAP.md under Milestone 2.
 """
 
 from __future__ import annotations

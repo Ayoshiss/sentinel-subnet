@@ -21,6 +21,12 @@ The differentiator. Prove that a response came from genuine, unmodified code.
 - [x] `Database` seam: `MockDatabase` for tests/CI, `PostgresDatabase` for real use
 - [x] End-to-end: request → enclave unlocks → query → result + attestation (`scripts/demo_mcp.py`)
 - [x] Integration test against real Postgres, skipped unless `DATABASE_URL` is set
+- [ ] **Encrypt released credentials to the enclave's ephemeral key (PK_TEE).** The
+      broker currently returns the DSN in the clear once attestation passes, so it is
+      only as private as the channel. Production should encrypt to a per-boot public
+      key carried in the attestation report, so nothing but that enclave can decrypt
+      it — the Trustee + Vault behaviour. Gating logic is unchanged; this hardens
+      what happens *after* the decision to release.
 - [ ] Run the MCP server inside an actual confidential VM (container first, then SEV-SNP)
 
 > Note: the existing `postgres/` directory is only `schema.sql` for the gateway's
