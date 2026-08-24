@@ -7,8 +7,12 @@ cryptography>=42
 # mock-backed tests, CI and demos run without a database driver present.
 psycopg[binary]>=3.1
 
+# Bittensor SDK for the miner/validator neurons. v11 has no axon/dendrite/synapse
+# networking stack: endpoints are published on-chain with the ServeAxon intent and
+# served over our own HTTP layer, authenticated via bittensor.http_auth.
+bittensor>=11.1
+
 # Pinned during testnet build.
-# bittensor>=6.0
 # fastapi>=0.110
 # uvicorn>=0.29
 # pydantic>=2.0
