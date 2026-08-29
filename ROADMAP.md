@@ -12,7 +12,14 @@ The differentiator. Prove that a response came from genuine, unmodified code.
 - [x] `sentinel/attestation.py` — report generation, verification, response binding (mock-first)
 - [x] Tests for signature validity, launch-measurement match, nonce binding, tamper detection
 - [x] `scripts/demo.py` — end-to-end attested query, verifiable independently
-- [ ] Swap `MockSilicon` for real `/dev/sev-guest` + AMD VCEK cert chain (needs EPYC hardware — first-hire task)
+- [x] **Real SEV-SNP verification** (`sentinel/sevsnp/`) — report parsing, VCEK →
+      ASK → ARK chain validation against AMD's genuine published certificates,
+      ECDSA P-384 signature checking, TCB floors and guest-policy checks. Raises
+      the same `VerificationError` as the mock path, so the Key Broker and
+      validator are unchanged.
+- [ ] Report *generation* — the ioctl to `/dev/sev-guest`. Roughly 50 lines, and
+      the only part that needs an EPYC confidential VM. Capture one real report
+      as a fixture and the existing tests run against it unchanged.
 
 ## Milestone 2 — MCP tool + enclave execution ✅ mostly done
 - [x] MCP `postgres.query` handler (`sentinel/mcp/`), read-only by default

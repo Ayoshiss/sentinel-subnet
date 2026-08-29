@@ -1,6 +1,11 @@
-# fly.toml — TAO Gateway
-# Deploy with: fly launch --config deploy/fly.toml (from repo root)
-# Then: fly secrets set API_KEY=sk_live_... CHUTES_API_KEY=...
+# fly.toml — TAO Gateway  [STALE — NOT WHAT IS DEPLOYED]
+#
+# The live app uses the fly.toml at the repo root. This file predates it: it
+# uses the older [[services]] block, points at ../gateway/Dockerfile rather than
+# Dockerfile.fly, and carries no auto-stop settings, so deploying it would
+# change the machine posture without meaning to.
+#
+# Kept only as a record of the original launch. Edit the root fly.toml instead.
 
 app = "tao-gateway"
 primary_region = "sjc"  # San Jose — close to most Bittensor validators
