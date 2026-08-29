@@ -130,3 +130,32 @@ def _issue(subject_cn: str, issuer_cn: str, public_key, signing_key, *, ca: bool
             ),
         )
     return builder.sign(signing_key, hashes.SHA384())
+
+
+class FakeSevSnpSilicon:
+    """`SevSnpSilicon` without the hardware.
+
+    Produces genuine-format reports signed by a throwaway P-384 key, so the full
+    sign-then-verify round trip is exercisable on a laptop. Swapping in the real
+    class changes where the bytes come from and nothing else.
+    """
+
+    def __init__(self, signing_key, measurement: bytes, chip_id: bytes | None = None):
+        self._key = signing_key
+        self._measurement = measurement
+        self._chip_id_bytes = chip_id or bytes(range(64))
+
+    @property
+    def chip_id(self) -> str:
+        return self._chip_id_bytes.hex().upper()
+
+    def sign(self, message: bytes) -> str:
+        """Bind SHA-512 of the message into REPORT_DATA, exactly as the chip does."""
+        import hashlib
+
+        return build_report(
+            self._key,
+            measurement=self._measurement,
+            report_data=hashlib.sha512(message).digest(),
+            chip_id=self._chip_id_bytes,
+        ).hex()

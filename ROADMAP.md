@@ -17,9 +17,14 @@ The differentiator. Prove that a response came from genuine, unmodified code.
       ECDSA P-384 signature checking, TCB floors and guest-policy checks. Raises
       the same `VerificationError` as the mock path, so the Key Broker and
       validator are unchanged.
-- [ ] Report *generation* — the ioctl to `/dev/sev-guest`. Roughly 50 lines, and
-      the only part that needs an EPYC confidential VM. Capture one real report
-      as a fixture and the existing tests run against it unchanged.
+- [x] **Report generation** (`sentinel/sevsnp/guest.py`) — the `/dev/sev-guest`
+      ioctl, request/response encoding, and `SevSnpSilicon` behind the same
+      `Silicon` interface as the mock. Encoding is fully tested; only the syscall
+      itself needs hardware.
+- [ ] **Run it on real silicon.** Everything is written — this is now confirming
+      one syscall on an EPYC confidential VM (a few hours, roughly $5), and
+      capturing one genuine report as a test fixture. The existing tests run
+      against it unchanged.
 
 ## Milestone 2 — MCP tool + enclave execution ✅ mostly done
 - [x] MCP `postgres.query` handler (`sentinel/mcp/`), read-only by default

@@ -272,3 +272,113 @@ def test_unknown_product_is_rejected():
 
     with pytest.raises(CertificateError, match="unknown product"):
         fetch_cert_chain("Pentium")
+
+
+# --- guest: asking the chip for a report --------------------------------------
+
+def test_ioctl_constant_matches_the_iowr_macro():
+    """Derived from _IOWR('S', 0, 24) rather than copied, so a wrong value here
+    is a visible arithmetic error instead of a mystery EINVAL on hardware."""
+    from sentinel.sevsnp.guest import SNP_GET_REPORT
+
+    expected = (3 << 30) | (24 << 16) | (ord("S") << 8) | 0
+    assert SNP_GET_REPORT == expected == 0xC0185300
+
+
+def test_request_encoding():
+    from sentinel.sevsnp.guest import REQ_SIZE, build_request
+
+    req = build_request(bytes(range(64)), vmpl=0)
+    assert len(req) == REQ_SIZE == 96
+    assert req[:64] == bytes(range(64))
+    assert struct.unpack_from("<I", req, 64)[0] == 0
+    assert req[68:] == bytes(28)
+
+
+def test_user_data_must_be_exactly_64_bytes():
+    """Padding silently would let two different requests share a binding."""
+    from sentinel.sevsnp.guest import GuestError, build_request
+
+    for bad in (b"", b"short", bytes(63), bytes(65)):
+        with pytest.raises(GuestError, match="exactly 64 bytes"):
+            build_request(bad)
+
+
+def test_vmpl_is_range_checked():
+    from sentinel.sevsnp.guest import GuestError, build_request
+
+    with pytest.raises(GuestError, match="vmpl"):
+        build_request(bytes(64), vmpl=4)
+
+
+def test_response_parsing_skips_the_header(vcek_key):
+    """The report starts at offset 32, after status/size/reserved."""
+    from sentinel.sevsnp.guest import RESP_HEADER_SIZE, parse_response
+
+    report = build_report(vcek_key, measurement=MEASUREMENT)
+    resp = struct.pack("<II", 0, REPORT_SIZE) + bytes(24) + report + bytes(2784)
+    assert parse_response(resp) == report
+    assert RESP_HEADER_SIZE == 32
+
+
+def test_nonzero_firmware_status_is_an_error():
+    from sentinel.sevsnp.guest import GuestError, parse_response
+
+    resp = struct.pack("<II", 22, REPORT_SIZE) + bytes(24) + bytes(REPORT_SIZE)
+    with pytest.raises(GuestError, match="status 22"):
+        parse_response(resp)
+
+
+def test_truncated_response_is_an_error():
+    from sentinel.sevsnp.guest import GuestError, parse_response
+
+    with pytest.raises(GuestError, match="too short"):
+        parse_response(bytes(100))
+
+
+def test_silicon_refuses_to_construct_without_hardware():
+    from sentinel.sevsnp.guest import GuestError, SevSnpSilicon
+
+    with pytest.raises(GuestError, match="not a SEV-SNP guest|needs a SEV-SNP guest"):
+        SevSnpSilicon(device="/nonexistent/sev-guest")
+
+
+def test_available_is_false_on_this_machine():
+    from sentinel.sevsnp.guest import available
+
+    assert available() is False  # a laptop is not a confidential VM
+
+
+# --- sign / verify round trip -------------------------------------------------
+
+def test_sign_then_verify_round_trip(chain, vcek_key, vcek):
+    """The full Silicon-shaped flow, with real report bytes underneath."""
+    from sentinel.sevsnp.testing import FakeSevSnpSilicon
+
+    silicon = FakeSevSnpSilicon(vcek_key, MEASUREMENT)
+    v = SevSnpVerifier("Milan", SevSnpPolicy(approved_measurement=MEASUREMENT),
+                       chain=chain, offline=True)
+
+    message = b"attest this exact response"
+    report = silicon.sign(message)
+    out = v.verify_signed_message(message, report, vcek=vcek)
+    assert out.measurement == MEASUREMENT
+    assert out.chip_id_hex == silicon.chip_id
+
+
+def test_report_does_not_verify_for_a_different_message(chain, vcek_key, vcek):
+    """The binding is what stops a report being reused for other data."""
+    from sentinel.sevsnp.testing import FakeSevSnpSilicon
+
+    silicon = FakeSevSnpSilicon(vcek_key, MEASUREMENT)
+    v = SevSnpVerifier("Milan", SevSnpPolicy(approved_measurement=MEASUREMENT),
+                       chain=chain, offline=True)
+
+    report = silicon.sign(b"message A")
+    with pytest.raises(VerificationError, match="response binding mismatch"):
+        v.verify_signed_message(b"message B", report, vcek=vcek)
+
+
+def test_malformed_hex_is_rejected(verifier, vcek):
+    with pytest.raises(VerificationError, match="not valid hex"):
+        verifier.verify_signed_message(b"msg", "not-hex-at-all", vcek=vcek)

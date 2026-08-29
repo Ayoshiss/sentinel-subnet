@@ -155,6 +155,33 @@ class SevSnpVerifier:
                 )
         return report
 
+    def verify_signed_message(
+        self,
+        message: bytes,
+        report_hex: str,
+        *,
+        vcek: object | None = None,
+    ) -> AttestationReportBlob:
+        """Verify a report produced by `SevSnpSilicon.sign(message)`.
+
+        The chip binds SHA-512 of the message into REPORT_DATA, so verification
+        recomputes that digest and checks it matches. This is the counterpart to
+        `Verifier.valid(message, signature)` in the mock path — same question,
+        asked of real hardware.
+        """
+        import hashlib
+
+        try:
+            blob = bytes.fromhex(report_hex)
+        except ValueError as exc:
+            raise VerificationError(f"report is not valid hex: {exc}") from exc
+
+        return self.verify(
+            blob,
+            expected_report_data=hashlib.sha512(message).digest(),
+            vcek=vcek,
+        )
+
     @staticmethod
     def _verify_signature(report: AttestationReportBlob, vcek: object) -> None:
         key = vcek.public_key()  # type: ignore[attr-defined]
