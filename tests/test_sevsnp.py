@@ -382,3 +382,40 @@ def test_report_does_not_verify_for_a_different_message(chain, vcek_key, vcek):
 def test_malformed_hex_is_rejected(verifier, vcek):
     with pytest.raises(VerificationError, match="not valid hex"):
         verifier.verify_signed_message(b"msg", "not-hex-at-all", vcek=vcek)
+
+
+# --- the standalone capture script must not drift ----------------------------
+
+def test_capture_script_agrees_with_the_parser(vcek_key):
+    """scripts/capture_report.py duplicates the offsets on purpose, so it can run
+    on a bare confidential VM before anything is installed. That duplication is
+    only safe while both readings agree — a drift would mean the script reports
+    one thing and the tested parser another, on the one machine where checking is
+    expensive."""
+    import importlib.util
+    import pathlib
+
+    path = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "capture_report.py"
+    spec = importlib.util.spec_from_file_location("capture_report", path)
+    cap = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cap)
+
+    assert cap.REPORT_SIZE == REPORT_SIZE
+    assert cap.SIGNATURE_OFFSET == SIGNATURE_OFFSET
+    assert cap.SNP_GET_REPORT == 0xC0185300
+
+    user_data = hashlib.sha512(b"marker").digest()
+    blob = build_report(vcek_key, measurement=MEASUREMENT, report_data=user_data)
+    parsed = parse_report(blob)
+
+    assert blob[0x090:0x0C0] == parsed.measurement
+    assert blob[0x050:0x090] == parsed.report_data == user_data
+    assert blob[0x1A0:0x1E0].hex().upper() == parsed.chip_id_hex
+
+    tcb = cap.unpack_tcb(struct.unpack_from("<Q", blob, 0x180)[0])
+    assert tcb == {
+        "bootloader": parsed.reported_tcb.bootloader,
+        "tee": parsed.reported_tcb.tee,
+        "snp": parsed.reported_tcb.snp,
+        "microcode": parsed.reported_tcb.microcode,
+    }
