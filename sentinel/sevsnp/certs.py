@@ -21,6 +21,8 @@ rate-limited and a validator checking many miners would otherwise hammer it.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import pathlib
 import urllib.error
@@ -43,9 +45,41 @@ PRODUCTS: Final = ("Milan", "Genoa", "Turin")
 
 DEFAULT_CACHE = pathlib.Path.home() / ".cache" / "sentinel" / "amd-certs"
 
+#: SHA-256 of the SubjectPublicKeyInfo of AMD's genuine ARK, per product line.
+#: This is the anchor the entire system rests on. Everything else is derived:
+#: the ASK is trusted because this key signed it, the VCEK because the ASK
+#: signed it, and the report because the VCEK signed it. Pin this wrongly and
+#: every check above it becomes decoration.
+#:
+#: "Self-signed" is not a substitute. Anyone can self-sign, including with the
+#: subject `CN=ARK-Milan, O=Advanced Micro Devices` — that string is not a
+#: secret and copying it costs nothing. The only thing an attacker cannot
+#: reproduce is AMD's private key, so the public half is what gets compared.
+#:
+#: Milan was taken from the certificate table of an AMD EPYC 7B13 on GCP,
+#: 2026-08-31, and is byte-identical to what AMD's KDS serves.
+AMD_ROOT_SPKI_SHA256: Final[dict[str, str]] = {
+    "Milan": "9f056bee44377e29308cb5ffa895bdfb62d18881fa6bed8d6f075b0204089cb9",
+}
+
 
 class CertificateError(Exception):
     pass
+
+
+def root_spki_sha256(cert: x509.Certificate) -> str:
+    """Fingerprint of a certificate's public key.
+
+    The public key rather than the certificate: AMD may reissue the ARK
+    certificate with new validity dates while keeping the same root key, and
+    pinning the certificate bytes would reject a legitimate reissue.
+    """
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+    spki = cert.public_key().public_bytes(
+        Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+    )
+    return hashlib.sha256(spki).hexdigest()
 
 
 @dataclass
@@ -55,17 +89,45 @@ class CertChain:
     product: str
     ask: x509.Certificate
     ark: x509.Certificate
+    #: The root this chain must anchor to. Defaults to AMD's genuine ARK for
+    #: `product`. Tests that build synthetic chains pass their own fingerprint,
+    #: which forces a fake root to be declared as such rather than sneaking
+    #: through under AMD's name.
+    expected_root_spki_sha256: str | None = None
 
     def verify_self(self) -> None:
-        """Check the chain is internally sound before trusting anything with it.
+        """Check the chain is internally sound *and anchored to AMD*.
 
-        The ARK must be self-signed and must have signed the ASK. Skipping this
-        would mean a substituted cert file is trusted blindly, which defeats the
-        point of pinning a root at all.
+        Internal soundness alone proves nothing. A chain can be perfectly
+        self-consistent and entirely forged: generate a root, sign an ASK with
+        it, sign a VCEK with that, and sign a report claiming any launch
+        measurement you like. Every signature verifies. The only question that
+        matters is whether the root is AMD's, and that is a comparison against
+        a key known in advance, not a property of the chain itself.
+
+        This is the same failure as trusting a verifier supplied by the party
+        being verified: whoever hands over the trust anchor decides the verdict.
         """
         if self.ark.subject != self.ark.issuer:
             raise CertificateError(f"{self.product} ARK is not self-signed")
         _verify_cert_signature(self.ark, self.ark.public_key(), "ARK self-signature")
+
+        expected = self.expected_root_spki_sha256 or AMD_ROOT_SPKI_SHA256.get(self.product)
+        if expected is None:
+            # Fail closed. An unpinned product is one we cannot verify, and
+            # accepting it "for now" would accept every forged chain for it.
+            raise CertificateError(
+                f"no pinned AMD root for {self.product}; refusing to verify "
+                f"against an unauthenticated root (pinned: "
+                f"{', '.join(sorted(AMD_ROOT_SPKI_SHA256)) or 'none'})"
+            )
+        actual = root_spki_sha256(self.ark)
+        if not hmac.compare_digest(actual, expected):
+            raise CertificateError(
+                f"{self.product} ARK is not AMD's root: expected key "
+                f"{expected[:16]}…, got {actual[:16]}… (self-signed by someone else)"
+            )
+
         _verify_cert_signature(self.ask, self.ark.public_key(), "ASK signed by ARK")
 
 

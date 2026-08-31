@@ -25,6 +25,7 @@ from .certs import (
     load_cert_chain,
     verify_vcek,
 )
+from .certtable import KNOWN_GUIDS, CertTableError, der_to_pem, parse_cert_table
 from .report import (
     REPORT_SIZE,
     SIGNATURE_OFFSET,
@@ -51,6 +52,11 @@ __all__ = [
     "fetch_vcek",
     "verify_vcek",
     "PRODUCTS",
+    # host certificate table (extended report)
+    "parse_cert_table",
+    "CertTableError",
+    "der_to_pem",
+    "KNOWN_GUIDS",
     # verifier
     "SevSnpVerifier",
     "SevSnpPolicy",

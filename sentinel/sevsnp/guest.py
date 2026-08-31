@@ -30,11 +30,51 @@ logger = logging.getLogger("sentinel.sevsnp.guest")
 
 DEVICE: Final = "/dev/sev-guest"
 
-#: _IOWR('S', 0x0, sizeof(struct snp_guest_request_ioctl)) — computed, not copied.
-SNP_GET_REPORT: Final = 0xC0185300
+#: struct snp_guest_request_ioctl {
+#:     __u8  msg_version;   /* padded out to the alignment of the u64s below */
+#:     __u64 req_data;
+#:     __u64 resp_data;
+#:     __u64 exitinfo2;
+#: }
+IOCTL_FORMAT: Final = "<BxxxxxxxQQQ"
+
+
+def _iowr(type_: str, nr: int, size: int) -> int:
+    """Linux `_IOWR(type, nr, size)`: direction 3 (read|write), size, type, nr."""
+    return (3 << 30) | (size << 16) | (ord(type_) << 8) | nr
+
+
+#: The struct's size is encoded *into* the ioctl number, and the kernel rejects
+#: a mismatch with ENOTTY rather than anything descriptive. So derive it from
+#: the same format used to pack the struct instead of writing a literal — the
+#: u8 pads out to 32 bytes, and a hand-computed 24 fails only on real hardware.
+SNP_GET_REPORT: Final = _iowr("S", 0x0, struct.calcsize(IOCTL_FORMAT))  # 0xC0205300
+
+#: Same outer struct, different request body: `req_data` points at
+#: `snp_ext_report_req` and the host attaches its certificate table.
+SNP_GET_EXT_REPORT: Final = _iowr("S", 0x2, struct.calcsize(IOCTL_FORMAT))  # 0xC0205302
 
 #: struct snp_report_req { u8 user_data[64]; u32 vmpl; u8 rsvd[28]; }
 REQ_SIZE: Final = 96
+
+#: struct snp_ext_report_req {
+#:     struct snp_report_req data;   /* 96 bytes */
+#:     __u64 certs_address;
+#:     __u32 certs_len;
+#: }  — trailing padding to the u64 alignment brings it to 112.
+EXT_REQ_FORMAT: Final = "<96sQI4x"
+
+#: How the kernel says "your certificate buffer is too small". Note it surfaces
+#: as EIO, *not* ENOSPC as the header's naming suggests: the errno reflects the
+#: failed guest request while the real signal is `vmm_error` in the upper half
+#: of exitinfo2. Keying on errno alone silently loses the certificates and sends
+#: the caller to KDS for no reason, which is exactly the dependency this avoids.
+VMM_ERR_INVALID_LEN: Final = 1
+ERRNO_NOSPC: Final = 28
+#: A host that provisions no certificates at all still needs a non-zero probe
+#: buffer on some kernels, and an absurd size would be its own bug. This is only
+#: a ceiling on what the two-call handshake is willing to believe.
+MAX_CERTS_LEN: Final = 1 << 20
 #: struct snp_report_resp { u8 data[4000]; }
 RESP_SIZE: Final = 4000
 #: The response opens with status, report_size and 24 reserved bytes; the
@@ -99,7 +139,7 @@ def request_report(user_data: bytes, vmpl: int = 0, device: str = DEVICE) -> byt
     req_addr = _address_of(req_buf)
     resp_addr = _address_of(resp)
 
-    ioctl_struct = bytearray(struct.pack("<BxxxxxxxQQQ", MSG_VERSION, req_addr, resp_addr, 0))
+    ioctl_struct = bytearray(struct.pack(IOCTL_FORMAT, MSG_VERSION, req_addr, resp_addr, 0))
 
     try:
         with open(device, "rb") as fd:
@@ -109,10 +149,86 @@ def request_report(user_data: bytes, vmpl: int = 0, device: str = DEVICE) -> byt
             f"{device} not present; this is not a SEV-SNP guest"
         ) from exc
     except OSError as exc:
-        _, _, _, exitinfo2 = struct.unpack("<BxxxxxxxQQQ", bytes(ioctl_struct))
+        _, _, _, exitinfo2 = struct.unpack(IOCTL_FORMAT, bytes(ioctl_struct))
         raise GuestError(f"ioctl failed: {exc} (exitinfo2=0x{exitinfo2:x})") from exc
 
     return parse_response(bytes(resp))
+
+
+def build_ext_request(user_data: bytes, certs_addr: int, certs_len: int,
+                      vmpl: int = 0) -> bytes:
+    """Encode `struct snp_ext_report_req`."""
+    return struct.pack(
+        EXT_REQ_FORMAT, build_request(user_data, vmpl), certs_addr, certs_len
+    )
+
+
+def request_ext_report(
+    user_data: bytes, vmpl: int = 0, device: str = DEVICE
+) -> tuple[bytes, bytes]:
+    """Ask the chip for a report *and* the host's certificate table.
+
+    Returns `(report_blob, certs_blob)`. The certificate blob is empty when the
+    host provisioned nothing — a normal outcome on some clouds, and the reason
+    callers must handle it rather than assume certificates are always there.
+
+    The buffer size is negotiated rather than guessed: ask with a zero-length
+    buffer, let the kernel refuse with ENOSPC and report the length it wants,
+    then ask again with exactly that. Guessing a size either wastes a page or
+    silently truncates the chain, and a truncated chain fails verification much
+    later, where the cause is far from obvious.
+    """
+    import fcntl
+
+    def _call(fd, req_buf: bytearray, resp_buf: bytearray) -> None:
+        ioctl_struct = bytearray(struct.pack(
+            IOCTL_FORMAT, MSG_VERSION, _address_of(req_buf), _address_of(resp_buf), 0
+        ))
+        try:
+            fcntl.ioctl(fd, SNP_GET_EXT_REPORT, ioctl_struct, True)
+        except OSError as exc:
+            _, _, _, exitinfo2 = struct.unpack(IOCTL_FORMAT, bytes(ioctl_struct))
+            exc.exitinfo2 = exitinfo2  # type: ignore[attr-defined]
+            raise
+
+    resp = bytearray(RESP_SIZE)
+    try:
+        with open(device, "rb") as fd:
+            # 1. Probe with no buffer; the kernel tells us how much it needs.
+            probe = bytearray(build_ext_request(user_data, 0, 0, vmpl))
+            certs_len = 0
+            try:
+                _call(fd, probe, resp)
+            except OSError as exc:
+                exitinfo2 = getattr(exc, "exitinfo2", 0)
+                vmm_err = (exitinfo2 >> 32) & 0xFFFFFFFF
+                if vmm_err != VMM_ERR_INVALID_LEN and exc.errno != ERRNO_NOSPC:
+                    raise GuestError(
+                        f"ext report ioctl failed: {exc} (exitinfo2=0x{exitinfo2:x})"
+                    ) from exc
+                # The kernel wrote the size it wants back into our request.
+                _, _, certs_len = struct.unpack(EXT_REQ_FORMAT, bytes(probe))
+
+            if certs_len == 0:
+                # The probe succeeded outright: no certificates to fetch.
+                return parse_response(bytes(resp)), b""
+            if certs_len > MAX_CERTS_LEN:
+                raise GuestError(f"host asked for an implausible {certs_len} certificate bytes")
+
+            # 2. Ask again with exactly the buffer it asked for.
+            certs = bytearray(certs_len)
+            req = bytearray(build_ext_request(user_data, _address_of(certs), certs_len, vmpl))
+            resp = bytearray(RESP_SIZE)
+            _call(fd, req, resp)
+            return parse_response(bytes(resp)), bytes(certs)
+
+    except FileNotFoundError as exc:
+        raise GuestError(f"{device} not present; this is not a SEV-SNP guest") from exc
+    except OSError as exc:
+        raise GuestError(
+            f"ext report ioctl failed: {exc} "
+            f"(exitinfo2=0x{getattr(exc, 'exitinfo2', 0):x})"
+        ) from exc
 
 
 def _address_of(buf: bytearray) -> int:

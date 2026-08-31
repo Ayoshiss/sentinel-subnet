@@ -17,6 +17,7 @@ and against AMD's genuine published certificates in an integration test.
 """
 
 import hashlib
+import pathlib
 import struct
 
 import pytest
@@ -33,6 +34,7 @@ from sentinel.sevsnp import (
     parse_report,
 )
 from sentinel.sevsnp.certs import CertChain
+from sentinel.sevsnp.certtable import CertTableError, der_to_pem, parse_cert_table
 from sentinel.sevsnp.report import ReportParseError
 from sentinel.sevsnp.testing import build_cert_chain, build_report, pack_tcb
 
@@ -245,9 +247,21 @@ def test_non_self_signed_root_is_rejected(chain):
 
 
 def test_ask_from_another_root_is_rejected(chain):
+    """An ASK the root did not sign, with the root itself above suspicion.
+
+    The chain is anchored to `other`'s own key so the root pin passes, which
+    forces the failure to come from the ASK signature rather than from the
+    anchor check. Otherwise this would pass for the wrong reason and stop
+    testing the link it is named after.
+    """
+    from sentinel.sevsnp.certs import root_spki_sha256
+
     other, _, _ = build_cert_chain("Genoa")
     with pytest.raises(CertificateError, match="ASK signed by ARK"):
-        CertChain(product="x", ask=chain.ask, ark=other.ark).verify_self()
+        CertChain(
+            product="x", ask=chain.ask, ark=other.ark,
+            expected_root_spki_sha256=root_spki_sha256(other.ark),
+        ).verify_self()
 
 
 def test_chain_order_is_detected_not_assumed(chain):
@@ -277,12 +291,20 @@ def test_unknown_product_is_rejected():
 # --- guest: asking the chip for a report --------------------------------------
 
 def test_ioctl_constant_matches_the_iowr_macro():
-    """Derived from _IOWR('S', 0, 24) rather than copied, so a wrong value here
-    is a visible arithmetic error instead of a mystery EINVAL on hardware."""
-    from sentinel.sevsnp.guest import SNP_GET_REPORT
+    """_IOWR('S', 0, sizeof(struct snp_guest_request_ioctl)).
 
-    expected = (3 << 30) | (24 << 16) | (ord("S") << 8) | 0
-    assert SNP_GET_REPORT == expected == 0xC0185300
+    The struct is `__u8 msg_version` followed by three `__u64`s, so the u8 pads
+    out to 32 bytes — not the 24 this test originally asserted. Both the
+    constant and this test were derived from that same wrong size, so the suite
+    confirmed the bug rather than catching it, and the kernel only objected on
+    real silicon with a bare ENOTTY. Hence the size is now taken from the format
+    string actually used to pack the struct: the two cannot disagree again.
+    """
+    from sentinel.sevsnp.guest import IOCTL_FORMAT, SNP_GET_REPORT
+
+    assert struct.calcsize(IOCTL_FORMAT) == 32
+    expected = (3 << 30) | (32 << 16) | (ord("S") << 8) | 0
+    assert SNP_GET_REPORT == expected == 0xC0205300
 
 
 def test_request_encoding():
@@ -402,7 +424,8 @@ def test_capture_script_agrees_with_the_parser(vcek_key):
 
     assert cap.REPORT_SIZE == REPORT_SIZE
     assert cap.SIGNATURE_OFFSET == SIGNATURE_OFFSET
-    assert cap.SNP_GET_REPORT == 0xC0185300
+    assert cap.SNP_GET_REPORT == 0xC0205300
+    assert struct.calcsize(cap.IOCTL_FORMAT) == 32
 
     user_data = hashlib.sha512(b"marker").digest()
     blob = build_report(vcek_key, measurement=MEASUREMENT, report_data=user_data)
@@ -419,3 +442,344 @@ def test_capture_script_agrees_with_the_parser(vcek_key):
         "snp": parsed.reported_tcb.snp,
         "microcode": parsed.reported_tcb.microcode,
     }
+
+
+# --- a report from real silicon ----------------------------------------------
+
+#: Captured 2026-08-31 from an AMD EPYC 7B13 (Milan) SEV-SNP guest on GCP,
+#: `n2d-standard-2` in us-central1-b, running at VMPL0. Every other test in this
+#: file builds its reports with a synthetic key, which proves the parser is
+#: self-consistent but cannot prove it reads what a real chip actually emits.
+REAL_REPORT = pathlib.Path(__file__).parent / "fixtures" / "sevsnp-report-20260831T055035Z.bin"
+
+#: What that chip reported. Pinned so a parsing change that silently shifts an
+#: offset fails here rather than on the next confidential VM.
+REAL_MEASUREMENT = (
+    "2d24cf9624ee36449e50c6c84042540b05898f6559f02741b7b354e0cc2ed18d"
+    "108352ade7dfc4cecce4fa974e51c773"
+)
+REAL_CHIP_ID_PREFIX = "73F0B5A781DB2168"
+
+
+@pytest.mark.skipif(not REAL_REPORT.exists(), reason="hardware fixture not present")
+def test_parses_a_report_from_real_hardware():
+    """The offsets, read against bytes no test wrote."""
+    blob = REAL_REPORT.read_bytes()
+    assert len(blob) == REPORT_SIZE
+
+    r = parse_report(blob)
+    assert r.version == 5
+    assert r.measurement.hex() == REAL_MEASUREMENT
+    assert len(r.measurement) == 48
+    assert r.chip_id_hex.startswith(REAL_CHIP_ID_PREFIX)
+    assert r.signed_bytes == blob[:SIGNATURE_OFFSET]
+
+    # The capture bound sha512 of a marker into REPORT_DATA and the chip echoed
+    # it back, which is what confirms 0x050 is the right offset on real silicon.
+    assert len(r.report_data) == 64
+    assert r.report_data != b"\x00" * 64
+
+
+@pytest.mark.skipif(not REAL_REPORT.exists(), reason="hardware fixture not present")
+def test_real_guest_was_not_debuggable():
+    """Policy bit 19 clear: the host could not inspect this guest, so the report
+    says something about confidentiality rather than nothing."""
+    r = parse_report(REAL_REPORT.read_bytes())
+    assert not (r.policy >> 19) & 1
+    SevSnpPolicy(approved_measurement=r.measurement).check(r)
+
+
+# --- the host certificate table (extended report) -----------------------------
+
+def _entry(guid_str, offset, length):
+    """A table entry as a real host emits one: GUID big-endian, RFC 4122 order."""
+    import uuid
+    return uuid.UUID(guid_str).bytes + struct.pack("<II", offset, length)
+
+
+def _build_table(certs):
+    """certs: list of (guid, der). Lays out a table exactly as a host would."""
+    from sentinel.sevsnp.certtable import ENTRY_SIZE
+
+    header_len = (len(certs) + 1) * ENTRY_SIZE   # +1 for the zero terminator
+    header, body, cursor = b"", b"", header_len
+    for guid, der in certs:
+        header += _entry(guid, cursor, len(der))
+        body += der
+        cursor += len(der)
+    return header + bytes(ENTRY_SIZE) + body
+
+
+VCEK_GUID = "63da758d-e664-4564-adc5-f4b93be8accd"
+ASK_GUID = "4ab7b379-bbac-4fe4-a02f-05aef327c782"
+ARK_GUID = "c0b406a4-a803-4952-9743-3fb6014cd0ae"
+
+
+def test_cert_table_splits_by_guid():
+    blob = _build_table([(VCEK_GUID, b"VVVV"), (ASK_GUID, b"AAAAAA"), (ARK_GUID, b"RR")])
+    assert parse_cert_table(blob) == {"VCEK": b"VVVV", "ASK": b"AAAAAA", "ARK": b"RR"}
+
+
+def test_guids_are_read_big_endian():
+    """RFC 4122 order, not the Microsoft mixed-endian convention.
+
+    Pinned against bytes a real GCP host emitted, because the original version
+    of this test built its fixture with the same wrong assumption as the code
+    and therefore passed while hardware returned three unrecognised GUIDs.
+    Reading these the wrong way round is not an error, it is a silent fall back
+    to KDS, so the wrong reading is asserted to fail explicitly.
+    """
+    import uuid
+
+    # Verbatim from the certificate table of an EPYC 7B13 on GCP, 2026-08-31.
+    raw = bytes.fromhex("63da758de6644564adc5f4b93be8accd")
+    assert str(uuid.UUID(bytes=raw)) == VCEK_GUID
+    assert str(uuid.UUID(bytes_le=raw)) == "8d75da63-64e6-6445-adc5-f4b93be8accd"
+
+    assert _entry(VCEK_GUID, 0, 0)[:16] == raw
+    assert parse_cert_table(_build_table([(VCEK_GUID, b"X")])) == {"VCEK": b"X"}
+
+
+def test_empty_blob_is_not_an_error():
+    """A host that provisions nothing is a normal case, distinct from corruption:
+    the caller has to be able to fall back to KDS rather than crash."""
+    assert parse_cert_table(b"") == {}
+    assert parse_cert_table(bytes(96)) == {}
+
+
+def test_unknown_guid_is_kept_under_its_uuid():
+    other = "11111111-2222-3333-4444-555555555555"
+    assert parse_cert_table(_build_table([(other, b"Z")])) == {other: b"Z"}
+
+
+def test_entry_pointing_outside_the_blob_is_rejected():
+    blob = bytearray(_build_table([(VCEK_GUID, b"X")]))
+    struct.pack_into("<I", blob, 20, 9999)  # absurd length on the first entry
+    with pytest.raises(CertTableError, match="outside the blob"):
+        parse_cert_table(bytes(blob))
+
+
+def test_unterminated_table_is_rejected():
+    from sentinel.sevsnp.certtable import ENTRY_SIZE
+
+    blob = _entry(VCEK_GUID, ENTRY_SIZE, 1) + b"X"
+    with pytest.raises(CertTableError, match="no terminating entry"):
+        parse_cert_table(blob)
+
+
+def test_der_to_pem_round_trips(vcek):
+    """PEM is emitted with the standard library so it works on a bare VM."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives.serialization import Encoding
+
+    der = vcek.public_bytes(Encoding.DER)
+    reloaded = x509.load_pem_x509_certificate(der_to_pem(der))
+    assert reloaded.public_bytes(Encoding.DER) == der
+
+
+# --- the extended request struct ---------------------------------------------
+
+def test_ext_report_ioctl_and_struct_sizes():
+    from sentinel.sevsnp.guest import (
+        EXT_REQ_FORMAT, REQ_SIZE, SNP_GET_EXT_REPORT, build_ext_request,
+    )
+
+    # Outer struct is unchanged; only the request body and the nr differ.
+    assert SNP_GET_EXT_REPORT == (3 << 30) | (32 << 16) | (ord("S") << 8) | 0x2
+    assert SNP_GET_EXT_REPORT == 0xC0205302
+    assert struct.calcsize(EXT_REQ_FORMAT) == 112  # 96 + u64 + u32 + padding
+
+    req = build_ext_request(hashlib.sha512(b"m").digest(), certs_addr=0xDEAD, certs_len=64)
+    inner, addr, length = struct.unpack(EXT_REQ_FORMAT, req)
+    assert len(inner) == REQ_SIZE
+    assert (addr, length) == (0xDEAD, 64)
+    assert inner[:64] == hashlib.sha512(b"m").digest()
+
+
+# --- end to end, on bytes from real silicon -----------------------------------
+
+HOST_DIR = pathlib.Path(__file__).parent / "fixtures" / "gcp-host-certs"
+EXT_REPORT = HOST_DIR / "sevsnp-report-20260831T061928Z.bin"
+HOST_BLOB = HOST_DIR / "host-certs-20260831T061928Z.bin"
+
+needs_host_certs = pytest.mark.skipif(
+    not EXT_REPORT.exists(), reason="hardware fixtures not present"
+)
+
+
+@pytest.fixture
+def host_certs():
+    """The certificate table exactly as a GCP host emitted it, 8192 bytes."""
+    return parse_cert_table(HOST_BLOB.read_bytes())
+
+
+@needs_host_certs
+def test_host_certificate_table_yields_the_full_chain(host_certs):
+    """The GUIDs a real host writes, decoded to the certificates AMD issues.
+
+    This is the test the original endianness bug would have failed. The earlier
+    unit tests could not catch it because they built their own fixtures; this
+    one reads bytes produced by hardware.
+    """
+    assert set(host_certs) == {"VCEK", "ASK", "ARK"}
+
+    from cryptography import x509
+    subjects = {
+        name: x509.load_der_x509_certificate(der).subject.rfc4514_string()
+        for name, der in host_certs.items()
+    }
+    assert "SEV-VCEK" in subjects["VCEK"]
+    assert "SEV-Milan" in subjects["ASK"]
+    assert "ARK-Milan" in subjects["ARK"]
+
+
+@needs_host_certs
+def test_real_report_verifies_offline_against_amd(host_certs):
+    """A genuine report, verified with no network at all.
+
+    `offline=True` makes any attempt to reach AMD's KDS an error rather than a
+    silent fallback, so this passing means the whole chain — AMD's root, its
+    signing key, the chip's own key, and the report signature — was checked from
+    bytes the host handed over with the proof. That is the property that keeps a
+    validator working on the day KDS is unreachable, which is the day this was
+    written.
+    """
+    from cryptography import x509
+
+    blob = EXT_REPORT.read_bytes()
+    report = parse_report(blob)
+    chain = CertChain(
+        product="Milan",
+        ask=x509.load_der_x509_certificate(host_certs["ASK"]),
+        ark=x509.load_der_x509_certificate(host_certs["ARK"]),
+    )
+    tcb = report.reported_tcb
+    verifier = SevSnpVerifier(
+        "Milan",
+        SevSnpPolicy(
+            approved_measurement=report.measurement,
+            min_bootloader=tcb.bootloader, min_tee=tcb.tee,
+            min_snp=tcb.snp, min_microcode=tcb.microcode,
+        ),
+        chain=chain,
+        offline=True,
+    )
+    vcek = x509.load_der_x509_certificate(host_certs["VCEK"])
+
+    verified = verifier.verify(blob, vcek=vcek)
+    assert verified.measurement == report.measurement
+    assert len(verified.signed_bytes) == 672
+
+
+@needs_host_certs
+def test_tampering_with_a_real_report_is_caught(host_certs):
+    """The same verification must still be able to say no."""
+    from cryptography import x509
+
+    blob = bytearray(EXT_REPORT.read_bytes())
+    blob[0x090] ^= 0xFF  # flip one bit of the launch measurement
+    report = parse_report(bytes(blob))
+
+    chain = CertChain(
+        product="Milan",
+        ask=x509.load_der_x509_certificate(host_certs["ASK"]),
+        ark=x509.load_der_x509_certificate(host_certs["ARK"]),
+    )
+    verifier = SevSnpVerifier(
+        "Milan", SevSnpPolicy(approved_measurement=report.measurement),
+        chain=chain, offline=True,
+    )
+    with pytest.raises(VerificationError, match="signature invalid"):
+        verifier.verify(bytes(blob), vcek=x509.load_der_x509_certificate(host_certs["VCEK"]))
+
+
+@needs_host_certs
+def test_the_launch_measurement_is_reproducible_across_hosts():
+    """Two captures, two different physical chips, same measurement.
+
+    This is what makes pinning a measurement meaningful: it identifies the
+    image, not the machine. If it varied per host there would be nothing stable
+    to approve.
+    """
+    first = parse_report(REAL_REPORT.read_bytes())
+    second = parse_report(EXT_REPORT.read_bytes())
+
+    assert first.chip_id_hex != second.chip_id_hex     # genuinely different chips
+    assert first.measurement == second.measurement     # identical image
+
+
+# --- the root of trust --------------------------------------------------------
+
+def test_forged_chain_is_rejected():
+    """The attack that worked before the root was pinned.
+
+    An attacker with no AMD silicon generates their own root, signs an ASK with
+    it, signs a VCEK with that, and signs a report claiming the approved launch
+    measurement. Every signature in that chain verifies, because they made all
+    of them. Internal consistency is not evidence of anything; only the identity
+    of the root is.
+    """
+    evil_chain, evil_key, evil_vcek = build_cert_chain("Milan")
+    forged = build_report(evil_key, measurement=MEASUREMENT, report_data=b"bind")
+
+    # The attacker presents their chain as AMD's, which is the whole trick.
+    passed_off_as_amd = CertChain(
+        product="Milan", ask=evil_chain.ask, ark=evil_chain.ark
+    )
+    verifier = SevSnpVerifier(
+        "Milan", SevSnpPolicy(approved_measurement=MEASUREMENT),
+        chain=passed_off_as_amd, offline=True,
+    )
+    with pytest.raises((CertificateError, VerificationError), match="not AMD's root"):
+        verifier.verify(forged, expected_report_data=b"bind", vcek=evil_vcek)
+
+
+def test_a_convincing_subject_line_does_not_help():
+    """`CN=ARK-Milan, O=Advanced Micro Devices` is not a secret.
+
+    The real ARK and a forged one carry the same subject and are both
+    self-signed, so neither field can distinguish them. Only the key can.
+    """
+    evil_chain, _, _ = build_cert_chain("Milan")
+    assert "ARK-Milan" in evil_chain.ark.subject.rfc4514_string()
+    assert evil_chain.ark.subject == evil_chain.ark.issuer  # self-signed, like AMD's
+
+    with pytest.raises(CertificateError, match="not AMD's root"):
+        CertChain(product="Milan", ask=evil_chain.ask, ark=evil_chain.ark).verify_self()
+
+
+def test_unpinned_product_fails_closed():
+    """No pinned root means no verification, not a waved-through one.
+
+    Genoa and Turin have no pinned key yet. Accepting them 'until we add it'
+    would accept every forged Genoa chain in the meantime.
+    """
+    from sentinel.sevsnp.certs import AMD_ROOT_SPKI_SHA256
+
+    assert "Genoa" not in AMD_ROOT_SPKI_SHA256
+    evil_chain, _, _ = build_cert_chain("Genoa")
+    with pytest.raises(CertificateError, match="no pinned AMD root"):
+        CertChain(product="Genoa", ask=evil_chain.ask, ark=evil_chain.ark).verify_self()
+
+
+@needs_host_certs
+def test_the_pinned_key_is_the_one_real_hardware_presented(host_certs):
+    """The pin matches what an actual AMD chip's host handed over.
+
+    Pinned from hardware rather than transcribed from a document, so this
+    asserts the constant was not fat-fingered.
+    """
+    from cryptography import x509
+
+    from sentinel.sevsnp.certs import AMD_ROOT_SPKI_SHA256, root_spki_sha256
+
+    ark = x509.load_der_x509_certificate(host_certs["ARK"])
+    assert root_spki_sha256(ark) == AMD_ROOT_SPKI_SHA256["Milan"]
+    assert ark.public_key().key_size == 4096
+
+    # And the real chain still validates against the pin.
+    CertChain(
+        product="Milan",
+        ask=x509.load_der_x509_certificate(host_certs["ASK"]),
+        ark=ark,
+    ).verify_self()

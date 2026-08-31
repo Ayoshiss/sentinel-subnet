@@ -101,7 +101,17 @@ def build_cert_chain(product: str = "Milan") -> tuple[CertChain, ec.EllipticCurv
     ask = _issue(f"SEV-{product}", f"ARK-{product}", ask_key.public_key(), ark_key, ca=True)
     vcek = _issue("SEV-VCEK", f"SEV-{product}", vcek_key.public_key(), ask_key, ca=False)
 
-    return CertChain(product=product, ask=ask, ark=ark), vcek_key, vcek
+    # This root is synthetic, so it must say so. Passing its own fingerprint is
+    # what lets the suite exercise the chain logic without the fixtures being
+    # able to impersonate AMD — a test chain that silently satisfied the
+    # production pin would mean the pin was not being tested at all.
+    from .certs import root_spki_sha256
+
+    chain = CertChain(
+        product=product, ask=ask, ark=ark,
+        expected_root_spki_sha256=root_spki_sha256(ark),
+    )
+    return chain, vcek_key, vcek
 
 
 def _issue(subject_cn: str, issuer_cn: str, public_key, signing_key, *, ca: bool) -> x509.Certificate:

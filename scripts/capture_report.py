@@ -40,7 +40,27 @@ SIGNATURE_OFFSET = 0x2A0
 RESP_HEADER_SIZE = 32
 REQ_SIZE = 96
 RESP_SIZE = 4000
-SNP_GET_REPORT = 0xC0185300  # _IOWR('S', 0, 24)
+IOCTL_FORMAT = "<BxxxxxxxQQQ"  # snp_guest_request_ioctl: u8 + pad + 3x u64 = 32
+# _IOWR('S', nr, 32). The size is encoded into the ioctl number and the kernel
+# answers a mismatch with a bare ENOTTY, so derive it from the struct itself.
+_IOWR = lambda nr: (3 << 30) | (struct.calcsize(IOCTL_FORMAT) << 16) | (ord("S") << 8) | nr  # noqa: E731
+SNP_GET_REPORT = _IOWR(0x0)
+SNP_GET_EXT_REPORT = _IOWR(0x2)
+
+# struct snp_ext_report_req { struct snp_report_req data; u64 certs_address; u32 certs_len; }
+EXT_REQ_FORMAT = "<96sQI4x"
+# "Buffer too small" arrives as EIO with vmm_err=1 in the top half of exitinfo2,
+# not as ENOSPC. The kernel writes the size it wants back into certs_len.
+VMM_ERR_INVALID_LEN = 1
+ERRNO_NOSPC = 28
+
+# GHCB certificate-table GUIDs, stored big-endian / RFC 4122 (uuid.bytes).
+CERT_GUIDS = {
+    "63da758d-e664-4564-adc5-f4b93be8accd": "VCEK",
+    "a8074bc2-a25a-483e-aae6-39c045a0b8a1": "VLEK",
+    "4ab7b379-bbac-4fe4-a02f-05aef327c782": "ASK",
+    "c0b406a4-a803-4952-9743-3fb6014cd0ae": "ARK",
+}
 DEVICE = "/dev/sev-guest"
 KDS = "https://kdsintf.amd.com/vcek/v1"
 
@@ -90,7 +110,7 @@ def request_report(user_data: bytes) -> bytes:
     resp = bytearray(RESP_SIZE)
     addr = lambda b: ctypes.addressof((ctypes.c_char * len(b)).from_buffer(b))  # noqa: E731
 
-    ioctl_struct = bytearray(struct.pack("<BxxxxxxxQQQ", 1, addr(req), addr(resp), 0))
+    ioctl_struct = bytearray(struct.pack(IOCTL_FORMAT, 1, addr(req), addr(resp), 0))
     with open(DEVICE, "rb") as fd:
         fcntl.ioctl(fd, SNP_GET_REPORT, ioctl_struct, True)
 
@@ -100,20 +120,121 @@ def request_report(user_data: bytes) -> bytes:
     return bytes(resp)[RESP_HEADER_SIZE:RESP_HEADER_SIZE + REPORT_SIZE]
 
 
+def request_ext_report(user_data: bytes):
+    """Report plus the host's certificate table, if it provisioned one.
+
+    The buffer size is negotiated, not guessed: ask with zero length, let the
+    kernel refuse with ENOSPC and state the size it wants, then ask again.
+    Returns (report, certs) with certs empty when the host attached nothing.
+    """
+    import ctypes
+    import fcntl
+
+    addr = lambda b: ctypes.addressof((ctypes.c_char * len(b)).from_buffer(b))  # noqa: E731
+    inner = user_data + struct.pack("<I", 0) + bytes(28)
+
+    def call(fd, req, resp):
+        s = bytearray(struct.pack(IOCTL_FORMAT, 1, addr(req), addr(resp), 0))
+        try:
+            fcntl.ioctl(fd, SNP_GET_EXT_REPORT, s, True)
+        except OSError as exc:
+            _, _, _, exc.exitinfo2 = struct.unpack(IOCTL_FORMAT, bytes(s))
+            raise
+
+    resp = bytearray(RESP_SIZE)
+    with open(DEVICE, "rb") as fd:
+        probe = bytearray(struct.pack(EXT_REQ_FORMAT, inner, 0, 0))
+        certs_len = 0
+        try:
+            call(fd, probe, resp)
+        except OSError as exc:
+            vmm_err = (getattr(exc, "exitinfo2", 0) >> 32) & 0xFFFFFFFF
+            if vmm_err != VMM_ERR_INVALID_LEN and exc.errno != ERRNO_NOSPC:
+                raise
+            _, _, certs_len = struct.unpack(EXT_REQ_FORMAT, bytes(probe))
+
+        if certs_len == 0:
+            return _report_from(resp), b""
+
+        certs = bytearray(certs_len)
+        req = bytearray(struct.pack(EXT_REQ_FORMAT, inner, addr(certs), certs_len))
+        resp = bytearray(RESP_SIZE)
+        call(fd, req, resp)
+        return _report_from(resp), bytes(certs)
+
+
+def _report_from(resp: bytearray) -> bytes:
+    status, _ = struct.unpack_from("<II", bytes(resp), 0)
+    if status != 0:
+        raise SystemExit(f"firmware returned status {status}")
+    return bytes(resp)[RESP_HEADER_SIZE:RESP_HEADER_SIZE + REPORT_SIZE]
+
+
+def parse_cert_table(blob: bytes) -> dict:
+    """Split the host blob into {name: der}. Empty blob means no certificates."""
+    import uuid
+
+    if not blob or not any(blob):
+        return {}
+    out = {}
+    for start in range(0, len(blob) - 24 + 1, 24):
+        entry = blob[start:start + 24]
+        if not any(entry):
+            break
+        offset, length = struct.unpack_from("<II", entry, 16)
+        if length == 0:
+            continue
+        if offset + length > len(blob):
+            raise SystemExit(f"cert entry at {start} points outside the blob")
+        guid = str(uuid.UUID(bytes=entry[:16]))
+        out[CERT_GUIDS.get(guid, guid)] = blob[offset:offset + length]
+    return out
+
+
+def der_to_pem(der: bytes) -> bytes:
+    import base64
+    import textwrap
+
+    body = "\n".join(textwrap.wrap(base64.b64encode(der).decode("ascii"), 64))
+    return f"-----BEGIN CERTIFICATE-----\n{body}\n-----END CERTIFICATE-----\n".encode()
+
+
 def capture():
     hr("[2] requesting a report")
     marker = f"sentinel-capture-{datetime.datetime.now(datetime.UTC).isoformat()}"
     user_data = hashlib.sha512(marker.encode()).digest()
     print(f"  binding  sha512({marker[:40]}…)")
 
-    blob = request_report(user_data)
+    # Prefer the extended report: it carries the certificates needed to verify,
+    # which removes any dependence on AMD's KDS being reachable. Fall back to
+    # the plain report, because a host that provisions nothing must still yield
+    # the artifact that is worth the trip.
+    certs_blob = b""
+    try:
+        blob, certs_blob = request_ext_report(user_data)
+        print(f"  ext report OK, {len(certs_blob)} bytes of host certificates")
+    except OSError as exc:
+        print(f"  ext report unavailable ({exc}); falling back to plain report")
+        blob = request_report(user_data)
     stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
     out = pathlib.Path(f"sevsnp-report-{stamp}.bin")
     out.write_bytes(blob)
 
     print(f"  got      {len(blob)} bytes")
     print(f"  SAVED    {out.resolve()}   <- copy this off the box")
-    return blob, user_data, out
+
+    certs = parse_cert_table(certs_blob)
+    if certs_blob:
+        pathlib.Path(f"host-certs-{stamp}.bin").write_bytes(certs_blob)
+    if certs:
+        print(f"  host provided: {', '.join(sorted(certs))}")
+        for name, der in certs.items():
+            pathlib.Path(f"{name}.der").write_bytes(der)
+            pathlib.Path(f"{name}.pem").write_bytes(der_to_pem(der))
+            print(f"  SAVED    {name}.der / {name}.pem  ({len(der)} bytes)")
+    else:
+        print("  host attached no certificates — verification will need AMD's KDS")
+    return blob, user_data, out, certs
 
 
 # --- 3. read it ---------------------------------------------------------------
@@ -172,7 +293,7 @@ def guess_product(cpu_model: str) -> list:
     return ["Milan", "Genoa", "Turin"]
 
 
-def verify(blob, fields, cpu_model):
+def verify(blob, fields, cpu_model, host_certs=None):
     hr("[4] AMD certificate chain")
     try:
         from cryptography import x509
@@ -183,6 +304,21 @@ def verify(blob, fields, cpu_model):
         print("  The report is saved; verify it offline with:")
         print("     pip install cryptography  (or run it on your laptop)")
         return
+
+    # The host's own certificates are preferred over KDS: they arrive with the
+    # report, they are the same certificates KDS would serve, and they work when
+    # AMD does not. KDS remains the fallback for hosts that provision nothing.
+    host_certs = host_certs or {}
+    leaf_name = "VCEK" if "VCEK" in host_certs else ("VLEK" if "VLEK" in host_certs else None)
+    if leaf_name and "ASK" in host_certs and "ARK" in host_certs:
+        print(f"  using the host's own certificates ({leaf_name}, ASK, ARK) — no network")
+        vcek = x509.load_der_x509_certificate(host_certs[leaf_name])
+        ask = x509.load_der_x509_certificate(host_certs["ASK"])
+        ark = x509.load_der_x509_certificate(host_certs["ARK"])
+        _finish(blob, vcek, ask, ark, leaf_name, x509, hashes, ec, padding)
+        return
+    if host_certs:
+        print(f"  host gave only: {', '.join(sorted(host_certs))} — need leaf+ASK+ARK, using KDS")
 
     tcb = fields["reported_tcb"]
     for product in guess_product(cpu_model):
@@ -206,48 +342,55 @@ def verify(blob, fields, cpu_model):
         vcek = x509.load_der_x509_certificate(vcek_der)
         certs = x509.load_pem_x509_certificates(chain_pem)
         ask, ark = certs if certs[0].subject != certs[0].issuer else (certs[1], certs[0])
-
-        hr("[5] verifying")
-        def rsa_check(cert, key, what):
-            algo = cert.signature_hash_algorithm
-            key.verify(cert.signature, cert.tbs_certificate_bytes,
-                       padding.PSS(mgf=padding.MGF1(algo), salt_length=algo.digest_size), algo)
-            print(f"  ✓ {what}")
-
-        try:
-            rsa_check(ark, ark.public_key(), "ARK is self-signed")
-            rsa_check(ask, ark.public_key(), "ASK signed by ARK")
-            rsa_check(vcek, ask.public_key(), "VCEK signed by ASK")
-        except Exception as exc:
-            print(f"  ✗ chain failed: {exc}")
-            return
-
-        # report signature: ECDSA P-384 over bytes [0, 0x2A0), R and S little-endian
-        from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
-        r_i = int.from_bytes(blob[SIGNATURE_OFFSET:SIGNATURE_OFFSET + 48], "little")
-        s_i = int.from_bytes(blob[SIGNATURE_OFFSET + 72:SIGNATURE_OFFSET + 120], "little")
-        try:
-            vcek.public_key().verify(
-                encode_dss_signature(r_i, s_i), blob[:SIGNATURE_OFFSET],
-                ec.ECDSA(hashes.SHA384()))
-            print("  ✓ REPORT SIGNATURE VERIFIES — genuine AMD silicon")
-            print("\n  Everything checks out. This is real hardware attestation.")
-        except Exception as exc:
-            print(f"  ✗ report signature failed: {exc}")
-            print("    The report is saved — debug the parsing offline, the bytes are good.")
+        _finish(blob, vcek, ask, ark, "VCEK", x509, hashes, ec, padding)
         return
 
     print("  Could not fetch a VCEK for any product line.")
     print("  The report is saved; this is debuggable offline.")
 
 
+def _finish(blob, leaf, ask, ark, leaf_name, x509, hashes, ec, padding):
+    """Chain check, then the report signature. Same for host certs and KDS."""
+    hr("[5] verifying")
+
+    def rsa_check(cert, key, what):
+        # AMD signs with RSA-PSS, not PKCS#1 v1.5; the salt length equals the
+        # digest size. Getting either wrong fails on genuine certificates.
+        algo = cert.signature_hash_algorithm
+        key.verify(cert.signature, cert.tbs_certificate_bytes,
+                   padding.PSS(mgf=padding.MGF1(algo), salt_length=algo.digest_size), algo)
+        print(f"  ✓ {what}")
+
+    try:
+        rsa_check(ark, ark.public_key(), "ARK is self-signed")
+        rsa_check(ask, ark.public_key(), "ASK signed by ARK")
+        rsa_check(leaf, ask.public_key(), f"{leaf_name} signed by ASK")
+    except Exception as exc:
+        print(f"  ✗ chain failed: {exc}")
+        return
+
+    # report signature: ECDSA P-384 over bytes [0, 0x2A0), R and S little-endian
+    from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+    r_i = int.from_bytes(blob[SIGNATURE_OFFSET:SIGNATURE_OFFSET + 48], "little")
+    s_i = int.from_bytes(blob[SIGNATURE_OFFSET + 72:SIGNATURE_OFFSET + 120], "little")
+    try:
+        leaf.public_key().verify(
+            encode_dss_signature(r_i, s_i), blob[:SIGNATURE_OFFSET],
+            ec.ECDSA(hashes.SHA384()))
+        print("  ✓ REPORT SIGNATURE VERIFIES — genuine AMD silicon")
+        print("\n  Everything checks out. This is real hardware attestation.")
+    except Exception as exc:
+        print(f"  ✗ report signature failed: {exc}")
+        print("    The report is saved — debug the parsing offline, the bytes are good.")
+
+
 def main():
     print("Sentinel — SEV-SNP report capture")
     print("=" * 70)
     cpu = preflight()
-    blob, user_data, path = capture()
+    blob, user_data, path, host_certs = capture()
     fields = describe(blob, user_data)
-    verify(blob, fields, cpu)
+    verify(blob, fields, cpu, host_certs)
 
     hr("done")
     print(f"  Copy off the box:  {path.name}")
