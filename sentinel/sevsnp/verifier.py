@@ -13,11 +13,14 @@ Failing any one raises `VerificationError`, the same exception the mock path
 raises, so the Key Broker and the validator do not care which backend produced
 the verdict. That is the seam the whole mock-first design was built around.
 
-What is real here and what is not: the certificate chain is genuinely AMD's,
-fetched from their Key Distribution Service and verified to a self-signed root,
-and the signature checking is real ECDSA P-384. What is missing is hardware to
-*produce* a report — that arrives with an EPYC confidential VM, and needs no
-change to this file.
+The chain is genuinely AMD's and is anchored to a *pinned* root, not merely to a
+self-signed one. That distinction is the whole of the trust model: a chain can be
+perfectly self-consistent and entirely forged, since an attacker who generates
+the root can sign every link below it. Only comparing the root against a key
+known in advance separates AMD's silicon from a convincing impostor.
+
+Reports produced by real hardware verify through this file unchanged; a captured
+one is a fixture in `tests/fixtures/`.
 """
 
 from __future__ import annotations

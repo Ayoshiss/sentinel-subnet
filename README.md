@@ -10,29 +10,44 @@ Sentinel is a Bittensor subnet where AI agents act on real systems — databases
 
 ## Status
 
-**Pre-registration, with the trust mechanism working end to end.** The protocol —
-attestation, credential release, attested tool execution, independent verification —
-runs today and is covered by 50 tests. What it does not yet have is real silicon or a
-subnet. Run `python scripts/demo_mcp.py` to watch a miner running modified code be
-refused a customer credential.
+**Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
+silicon.** The protocol — attestation, credential release, attested tool execution,
+independent verification — runs today under 167 tests, CI green on every push.
+
+Three things you can check without asking us for anything:
+
+```bash
+btcli subnets metagraph 554 --network test   # the subnet exists (bittensor >= 11)
+python scripts/benchmark.py --rounds 100     # 100% detection, 0 false rejections
+python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verified offline
+```
 
 | Area | State |
 |---|---|
 | Attestation core | **Working** (`sentinel/attestation.py`) — Ed25519, publicly verifiable |
 | Key Broker (credential release) | **Working** (`sentinel/kbs.py`) — every refusal path tested |
 | MCP `postgres.query` tool | **Working** (`sentinel/mcp/`) — read-only by default |
-| Attested query, end to end | **Working** (`scripts/demo_mcp.py`), 50 tests, CI on every push |
+| Attested query, end to end | **Working** (`scripts/demo_mcp.py`), CI on every push |
+| **SEV-SNP hardware** | **Verified on real silicon** — AMD EPYC 7B13, VCEK → ASK → ARK → report signature, offline, against a pinned AMD root |
+| Miner / validator neurons | **Working** — bittensor v11, weights land via timelock commit |
+| Testnet | **Live**, netuid 554 since 2026-08-29 |
+| Published results | `docs/results.md` — 100 rounds, 900 challenges |
 | Gateway stack | **Live in production** (`gateway/`, `sidecar/`, `web/`) — routes paid inference to SN64 |
 | Architecture, threat register, Yuma mechanics, litepaper | Complete (`docs/`) |
-| SEV-SNP hardware | **Simulated.** `MockSilicon` signs in software; real VCEK drops in behind the same interface |
-| Miner / validator neurons | Scaffolding — Bittensor integration not built |
-| Testnet | Not launched |
 
-**What "simulated" means here.** `MockSilicon` signs with a software Ed25519 key that has
-the same trust shape as a real VCEK — public verifiability, no shared secret — but it is
-not silicon-resident and AMD-certified. It proves the protocol, not the hardware root of
-trust. The `Silicon` and `Verifier` interfaces are what the real backend implements, so
-that swap changes no callers.
+Run `python scripts/demo_mcp.py` to watch a miner running modified code be refused
+a customer credential.
+
+**The honest gap.** The miners registered on 554 still run `MockSilicon`. Capturing
+and verifying genuine reports is done and is in CI; putting live miners on
+persistent confidential VMs is ongoing infrastructure and cost, deferred until
+there is someone to serve. `MockSilicon` signs with a software Ed25519 key that has
+the same trust shape as a real VCEK — public verifiability, no shared secret — so it
+proves the protocol rather than the hardware root of trust. The `Silicon` and
+`Verifier` interfaces are what the real backend implements, and that swap changes no
+callers.
+
+**And no design partners yet.** The product works; nobody has signed up to use it.
 
 ---
 
@@ -88,20 +103,35 @@ Full component inventory, request/payment/attestation flows, failure modes, and 
 Three layers at different maturities. Being precise about which is which matters
 more than making the tree look finished.
 
-**Sentinel core — working, tested (50 tests, CI on every push)**
+**Sentinel core — working, tested (167 tests, CI on every push)**
 ```
 sentinel/
 ├── attestation.py            # reports, response binding, verification
 ├── kbs.py                    # Key Broker — releases secrets only to attested code
 ├── enclave.py                # unlock → execute → attest the result
+├── chain.py                  # metagraph discovery, ServeAxon, permit checks
 ├── database.py               # Database seam: Mock / Sqlite / Postgres backends
-└── mcp/
-    ├── server.py             # MCP tool registry and dispatch
-    └── tools/postgres.py     # postgres.query, read-only by default
-tests/                        # 50 tests, weighted toward the refusal paths
+├── mcp/
+│   ├── server.py             # MCP tool registry and dispatch
+│   └── tools/postgres.py     # postgres.query, read-only by default
+├── serving/                  # miner HTTP layer, hotkey auth, replay protection
+├── validating/               # challenge → verify → score → submit weights
+└── sevsnp/                   # real AMD attestation
+    ├── report.py             # binary report parsing
+    ├── certs.py              # AMD chain, root public key pinned
+    ├── certtable.py          # host certificates from the extended report
+    ├── verifier.py           # the five checks a report must pass
+    └── guest.py              # /dev/sev-guest ioctls, standard and extended
+tests/                        # 167 tests, weighted toward the refusal paths
+└── fixtures/                 # a genuine AMD-signed report and AMD's real chain
 scripts/
 ├── demo.py                   # attestation, verification, tamper detection
-└── demo_mcp.py               # credential release → attested query → refusals
+├── demo_mcp.py               # credential release → attested query → refusals
+├── demo_round.py             # a validator round against dishonest miners
+├── benchmark.py              # validator accuracy over N rounds
+├── capture_report.py         # standalone report capture for a confidential VM
+├── run_epoch.py              # a full epoch against a chain
+└── launch_testnet.py         # subnet creation and registration
 ```
 
 **Inherited gateway stack — live in production, carried forward from TAO Gateway**
@@ -112,13 +142,6 @@ web/                          # Next.js frontend
 postgres/schema.sql           # gateway's own billing tables (not customer data)
 deploy/ · demo/ · chat.py · smoke-test.sh
 Dockerfile.fly · docker-compose.yml · fly.toml · supervisord.conf
-```
-
-**Neuron scaffolding — interfaces defined, Bittensor integration not built**
-```
-miner/                        # neuron wrapper around the working enclave;
-                              #   registration + serving loop raise NotImplementedError
-validator/                    # challenge / verify / score loop; 40/30/20/5/5 rubric
 ```
 
 **Docs**

@@ -95,13 +95,19 @@ non-deterministic query can make an honest miner disagree once, so the right
 correction is a moving average across epochs rather than an instant cliff. That
 needs multi-epoch data from a live subnet, which 554 now produces.
 
-**Attestation here is `MockSilicon`.** These numbers measure the
+**Attestation in this benchmark is `MockSilicon`.** These numbers measure the
 challenge-verify-score protocol, which is what catches each attack. Real
 hardware changes where a signature originates, not whether a mismatched launch
-measurement is detected. The real SEV-SNP path — report parsing, VCEK → ASK → ARK
-validation against AMD's published certificates, and the `/dev/sev-guest` ioctl —
-is implemented and tested (`sentinel/sevsnp/`), and needs EPYC hardware to
-confirm one syscall.
+measurement is detected.
+
+The real SEV-SNP path is no longer hypothetical: as of 2026-08-31 a genuine
+report captured from an AMD EPYC 7B13 verifies end to end — VCEK → ASK → ARK →
+report signature, against AMD's root, offline. That report and AMD's real
+certificate chain are committed under `tests/fixtures/`, so the verification
+runs in CI on every push and can be confirmed without any hardware.
+
+What is still true is that the miners on netuid 554 run the mock, so the two
+halves have not yet been joined on a live subnet.
 
 **A single validator, a small field, one machine.** Latency figures are
 loopback and say nothing about the internet. Nine miners is not a network.
@@ -117,5 +123,5 @@ python -m venv .venv && .venv/bin/pip install pytest -r requirements.txt
 .venv/bin/python scripts/benchmark.py --rounds 100
 ```
 
-Full per-miner output is written to `results.json`. The suite behind it is 149
+Full per-miner output is written to `results.json`. The suite behind it is 167
 tests, weighted toward the refusals, green on every push.

@@ -18,13 +18,27 @@ The differentiator. Prove that a response came from genuine, unmodified code.
       the same `VerificationError` as the mock path, so the Key Broker and
       validator are unchanged.
 - [x] **Report generation** (`sentinel/sevsnp/guest.py`) — the `/dev/sev-guest`
-      ioctl, request/response encoding, and `SevSnpSilicon` behind the same
-      `Silicon` interface as the mock. Encoding is fully tested; only the syscall
-      itself needs hardware.
-- [ ] **Run it on real silicon.** Everything is written — this is now confirming
-      one syscall on an EPYC confidential VM (a few hours, roughly $5), and
-      capturing one genuine report as a test fixture. The existing tests run
-      against it unchanged.
+      ioctls, standard and extended, request/response encoding, and
+      `SevSnpSilicon` behind the same `Silicon` interface as the mock.
+- [x] **Run it on real silicon.** Done 2026-08-31 on an AMD EPYC 7B13. A genuine
+      report and AMD's real certificate chain are fixtures in `tests/fixtures/`,
+      so the end-to-end verification runs in CI without hardware. Two captures on
+      different physical chips gave identical launch measurements.
+- [x] **Remove the dependency on AMD's KDS.** The extended report carries the
+      host's certificate chain, so validators verify without reaching AMD. Their
+      KDS was refusing connections the day this was built, which is the argument
+      for it.
+- [x] **Pin AMD's root.** The chain was previously anchored to any self-signed
+      certificate, so a forged root, ASK and VCEK verified a report claiming any
+      launch measurement. Now compared against a pinned key; unpinned product
+      lines fail closed.
+- [ ] **Measurement rotation.** `approved_measurement` is a single value. A cloud
+      guest-image refresh changes it and fails every miner at once. Needs an
+      overlap window and a way to publish a successor.
+- [ ] **Reproducible builds**, so a third party can derive the approved
+      measurement from source rather than taking ours on trust.
+- [ ] **Miners on 554 running real silicon.** Persistent confidential VMs are
+      ongoing cost, deliberately deferred until there is someone to serve.
 
 ## Milestone 2 — MCP tool + enclave execution ✅ mostly done
 - [x] MCP `postgres.query` handler (`sentinel/mcp/`), read-only by default

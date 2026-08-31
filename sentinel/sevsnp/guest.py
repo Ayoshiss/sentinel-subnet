@@ -6,9 +6,14 @@ caller data to the AMD Secure Processor and returns a report signed by the VCEK.
 Those 64 bytes are the whole point: they are what binds a report to one specific
 request, so a miner cannot produce an answer before being asked for it.
 
-This is the half that needs hardware. It is deliberately thin — the request and
-response encoding is pure and tested, and only the ioctl itself touches the
-device, so everything except one syscall can be verified on a laptop.
+This is the half that needs hardware to run. It is deliberately thin: the request
+and response encoding is pure and tested, and only the ioctl itself touches the
+device.
+
+Thin did not mean safe. Every bug found here was in the parts a laptop could not
+reach — the ioctl number, the errno the kernel uses to report a short buffer, and
+the byte order of the certificate table's GUIDs. Encoding tests written next to
+the code they test share its assumptions and confirm them rather than check them.
 
 Mapping onto the `Silicon` protocol takes one idea: a SEV-SNP chip does not sign
 arbitrary messages, it produces a report bound to 64 bytes. So the message is
@@ -124,9 +129,11 @@ def parse_response(resp: bytes) -> bytes:
 def request_report(user_data: bytes, vmpl: int = 0, device: str = DEVICE) -> bytes:
     """Ask the chip for a report bound to `user_data`. Requires a SEV-SNP guest.
 
-    The only function here that touches hardware. Everything it depends on is
-    tested independently, so bringing this up on a confidential VM is a matter
-    of confirming one syscall rather than debugging a stack.
+    The only function here that touches hardware, and confirmed against an AMD
+    EPYC 7B13. The ioctl number is derived from the struct rather than written as
+    a literal, because the size is encoded into it and the kernel rejects a
+    mismatch with a bare ENOTTY — which is precisely how the original hand
+    computed value failed.
     """
     import fcntl  # Linux-only; imported late so this module loads anywhere.
 

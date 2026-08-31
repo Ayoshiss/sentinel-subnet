@@ -10,9 +10,13 @@ Opt-in, because it needs the network and KDS is rate-limited:
 
     SENTINEL_NETWORK_TESTS=1 python -m pytest tests/test_sevsnp_integration.py -q
 
-Still missing, and honestly so: a genuine VCEK-signed report. That needs an EPYC
-confidential VM. When one is captured it becomes a fixture and the existing
-tests run against it unchanged — the interfaces do not move.
+A genuine VCEK-signed report is no longer missing: one was captured from an AMD
+EPYC 7B13 on 2026-08-31 and lives in `tests/fixtures/`, together with AMD's real
+certificate chain. It is verified end to end in `tests/test_sevsnp.py`, offline
+and without network access, so those checks are not gated behind this file.
+
+What remains network-gated here is only what genuinely needs AMD reachable:
+fetching certificates live from their Key Distribution Service.
 """
 
 import os

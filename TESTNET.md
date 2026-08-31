@@ -34,11 +34,15 @@ Yuma's timelock-encrypted commit path.
 
 ## Honest status
 
-Attestation is **mock-first on this subnet**. The real SEV-SNP path is
-implemented and tested — report parsing, VCEK to ASK to ARK validation against
-AMD's genuine published certificates, and the `/dev/sev-guest` ioctl — but the
-miners here run `MockSilicon`, because switching them over needs EPYC
-confidential hardware. See `sentinel/sevsnp/` and ROADMAP.md.
+Attestation is **mock-first on this subnet**. The real SEV-SNP path is done and
+confirmed on hardware: a genuine report from an AMD EPYC 7B13 verifies end to
+end against AMD's pinned root, offline, and is committed as a fixture so CI
+re-checks it on every push.
+
+What has not happened is joining the two on this subnet — the miners registered
+here still run `MockSilicon`, because putting them on real silicon means
+persistent confidential VMs and ongoing cost, which is deferred until there is
+someone to serve. See `sentinel/sevsnp/`, `docs/hardware-run.md` and ROADMAP.md.
 
 ## Notes for anyone reproducing this
 
