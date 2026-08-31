@@ -1,0 +1,127 @@
+{
+  "rounds": 100,
+  "miners": 9,
+  "elapsed_seconds": 185.7,
+  "latency_ceiling_ms": 2000.0,
+  "per_miner": [
+    {
+      "miner": "honest-a",
+      "expected_defence": "none (honest)",
+      "rounds": 100,
+      "mean_weight": 1.0,
+      "max_weight": 1.0,
+      "verified_pct": 100.0,
+      "caught_pct": 0.0,
+      "caught_by_expected_pct": 0.0,
+      "latency_p50_ms": 1.4,
+      "latency_p95_ms": 2.0
+    },
+    {
+      "miner": "honest-b",
+      "expected_defence": "none (honest)",
+      "rounds": 100,
+      "mean_weight": 1.0,
+      "max_weight": 1.0,
+      "verified_pct": 100.0,
+      "caught_pct": 0.0,
+      "caught_by_expected_pct": 0.0,
+      "latency_p50_ms": 1.4,
+      "latency_p95_ms": 1.9
+    },
+    {
+      "miner": "backdoored",
+      "expected_defence": "attestation",
+      "rounds": 100,
+      "mean_weight": 0.0,
+      "max_weight": 0.0,
+      "verified_pct": 0.0,
+      "caught_pct": 100.0,
+      "caught_by_expected_pct": 100.0,
+      "latency_p50_ms": 1.2,
+      "latency_p95_ms": 1.8
+    },
+    {
+      "miner": "replay",
+      "expected_defence": "attestation",
+      "rounds": 100,
+      "mean_weight": 0.0,
+      "max_weight": 0.0,
+      "verified_pct": 0.0,
+      "caught_pct": 100.0,
+      "caught_by_expected_pct": 100.0,
+      "latency_p50_ms": 1.1,
+      "latency_p95_ms": 1.6
+    },
+    {
+      "miner": "fabricator",
+      "expected_defence": "correctness",
+      "rounds": 100,
+      "mean_weight": 0.8,
+      "max_weight": 0.8,
+      "verified_pct": 100.0,
+      "caught_pct": 100.0,
+      "caught_by_expected_pct": 100.0,
+      "latency_p50_ms": 1.1,
+      "latency_p95_ms": 1.6
+    },
+    {
+      "miner": "cacheable",
+      "expected_defence": "cache_hygiene",
+      "rounds": 100,
+      "mean_weight": 0.95,
+      "max_weight": 0.95,
+      "verified_pct": 100.0,
+      "caught_pct": 100.0,
+      "caught_by_expected_pct": 100.0,
+      "latency_p50_ms": 1.1,
+      "latency_p95_ms": 1.6
+    },
+    {
+      "miner": "slow",
+      "expected_defence": "none (honest)",
+      "rounds": 100,
+      "mean_weight": 0.8872,
+      "max_weight": 0.8881,
+      "verified_pct": 100.0,
+      "caught_pct": 0.0,
+      "caught_by_expected_pct": 0.0,
+      "latency_p50_ms": 908.6,
+      "latency_p95_ms": 912.8
+    },
+    {
+      "miner": "malformed",
+      "expected_defence": "attestation",
+      "rounds": 100,
+      "mean_weight": 0.0,
+      "max_weight": 0.0,
+      "verified_pct": 0.0,
+      "caught_pct": 100.0,
+      "caught_by_expected_pct": 100.0,
+      "latency_p50_ms": 1.7,
+      "latency_p95_ms": 2.4
+    },
+    {
+      "miner": "unreachable",
+      "expected_defence": "unreachable",
+      "rounds": 100,
+      "mean_weight": 0.0,
+      "max_weight": 0.0,
+      "verified_pct": 0.0,
+      "caught_pct": 100.0,
+      "caught_by_expected_pct": 100.0,
+      "latency_p50_ms": null,
+      "latency_p95_ms": null
+    }
+  ],
+  "summary": {
+    "honest_mean_weight": 1.0,
+    "dishonest_mean_weight": 0.2917,
+    "honest_min_weight": 1.0,
+    "dishonest_max_weight": 0.95,
+    "degraded_mean_weight": 0.8872,
+    "false_rejections": 0,
+    "false_rejection_rate_pct": 0.0,
+    "detection_rate_pct": 100.0,
+    "correct_attribution_pct": 100.0
+  }
+}
