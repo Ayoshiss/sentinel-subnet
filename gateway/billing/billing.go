@@ -10,7 +10,7 @@ import (
 	"github.com/stripe/stripe-go/v82/checkout/session"
 	"github.com/stripe/stripe-go/v82/customer"
 	"github.com/stripe/stripe-go/v82/webhook"
-	"github.com/taogateway/gateway/db"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/db"
 )
 
 // CreatePortalSession returns a Stripe-hosted Customer Portal URL where the
@@ -75,7 +75,7 @@ func CreateCheckoutSession(ctx context.Context, customerID, email, packName, app
 				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
 					Currency: stripe.String("usd"),
 					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
-						Name:        stripe.String(fmt.Sprintf("TAO Gateway — %s credits ($%.0f)", pack.Name, pack.Credits)),
+						Name:        stripe.String(fmt.Sprintf("TAO Gateway, %s credits ($%.0f)", pack.Name, pack.Credits)),
 						Description: stripe.String(fmt.Sprintf("$%.2f in API credits for TAO Gateway inference", pack.Credits)),
 					},
 					UnitAmount: stripe.Int64(pack.AmountUSD),

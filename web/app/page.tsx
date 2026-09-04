@@ -15,12 +15,12 @@ const PILLARS = [
   {
     k: "01",
     title: "10× cheaper",
-    body: "Inference runs on Bittensor's decentralized GPU network — no data-center markup, no brand premium. You pay a fraction of OpenAI's rate.",
+    body: "Inference runs on Bittensor's decentralized GPU network, no data-center markup, no brand premium. You pay a fraction of OpenAI's rate.",
   },
   {
     k: "02",
     title: "Never down",
-    body: "Decentralized nodes are chaotic. Bhairab guards against it — a sub-5s failover ladder and an invisible backstop keep your app online when the network isn't.",
+    body: "Decentralized nodes are chaotic. Bhairab guards against it, a sub-5s failover ladder and an invisible backstop keep your app online when the network isn't.",
   },
   {
     k: "03",
@@ -32,7 +32,7 @@ const PILLARS = [
 const STEPS = [
   { n: "1", t: "Get a key", d: "Sign up with an email. 100k tokens free, no card." },
   { n: "2", t: "Change one line", d: "Point your OpenAI SDK at our endpoint. Nothing else changes." },
-  { n: "3", t: "We guard the rest", d: "Routing, failover, paying miners in TAO, fiat billing — handled." },
+  { n: "3", t: "We guard the rest", d: "Routing, failover, paying miners in TAO, fiat billing, handled." },
 ];
 
 const PRICING = [
@@ -154,8 +154,8 @@ resp = client.chat.completions.create(
           <EyeMark size={40} className="mx-auto mb-8" />
           <h2 className="text-2xl font-semibold tracking-tight mb-5">Named for the guardian</h2>
           <p className="text-[#8A8A8F] text-sm leading-relaxed mb-4">
-            Bhairab is the fierce protector deity of Kathmandu — the watchful guardian who never sleeps.
-            Bittensor is a $3.3B decentralized AI network of GPU miners, 10× cheaper than the cloud — but
+            Bhairab is the fierce protector deity of Kathmandu, the watchful guardian who never sleeps.
+            Bittensor is a $3.3B decentralized AI network of GPU miners, 10× cheaper than the cloud, but
             chaotic, unreliable, and walled behind crypto.
           </p>
           <p className="text-[#8A8A8F] text-sm leading-relaxed">
@@ -198,7 +198,7 @@ resp = client.chat.completions.create(
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-[#55555B]">
           <div className="flex items-center gap-2.5">
             <EyeMark size={18} />
-            <span>Bhairab © 2026 — The guardian of decentralized AI</span>
+            <span>Bhairab © 2026: The guardian of decentralized AI</span>
           </div>
           <div className="flex gap-6">
             <Link href="/docs" className="hover:text-[#ECECEC] transition-colors">Docs</Link>

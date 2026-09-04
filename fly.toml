@@ -14,7 +14,7 @@ primary_region = "sjc"
   force_https = true
 
   # Idle posture. Two always-on machines were kept warm for a live demo, because
-  # auto-stop routed the first request to a cold machine and the scan failed —
+  # auto-stop routed the first request to a cold machine and the scan failed,
   # and a scan that fails is an agent trading unverified. With no live traffic
   # that is roughly $6.40/month buying nothing, so the machines suspend when idle
   # and wake on the first request.

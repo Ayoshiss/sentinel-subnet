@@ -209,7 +209,7 @@ def test_fabricated_rows_lose_correctness_by_consensus(evaluator):
     assert out[0].scores.correctness == 1.0
     assert out[1].scores.correctness == 1.0
     assert out[2].scores.correctness == 0.0
-    assert out[2].verified  # its attestation is genuine — it just lied about the data
+    assert out[2].verified  # its attestation is genuine, it just lied about the data
     assert out[2].weight < out[0].weight
 
 

@@ -26,7 +26,7 @@ const USDCDevMint = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 // Network identifier in the signed message.
 const Network = "solana"
 
-// Recipient (our USDC address) — set via env; placeholder is the system program.
+// Recipient (our USDC address), set via env; placeholder is the system program.
 func Recipient() string {
 	if r := os.Getenv("X402_USDC_RECIPIENT"); r != "" {
 		return r

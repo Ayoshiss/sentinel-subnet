@@ -1,5 +1,5 @@
 """
-TAO Gateway — Dendrite Sidecar
+TAO Gateway: Dendrite Sidecar
 Handles all Bittensor protocol work: wallet, Synapse signing, validator calls.
 The Go gateway treats this as a dumb HTTP service.
 """
@@ -20,7 +20,7 @@ log = logging.getLogger("sidecar")
 
 app = FastAPI(title="TAO Sidecar")
 
-# Persistent HTTP client — reuses connections and caches DNS across requests
+# Persistent HTTP client: reuses connections and caches DNS across requests
 _client: Optional[httpx.AsyncClient] = None
 
 @app.on_event("startup")
@@ -44,18 +44,18 @@ CHUTES_API_URL = os.getenv("CHUTES_API_URL", "https://llm.chutes.ai/v1/chat/comp
 CHUTES_API_KEY = os.getenv("CHUTES_API_KEY", "")
 DEFAULT_MODEL  = os.getenv("DEFAULT_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
 
-# Groq — invisible last-resort backstop (centralized). Fires ONLY when every
+# Groq: invisible last-resort backstop (centralized). Fires ONLY when every
 # decentralized SN64 option is exhausted or the global budget is blown.
 GROQ_API_URL   = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_API_KEY   = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL     = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-# Fallback model chain — all on Chutes SN64, tried in order when primary fails.
+# Fallback model chain: all on Chutes SN64, tried in order when primary fails.
 # CRITICAL: fallbacks must be NON-REASONING, permanently-hot models. A reasoning
 # model (e.g. Qwen3) silently burns output tokens on internal <think> compute,
-# which we pay for at full output rates — a margin killer under heavy load.
+# which we pay for at full output rates: a margin killer under heavy load.
 FALLBACK_MODELS = [
-    "deepseek-ai/DeepSeek-V3.2-TEE",          # primary — best quality
+    "deepseek-ai/DeepSeek-V3.2-TEE",          # primary: best quality
     "google/gemma-4-31B-turbo-TEE",           # hot, non-reasoning, $0.15/$0.42 per M
     "unsloth/Mistral-Nemo-Instruct-2407-TEE", # cheapest, non-reasoning, $0.02/$0.10 per M
     "moonshotai/Kimi-K2.6-TEE",               # last resort
@@ -137,7 +137,7 @@ def health():
 @app.post("/query")
 async def query(request: dict):
     if not CHUTES_API_KEY:
-        log.warning("CHUTES_API_KEY not set — returning stub response")
+        log.warning("CHUTES_API_KEY not set: returning stub response")
         return _stub_response(request)
 
     # Pick the primary model. "auto" opts into the dynamic router (Tier 1
@@ -155,7 +155,7 @@ async def query(request: dict):
     model_chain = [primary_model] + [m for m in FALLBACK_MODELS if m != primary_model]
     is_stream = bool(request.get("stream"))
 
-    # ── Phase 1: decentralized (SN64) — TTFT caps + global budget ───────────────
+    # ── Phase 1: decentralized (SN64): TTFT caps + global budget ───────────────
     if is_stream:
         result = await _route_streaming(request, model_chain)
     else:
@@ -165,13 +165,13 @@ async def query(request: dict):
 
     # ── Phase 2: invisible centralized backstop (Groq) ──────────────────────────
     if GROQ_API_KEY:
-        log.warning("SN64 exhausted/budget blown — failing over to Groq backstop")
+        log.warning("SN64 exhausted/budget blown, failing over to Groq backstop")
         backstop = await _groq_backstop(request, is_stream)
         if backstop is not None:
             return backstop
 
     log.error("All providers exhausted (SN64 + Groq)")
-    raise HTTPException(status_code=502, detail="all providers at capacity — please retry in a moment")
+    raise HTTPException(status_code=502, detail="all providers at capacity, please retry in a moment")
 
 
 # ---------------------------------------------------------------------------
@@ -188,26 +188,26 @@ async def _route_streaming(request: dict, model_chain: List[str]):
     for model in model_chain:
         elapsed = time.monotonic() - phase_start
         if elapsed > DECENTRALIZED_BUDGET:
-            log.warning("Decentralized budget (%.0fs) blown after %.1fs — ripcord to Groq",
+            log.warning("Decentralized budget (%.0fs) blown after %.1fs, ripcord to Groq",
                         DECENTRALIZED_BUDGET, elapsed)
             return None
 
         payload = {**base, "model": model}
         headers = {"Authorization": f"Bearer {CHUTES_API_KEY}", "Content-Type": "application/json"}
         try:
-            # TTFT cap — abandon a stalling miner fast. _open_upstream_stream
+            # TTFT cap: abandon a stalling miner fast. _open_upstream_stream
             # guarantees the connection is closed on any failure.
             resp, aiter, first_chunk = await _open_upstream_stream(
                 CHUTES_API_URL, headers, payload, TTFT_CAP)
         except (asyncio.TimeoutError, StopAsyncIteration):
-            log.warning("Model %s — no first token within %.0fs, next", model, TTFT_CAP)
+            log.warning("Model %s, no first token within %.0fs, next", model, TTFT_CAP)
             continue
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as e:
-            log.warning("Model %s stream failed (%s) — next", model, type(e).__name__)
+            log.warning("Model %s stream failed (%s), next", model, type(e).__name__)
             await _reset_client()
             continue
         except Exception as e:
-            log.warning("Model %s stream error: %s — next", model, e)
+            log.warning("Model %s stream error: %s: next", model, e)
             continue
 
         log.info("Streaming from SN64 %s (TTFT %.1fs)", model, time.monotonic() - phase_start)
@@ -226,7 +226,7 @@ async def _route_buffered(request: dict, model_chain: List[str]):
     for model in model_chain:
         elapsed = time.monotonic() - phase_start
         if elapsed > DECENTRALIZED_BUDGET:
-            log.warning("Decentralized budget (%.0fs) blown after %.1fs — ripcord to Groq",
+            log.warning("Decentralized budget (%.0fs) blown after %.1fs, ripcord to Groq",
                         DECENTRALIZED_BUDGET, elapsed)
             return None
         result = await _try_model(request, model)
@@ -243,7 +243,7 @@ async def _open_upstream_stream(url: str, headers: dict, payload: dict, ttft: fl
     - The first-token wait is bounded by `ttft` via asyncio.wait_for.
     - On ANY failure (timeout, bad status, empty stream, or cancellation) the
       underlying connection is EXPLICITLY closed via resp.aclose() before the
-      exception propagates — we never rely on async-generator GC to release it.
+      exception propagates, we never rely on async-generator GC to release it.
     - On success the caller owns `response` and must close it (done in
       _stream_body's finally block, which also runs on client disconnect)."""
     req = _client.build_request(
@@ -259,7 +259,7 @@ async def _open_upstream_stream(url: str, headers: dict, payload: dict, ttft: fl
         return resp, aiter, first
     except BaseException:
         # Covers TimeoutError, status errors, StopAsyncIteration, and
-        # CancelledError — explicit, deterministic connection release.
+        # CancelledError: explicit, deterministic connection release.
         await resp.aclose()
         raise
 
@@ -290,23 +290,23 @@ async def _try_model(request: dict, model: str) -> Optional[JSONResponse]:
             timeout=ATTEMPT_TIMEOUT,
         )
         if resp.status_code == 429 or resp.status_code >= 500:
-            log.warning("Model %s returned %s — next", model, resp.status_code)
+            log.warning("Model %s returned %s: next", model, resp.status_code)
             return None
         resp.raise_for_status()
         log.info("SN64 %s succeeded", model)
         return JSONResponse(content=resp.json(), headers={"X-Routed-Subnet": f"SN64-Chutes/{model}"})
     except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError):
-        log.warning("Model %s timed out (%.0fs) — next", model, ATTEMPT_TIMEOUT)
+        log.warning("Model %s timed out (%.0fs), next", model, ATTEMPT_TIMEOUT)
         await _reset_client()
         return None
     except Exception as e:
-        log.warning("Model %s error: %s — next", model, e)
+        log.warning("Model %s error: %s: next", model, e)
         await _reset_client()
         return None
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Groq backstop (invisible centralized last resort)
+# Phase 2: Groq backstop (invisible centralized last resort)
 # ---------------------------------------------------------------------------
 async def _groq_backstop(request: dict, is_stream: bool):
     """Last-resort failover to Groq. Stamps X-Routed-Subnet: groq-backstop for
@@ -387,7 +387,7 @@ def _stub_response(request: dict) -> dict:
             "index": 0,
             "message": {
                 "role": "assistant",
-                "content": f"[STUB — set CHUTES_API_KEY] Echo: {last}",
+                "content": f"[STUB, set CHUTES_API_KEY] Echo: {last}",
             },
             "finish_reason": "stop",
         }],

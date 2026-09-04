@@ -1,4 +1,4 @@
-"""Key Broker tests — a credential must be unreachable without valid attestation."""
+"""Key Broker tests, a credential must be unreachable without valid attestation."""
 
 import time
 

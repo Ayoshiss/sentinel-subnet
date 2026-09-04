@@ -17,7 +17,7 @@ testnet (`btcli subnets metagraph 554 --network test`).
 
 ## The field
 
-Two honest miners, one merely slow, and six ways of being dishonest — each
+Two honest miners, one merely slow, and six ways of being dishonest, each
 isolated so that a failure names one specific defence rather than a vague
 "something was wrong".
 
@@ -41,15 +41,15 @@ single voice. Every round issues fresh nonces; nothing carries between rounds.
 
 | Miner | Verified | Caught | By expected cause | Mean weight | p50 latency |
 |---|---|---|---|---|---|
-| honest-a | 100.0% | 0.0% | — | **1.0000** | 1 ms |
-| honest-b | 100.0% | 0.0% | — | **1.0000** | 1 ms |
-| slow | 100.0% | 0.0% | — | 0.8872 | 909 ms |
+| honest-a | 100.0% | 0.0% |: | **1.0000** | 1 ms |
+| honest-b | 100.0% | 0.0% |: | **1.0000** | 1 ms |
+| slow | 100.0% | 0.0% |: | 0.8872 | 909 ms |
 | cacheable | 100.0% | 100.0% | 100.0% | 0.9500 | 1 ms |
 | fabricator | 100.0% | 100.0% | 100.0% | 0.8000 | 1 ms |
 | backdoored | 0.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
 | replay | 0.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
 | malformed | 0.0% | 100.0% | 100.0% | **0.0000** | 2 ms |
-| unreachable | 0.0% | 100.0% | 100.0% | **0.0000** | — |
+| unreachable | 0.0% | 100.0% | 100.0% | **0.0000** |: |
 
 ```
 detection rate                   100.0%
@@ -61,7 +61,7 @@ dishonest mean weight            0.2917
 
 **Detection was perfect and correctly attributed.** Every dishonest miner was
 caught in all 100 rounds, and each was caught by the defence intended to catch
-it — a miner failing for the wrong reason would be a bug wearing a success as a
+it, a miner failing for the wrong reason would be a bug wearing a success as a
 disguise, so the harness checks the cause, not just the outcome.
 
 **No honest miner was ever rejected.** Zero false positives across 900
@@ -83,14 +83,14 @@ currently outranks an honest miner with a slow link, which is the wrong ordering
 a cached attested response is served to someone else without the proof that
 belongs to it, and that is a correctness problem, not a hygiene nicety.
 
-`fabricator` keeps 0.8000. It passes attestation honestly — genuine chip,
-approved image — and simply lies about the data, losing only the 20% correctness
+`fabricator` keeps 0.8000. It passes attestation honestly, genuine chip,
+approved image, and simply lies about the data, losing only the 20% correctness
 axis. A miner returning fiction should not retain four fifths of its weight.
 
 Both follow from the rubric rather than from a failure of detection: *both were
 caught 100% of the time*. The defences work; the penalties are too small. The
 fix is to raise those weights or gate on them, and the reason it has not been
-done yet is that consensus correctness is probabilistic — a replica with lag or a
+done yet is that consensus correctness is probabilistic, a replica with lag or a
 non-deterministic query can make an honest miner disagree once, so the right
 correction is a moving average across epochs rather than an instant cliff. That
 needs multi-epoch data from a live subnet, which 554 now produces.
@@ -101,7 +101,7 @@ hardware changes where a signature originates, not whether a mismatched launch
 measurement is detected.
 
 The real SEV-SNP path is no longer hypothetical: as of 2026-08-31 a genuine
-report captured from an AMD EPYC 7B13 verifies end to end — VCEK → ASK → ARK →
+report captured from an AMD EPYC 7B13 verifies end to end, VCEK → ASK → ARK →
 report signature, against AMD's root, offline. That report and AMD's real
 certificate chain are committed under `tests/fixtures/`, so the verification
 runs in CI on every push and can be confirmed without any hardware.

@@ -3,11 +3,11 @@ Verifying a real SEV-SNP attestation report.
 
 Five checks, and a report has to pass all of them:
 
-    1. the VCEK chains to AMD's root      — genuine silicon, not a simulator
-    2. the report signature verifies      — these exact bytes came from that chip
-    3. the measurement is approved        — the expected image booted
-    4. the TCB is at or above the floor   — firmware is not known-vulnerable
-    5. report_data matches the binding    — this proof is for THIS request
+    1. the VCEK chains to AMD's root     , genuine silicon, not a simulator
+    2. the report signature verifies     , these exact bytes came from that chip
+    3. the measurement is approved       : the expected image booted
+    4. the TCB is at or above the floor  , firmware is not known-vulnerable
+    5. report_data matches the binding   : this proof is for THIS request
 
 Failing any one raises `VerificationError`, the same exception the mock path
 raises, so the Key Broker and the validator do not care which backend produced
@@ -51,7 +51,7 @@ class SevSnpPolicy:
     min_tee: int = 0
     min_snp: int = 0
     min_microcode: int = 0
-    #: Guest policy bit 19 — debug enabled. A debuggable guest can be inspected
+    #: Guest policy bit 19, debug enabled. A debuggable guest can be inspected
     #: by its host, so a report from one proves nothing about confidentiality.
     allow_debug: bool = False
 
@@ -118,7 +118,7 @@ class SevSnpVerifier:
     ) -> AttestationReportBlob:
         """Verify a raw report. Returns it parsed, or raises `VerificationError`.
 
-        `vcek` may be supplied directly — a guest can hand out the certificate it
+        `vcek` may be supplied directly, a guest can hand out the certificate it
         was provisioned with, which lets a verifier work without reaching KDS.
         """
         try:
@@ -169,7 +169,7 @@ class SevSnpVerifier:
 
         The chip binds SHA-512 of the message into REPORT_DATA, so verification
         recomputes that digest and checks it matches. This is the counterpart to
-        `Verifier.valid(message, signature)` in the mock path — same question,
+        `Verifier.valid(message, signature)` in the mock path, same question,
         asked of real hardware.
         """
         import hashlib

@@ -33,7 +33,7 @@ class DiscoveredMiner:
 
 async def fetch_metagraph(subtensor: Any, netuid: int) -> Any:
     """The typed metagraph. `Subtensor.read('metagraph')` returns subnet
-    metadata only — neurons come from the module-level fetch."""
+    metadata only: neurons come from the module-level fetch."""
     import bittensor as bt
 
     return await bt.metagraph.fetch(subtensor, netuid)
@@ -52,8 +52,8 @@ async def publish_axon(
 
     Signed by the HOTKEY, so a miner can publish without the coldkey on the box.
 
-    Two chain rules bite here. Loopback is rejected outright — an axon nobody can
-    reach is not an axon — so `127.0.0.1` fails and a LAN or public address is
+    Two chain rules bite here. Loopback is rejected outright, an axon nobody can
+    reach is not an axon, so `127.0.0.1` fails and a LAN or public address is
     required. And the subnet's `serving_rate_limit` (50 blocks by default)
     applies per neuron, so this belongs at startup and on change, never in the
     serving loop.

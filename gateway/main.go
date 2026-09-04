@@ -16,13 +16,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/taogateway/gateway/auth"
-	"github.com/taogateway/gateway/billing"
-	"github.com/taogateway/gateway/db"
-	"github.com/taogateway/gateway/keys"
-	"github.com/taogateway/gateway/pricing"
-	"github.com/taogateway/gateway/ratelimit"
-	"github.com/taogateway/gateway/x402"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/auth"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/billing"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/db"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/keys"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/pricing"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/ratelimit"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/x402"
 	"sync"
 )
 
@@ -60,15 +60,15 @@ func main() {
 	// resolveCaller handles both inside the handler).
 	r.Post("/v1/chat/completions", handleChatCompletions)
 
-	// Pre-transaction risk scan — AI guardian that reads LIVE signals and returns
+	// Pre-transaction risk scan, AI guardian that reads LIVE signals and returns
 	// a verdict before money moves. Same prepaid-or-x402 auth (agents pay to scan).
 	r.Post("/v1/risk/scan", handleRiskScan)
 
-	// Auth routes — magic link
+	// Auth routes: magic link
 	r.Post("/auth/request", handleAuthRequest)
 	r.Get("/auth/verify", handleAuthVerify)
 
-	// Dashboard API — session required
+	// Dashboard API: session required
 	r.With(sessionMiddleware).Get("/v1/usage", handleUsage)
 	r.With(sessionMiddleware).Get("/v1/keys", handleListKeys)
 	r.With(sessionMiddleware).Delete("/v1/keys/{id}", handleRevokeKey)
@@ -84,7 +84,7 @@ func main() {
 	r.With(sessionMiddleware).Post("/v1/billing/portal", handleBillingPortal)
 	r.Post("/v1/billing/webhook", handleStripeWebhook)
 
-	// Admin routes — protected by ADMIN_SECRET header
+	// Admin routes: protected by ADMIN_SECRET header
 	r.With(adminMiddleware).Post("/admin/customers", handleCreateCustomer)
 	r.With(adminMiddleware).Post("/admin/keys", handleCreateKey)
 	r.With(adminMiddleware).Get("/admin/margin", handleMargin)
@@ -110,7 +110,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 const x402Resource = "/v1/chat/completions"
 
-// caller is whoever authorized this request — a prepaid key holder or an x402 payer.
+// caller is whoever authorized this request, a prepaid key holder or an x402 payer.
 type caller struct {
 	method     string // "prepaid" | "x402"
 	apiKeyID   string // prepaid only
@@ -129,7 +129,7 @@ func x402PriceMicro() int64 {
 	return 1000 // 0.001 USDC default (matches Lattice)
 }
 
-// In-memory single-use nonce store with TTL (v1 — multi-instance needs Redis).
+// In-memory single-use nonce store with TTL (v1, multi-instance needs Redis).
 var (
 	nonceMu    sync.Mutex
 	nonceStore = map[string]time.Time{}
@@ -233,7 +233,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if c.method == "prepaid" {
 		balance, err := billing.GetBalance(r.Context(), c.customerID)
 		if err == nil && balance <= 0 {
-			http.Error(w, `{"error":"insufficient balance — top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
+			http.Error(w, `{"error":"insufficient balance, top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
 			return
 		}
 	}
@@ -430,12 +430,12 @@ func handleCreateKey(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"key":  rawKey,
-		"note": "Store this key — it will not be shown again.",
+		"note": "Store this key, it will not be shown again.",
 	})
 }
 
 // handleMargin reports retail vs wholesale (COGS) per served model over the
-// last N days — the hard data that proves the Tier-1 router is preserving margin
+// last N days, the hard data that proves the Tier-1 router is preserving margin
 // by down-routing simple prompts to cheaper models. ?days=7 (default).
 func handleMargin(w http.ResponseWriter, r *http.Request) {
 	days := 7
@@ -610,7 +610,7 @@ func handleAuthVerify(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, appURL+"/login?error=expired", http.StatusFound)
 		return
 	}
-	// Return token as JSON — frontend sets the cookie on its own domain
+	// Return token as JSON: frontend sets the cookie on its own domain
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": sessionToken})
 }
@@ -731,10 +731,10 @@ func handleRevokeKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Scope the update to the session's own customer_id — this prevents one
+	// Scope the update to the session's own customer_id: this prevents one
 	// customer from revoking another's key (IDOR). Revocation is a soft delete:
 	// setting revoked_at makes keys.Lookup (WHERE revoked_at IS NULL) reject the
-	// key on the very next request. No cache to evict — Lookup hits Postgres
+	// key on the very next request. No cache to evict: Lookup hits Postgres
 	// directly, so the kill is effective immediately.
 	tag, err := db.Pool.Exec(r.Context(), `
 		UPDATE api_keys
@@ -742,7 +742,7 @@ func handleRevokeKey(w http.ResponseWriter, r *http.Request) {
 		WHERE id = $1 AND customer_id = $2 AND revoked_at IS NULL
 	`, keyID, sess.CustomerID)
 	if err != nil {
-		// Likely a malformed UUID or db error — don't leak details
+		// Likely a malformed UUID or db error: don't leak details
 		http.Error(w, `{"error":"could not revoke key"}`, http.StatusBadRequest)
 		return
 	}
@@ -891,7 +891,7 @@ func handleBillingPortal(w http.ResponseWriter, r *http.Request) {
 		log.Printf("portal error: %v", err)
 		// Most common cause in test mode: the Customer Portal hasn't been
 		// activated in the Stripe dashboard yet.
-		http.Error(w, `{"error":"billing portal unavailable — enable the Customer Portal in Stripe settings"}`, http.StatusServiceUnavailable)
+		http.Error(w, `{"error":"billing portal unavailable, enable the Customer Portal in Stripe settings"}`, http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

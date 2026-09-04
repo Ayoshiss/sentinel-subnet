@@ -1,4 +1,4 @@
--- TAO Gateway — Postgres schema
+-- TAO Gateway: Postgres schema
 -- Run once on a fresh database: psql $DATABASE_URL -f schema.sql
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 
 -- ── API Keys ─────────────────────────────────────────────────────────────────
--- key_hash is SHA-256 of the raw key — we never store the raw key after creation
+-- key_hash is SHA-256 of the raw key, we never store the raw key after creation
 CREATE TABLE IF NOT EXISTS api_keys (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id  UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,

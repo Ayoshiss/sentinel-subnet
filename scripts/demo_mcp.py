@@ -1,5 +1,5 @@
 """
-Milestone 2 — an agent queries a real database it is never trusted with.
+Milestone 2, an agent queries a real database it is never trusted with.
 
 Run:  python scripts/demo_mcp.py
 
@@ -44,7 +44,7 @@ def rule(title: str) -> None:
 
 
 def run() -> None:
-    print("Sentinel — attested database access")
+    print("Sentinel: attested database access")
     print("(simulation: software Ed25519 + in-memory database)")
     print("═" * 68)
 
@@ -64,7 +64,7 @@ def run() -> None:
     print(f"  measurement: {APPROVED[:32]}…")
     print(f"  public key : {enclave.public_key_hex[:32]}…  (published)")
 
-    # ACT 1 — unlock, then answer.
+    # ACT 1: unlock, then answer.
     rule("[act 1]     enclave attests, broker releases, query runs")
     credentials = enclave.unlock(broker, RESOURCE)
     print(f"  ✓ credential released to attested code  → {credentials!r}")
@@ -83,7 +83,7 @@ def run() -> None:
         print(f"      {row}")
     print(f"  ✓ result bound into attestation (hash {attested.response_hash[:24]}…)")
 
-    # ACT 2 — a stranger verifies, holding only the public key.
+    # ACT 2: a stranger verifies, holding only the public key.
     rule("[act 2]     a third party verifies with the public key alone")
     public_only = verifier_from_public_key(enclave.public_key_hex)
     try:
@@ -92,11 +92,11 @@ def run() -> None:
             approved_measurement=APPROVED, expected_nonce=nonce,
             expected_report_data=bind_response(request_id, attested.response_hash),
         )
-        print("  VERIFIED — approved code, genuine chip, this exact result")
+        print("  VERIFIED: approved code, genuine chip, this exact result")
     except VerificationError as exc:
-        print(f"  REJECTED — {exc}")
+        print(f"  REJECTED: {exc}")
 
-    # ACT 3 — the miner tampers with the data on the way out.
+    # ACT 3: the miner tampers with the data on the way out.
     rule("[act 3]     miner edits a row after attesting")
     forged = dict(attested.result)
     forged["rows"] = [[1, "attacker@evil.com", "enterprise"]]
@@ -109,9 +109,9 @@ def run() -> None:
         )
         print("  (should not happen)")
     except VerificationError as exc:
-        print(f"  REJECTED — {exc}")
+        print(f"  REJECTED: {exc}")
 
-    # ACT 4 — the strongest property: modified code never gets the secret.
+    # ACT 4: the strongest property: modified code never gets the secret.
     rule("[act 4]     miner swaps in modified code and asks for the credential")
     rogue = Enclave(MockSilicon(), launch_measurement=sha384(b"backdoored-image"))
     broker.trust_chip(rogue.chip_id, rogue.public_key_hex)  # genuine chip, bad image
@@ -121,7 +121,7 @@ def run() -> None:
         rogue.unlock(broker, RESOURCE)
         print("  (should not happen)")
     except CredentialReleaseError as exc:
-        print(f"  REFUSED — {exc}")
+        print(f"  REFUSED: {exc}")
     print(f"  credential held by rogue enclave: {rogue.credential_for(RESOURCE)}")
 
     print("\n" + "═" * 68)

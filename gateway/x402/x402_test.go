@@ -58,7 +58,7 @@ func TestCrossLanguageJS(t *testing.T) {
 	_ = base64.StdEncoding.EncodeToString(b)
 
 	if !Verify(proof, os.Getenv("X402_RESOURCE"), os.Getenv("X402_NONCE"), 1000) {
-		t.Fatal("JS-signed proof FAILED to verify in Go — byte-parity broken")
+		t.Fatal("JS-signed proof FAILED to verify in Go: byte-parity broken")
 	}
-	t.Log("✅ JS (tweetnacl/bs58) proof verified in Go — byte-parity confirmed")
+	t.Log("✅ JS (tweetnacl/bs58) proof verified in Go, byte-parity confirmed")
 }

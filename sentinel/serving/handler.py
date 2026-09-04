@@ -1,5 +1,5 @@
 """
-Miner request handling — auth, execute, attest.
+Miner request handling, auth, execute, attest.
 
 Deliberately framework-agnostic: `MinerHandler.handle()` maps a `Request` to a
 `Response` and knows nothing about sockets. The stdlib server in `server.py`
@@ -29,7 +29,7 @@ from bittensor import http_auth
 from ..enclave import Enclave
 from ..mcp import MCPServer, ToolError
 
-#: Routes that answer without a signature. Liveness only — no state, no secrets.
+#: Routes that answer without a signature. Liveness only, no state, no secrets.
 PUBLIC_PATHS = frozenset({"/health"})
 
 
@@ -154,7 +154,7 @@ class MinerHandler:
         """Answer a validator's liveness/integrity challenge with an attestation.
 
         Proves, on demand, that this miner is still the approved image on a
-        genuine chip — bound to the validator's nonce so a previous answer
+        genuine chip: bound to the validator's nonce so a previous answer
         cannot be replayed.
         """
         nonce = self._require_nonce(request.json())

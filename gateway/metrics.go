@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taogateway/gateway/db"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/db"
 )
 
-// scan_events is the persistent record of every risk scan — the real
+// scan_events is the persistent record of every risk scan: the real
 // product-engagement signal (a bot loads the page; only a human runs a scan).
 // Powers the milestone metric: how many scans, by how many distinct callers.
 func ensureScanTable(ctx context.Context) {
@@ -87,7 +87,7 @@ func handleScanRecent(w http.ResponseWriter, r *http.Request) {
 		Ago     string `json:"ago"`
 		Tier    string `json:"tier"`
 		Verdict string `json:"verdict"`
-		IPTail  string `json:"ipTail"` // last octet only (privacy) — enough to tell visitors apart
+		IPTail  string `json:"ipTail"` // last octet only (privacy), enough to tell visitors apart
 		Token   string `json:"token"`
 	}
 	var out []ev
@@ -126,7 +126,7 @@ func handleScanStats(w http.ResponseWriter, r *http.Request) {
 
 	type stats struct {
 		TotalScans       int64            `json:"totalScans"`
-		DistinctVisitors int64            `json:"distinctVisitors"` // by IP — the real "how many people" number
+		DistinctVisitors int64            `json:"distinctVisitors"` // by IP, the real "how many people" number
 		Visitors24h      int64            `json:"distinctVisitors24h"`
 		DistinctCallers  int64            `json:"distinctCallers"` // by key/wallet (web shares one demo key)
 		Last24h          int64            `json:"last24h"`

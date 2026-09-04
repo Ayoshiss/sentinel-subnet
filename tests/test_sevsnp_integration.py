@@ -3,7 +3,7 @@ Verification against AMD's genuine certificate chain.
 
 The unit tests use a synthetic root for speed. These fetch the real ARK and ASK
 from AMD's Key Distribution Service and check our chain validation against the
-actual trust anchor — the difference between "our code is self-consistent" and
+actual trust anchor, the difference between "our code is self-consistent" and
 "our code agrees with AMD".
 
 Opt-in, because it needs the network and KDS is rate-limited:
@@ -64,7 +64,7 @@ def test_chains_are_distinct_per_product(chains):
 
 
 def test_cross_product_substitution_is_rejected(chains):
-    """A Milan ASK under a Genoa root must not verify — this is the check that
+    """A Milan ASK under a Genoa root must not verify: this is the check that
     stops a report being validated against the wrong generation's trust root."""
     crossed = CertChain(product="x", ask=chains["Milan"].ask, ark=chains["Genoa"].ark)
     with pytest.raises(CertificateError, match="signature does not verify"):
@@ -77,7 +77,7 @@ def test_chain_is_cached_after_first_fetch(tmp_path):
     cached = tmp_path / "Milan-cert_chain.pem"
     assert cached.exists() and cached.stat().st_size > 1000
 
-    # Second call must be served from disk — break the network to prove it.
+    # Second call must be served from disk: break the network to prove it.
     import sentinel.sevsnp.certs as certs
 
     original = certs.urllib.request.urlopen

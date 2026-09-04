@@ -1,9 +1,9 @@
-# Sentinel — Litepaper v0.1
+# Sentinel: Litepaper v0.1
 
 **The trust layer for the AI agent economy.**
 
 A Bittensor subnet where AI agents act on real systems through hardware-attested
-confidential compute, paying per query in machine-native money — and the silicon
+confidential compute, paying per query in machine-native money, and the silicon
 itself proves nobody saw the data.
 
 ## Abstract
@@ -17,7 +17,7 @@ response ships with a cryptographic attestation, signed by the chip, proving the
 query ran on genuine, unmodified hardware. Agents pay per call via x402
 micropayments. Miners post slashable TAO collateral and are continuously
 re-attested by validators under Yuma Consensus. The result is a decentralised
-marketplace of **attested tool-servers** — the confidential execution layer the
+marketplace of **attested tool-servers**, the confidential execution layer the
 agent economy is missing, and one of the few Bittensor subnet designs built to
 earn real external revenue rather than farm emissions.
 
@@ -27,14 +27,14 @@ An agent that can only talk is a demo. An agent that can *act* is a product. But
 acting requires credentials, and handing credentials to an autonomous agent on
 someone else's infrastructure is the biggest unsolved risk in the agent economy.
 
-- **SaaS tool gateways** (Arcade, Composio) — keys sit on the vendor's servers.
-- **Self-hosting** — weeks of engineering per integration.
-- **Raw keys in agent memory** — today's default; keys leak constantly.
+- **SaaS tool gateways** (Arcade, Composio), keys sit on the vendor's servers.
+- **Self-hosting**, weeks of engineering per integration.
+- **Raw keys in agent memory**, today's default; keys leak constantly.
 
 Confidential computing for agents is a validated, emerging field. What does not
 yet exist is a **decentralised, incentivised network of attested tool-servers.**
 
-## 2. The solution — bonded couriers with sealed briefcases
+## 2. The solution: bonded couriers with sealed briefcases
 
 | Element | In Sentinel |
 |---|---|
@@ -48,7 +48,7 @@ yet exist is a **decentralised, incentivised network of attested tool-servers.**
 ## 3. Architecture
 
 Five layers; only the customer (top) and AMD silicon (bottom) are trusted. See
-[architecture.md](architecture.md) for the full spec — component inventory,
+[architecture.md](architecture.md) for the full spec, component inventory,
 request/payment/attestation flows, failure modes, deployment topology.
 
 ## 4. Incentive mechanism
@@ -95,5 +95,5 @@ Pre-registration. Architecture, threat model, Bittensor mechanics, and GTM
 complete; testnet build is next. Founder-led by Ayoshis Prakash Sitaula
 (Kathmandu), with a senior TEE/attestation engineer as the first funded hire.
 
-> We taught machines to think. Sentinel lets us trust them to act — with proof
+> We taught machines to think. Sentinel lets us trust them to act, with proof
 > built into the silicon itself.

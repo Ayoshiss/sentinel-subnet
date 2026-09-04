@@ -72,7 +72,7 @@ FIELD = [
     ("unreachable", {"unreachable": True}),
 ]
 
-#: Miners that are slow but honest. They should score *lower*, not be rejected —
+#: Miners that are slow but honest. They should score *lower*, not be rejected,
 #: counting them as undetected attacks would misstate the detection rate, and
 #: rejecting them would be a false positive.
 DEGRADED = {"slow"}
@@ -160,7 +160,7 @@ def classify(name, outcome):
 
 
 def run(rounds: int, latency_ceiling_ms: float):
-    print(f"Sentinel — validator benchmark, {rounds} rounds")
+    print(f"Sentinel: validator benchmark, {rounds} rounds")
     print("=" * 78)
 
     miners = [(name, *build_miner(name, **kw)) for name, kw in FIELD]

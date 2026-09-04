@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TAO Gateway — full end-to-end smoke test
+# TAO Gateway: full end-to-end smoke test
 # Exercises every shipped feature against PRODUCTION and prints a status report.
 #
 # Usage:  ADMIN_SECRET=... ./smoke-test.sh
@@ -26,7 +26,7 @@ no()   { echo "  ❌ $1"; fail=$((fail+1)); }
 hdr()  { echo ""; echo "── $1 ──"; }
 
 echo "════════════════════════════════════════════════════"
-echo "  TAO Gateway — End-to-End Smoke Test"
+echo "  TAO Gateway: End-to-End Smoke Test"
 echo "  Gateway:  $GW"
 echo "  Frontend: $WEB"
 echo "════════════════════════════════════════════════════"

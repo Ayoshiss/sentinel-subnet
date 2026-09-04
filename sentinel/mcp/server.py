@@ -1,10 +1,10 @@
 """
-Minimal MCP server — tool registry and dispatch.
+Minimal MCP server, tool registry and dispatch.
 
 Model Context Protocol is how an agent discovers and calls tools: `tools/list`
 to see what is available, `tools/call` to invoke one. This implements those two
 operations in-process. The JSON-RPC transport that normally carries them is
-deliberately absent — it adds nothing to what this milestone is proving, which
+deliberately absent, it adds nothing to what this milestone is proving, which
 is that a tool call can be executed inside an enclave and attested.
 
 In Sentinel the server runs *inside* the confidential VM. Callers never reach it

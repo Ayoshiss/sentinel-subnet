@@ -1,5 +1,5 @@
 """
-End-to-end attested query — the Sentinel flow, simulated.
+End-to-end attested query, the Sentinel flow, simulated.
 
 Run:  python scripts/demo.py
 
@@ -31,13 +31,13 @@ def check(label: str, **kw) -> None:
     """Run one verification and report the outcome."""
     try:
         verify(**kw)
-        print(f"  VERIFIED  — {label}")
+        print(f"  VERIFIED : {label}")
     except VerificationError as e:
-        print(f"  REJECTED  — {label}: {e}")
+        print(f"  REJECTED : {label}: {e}")
 
 
 def run():
-    print("Sentinel — attested query demo")
+    print("Sentinel: attested query demo")
     print("(simulation: software Ed25519 stands in for an AMD SEV-SNP VCEK)")
     print("-" * 64)
 
@@ -61,7 +61,7 @@ def run():
     print(f"[miner]     query executed → {result}")
     print(f"[miner]     attestation signed, bound to this exact response")
 
-    # Anyone can verify using ONLY the published public key — no chip, no secret.
+    # Anyone can verify using ONLY the published public key: no chip, no secret.
     print("\n[anyone]    verifying with the PUBLIC key alone (no shared secret):")
     public_only = verifier_from_public_key(chip.public_key_hex)
     check(
@@ -88,7 +88,7 @@ def run():
     )
 
     print("\n" + "-" * 64)
-    print("Verification required no secret — only the chip's public key.")
+    print("Verification required no secret: only the chip's public key.")
     print("That is the trust shape of a real VCEK checked against AMD's cert chain.")
 
 

@@ -1,5 +1,5 @@
 """
-Key Broker Service — credentials are released to *code*, not to people.
+Key Broker Service, credentials are released to *code*, not to people.
 
 This is the piece that makes Sentinel's central claim true. A customer's database
 password is never handed to a miner operator. It is held by the broker and
@@ -13,7 +13,7 @@ things at once:
 Fail any one and the credential is never emitted. An operator who swaps in
 modified code does not get a degraded service; they get nothing.
 
-Mirrors the real Confidential Containers flow — Trustee/KBS validating an
+Mirrors the real Confidential Containers flow, Trustee/KBS validating an
 SEV-SNP report against a policy before releasing a secret from Vault. Here the
 chip registry stands in for AMD's certificate directory, and `MockSilicon`
 stands in for the processor. The interfaces are the same, so the real backend
@@ -108,12 +108,12 @@ class KeyBroker:
         if resource not in self._secrets:
             raise CredentialReleaseError(f"no secret stored for resource {resource!r}")
 
-        # Freshness — the nonce must be one we issued and have not yet spent.
+        # Freshness: the nonce must be one we issued and have not yet spent.
         self._expire_nonces()
         if report.nonce not in self._issued_nonces:
             raise CredentialReleaseError("unknown or expired nonce (replayed attestation)")
 
-        # Chip identity — an unregistered chip is not a chip we will trust.
+        # Chip identity: an unregistered chip is not a chip we will trust.
         public_key = self._trusted_chips.get(report.chip_id)
         if public_key is None:
             raise CredentialReleaseError(

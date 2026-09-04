@@ -19,7 +19,7 @@ by anyone without hardware.
 Bringing generation up on real silicon was not the formality it looked like. The
 ioctl number was wrong, the kernel reports a short certificate buffer through a
 different errno than its header implies, and the certificate table's GUID
-byte order was the opposite of what was assumed — with a unit test that had been
+byte order was the opposite of what was assumed, with a unit test that had been
 written under the same assumption and therefore passed. Encoding tests written
 alongside the code they test are not an independent check of it.
 """

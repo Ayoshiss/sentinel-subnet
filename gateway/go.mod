@@ -1,4 +1,4 @@
-module github.com/taogateway/gateway
+module github.com/Ayoshiss/sentinel-subnet/gateway
 
 go 1.26.3
 

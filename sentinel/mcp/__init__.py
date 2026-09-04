@@ -1,4 +1,4 @@
-"""Model Context Protocol surface — the tools an agent can call."""
+"""Model Context Protocol surface: the tools an agent can call."""
 
 from .server import MCPServer, Tool, ToolError
 

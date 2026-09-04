@@ -57,7 +57,7 @@ export default function Signup() {
       </header>
 
       <div className="flex-1 flex">
-        {/* Left — form */}
+        {/* Left: form */}
         <div className="flex-1 flex items-center justify-center px-6 py-12">
           <div className="w-full max-w-sm">
 
@@ -119,7 +119,7 @@ export default function Signup() {
                 </div>
 
                 <h1 className="text-2xl font-semibold tracking-tight mb-1">Your API key</h1>
-                <p className="text-sm text-[#8A8A8F] mb-6">Copy and store this key — we won&apos;t show it again.</p>
+                <p className="text-sm text-[#8A8A8F] mb-6">Copy and store this key, we won&apos;t show it again.</p>
 
                 <div className="border border-[#1E1E20] rounded-lg mb-6 overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 bg-[#111113] border-b border-[#1E1E20]">
@@ -164,7 +164,7 @@ export default function Signup() {
           </div>
         </div>
 
-        {/* Right — guardian panel */}
+        {/* Right: guardian panel */}
         <div className="hidden lg:flex w-96 bg-[#0C0C0D] border-l border-[#1E1E20] flex-col justify-center px-12 py-12">
           <EyeMark size={32} className="mb-8" />
           <h2 className="text-sm font-semibold text-[#ECECEC] mb-6 uppercase tracking-[0.2em]">What you get</h2>

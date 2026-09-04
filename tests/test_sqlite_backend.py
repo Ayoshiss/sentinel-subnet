@@ -1,5 +1,5 @@
 """
-SqliteDatabase — a real SQL engine behind the same `Database` protocol.
+SqliteDatabase, a real SQL engine behind the same `Database` protocol.
 
 These tests cover what `MockDatabase` deliberately cannot: parameter binding,
 malformed SQL, and non-SELECT statements. The attested flow is exercised on top

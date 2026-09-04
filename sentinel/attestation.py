@@ -4,17 +4,17 @@ Sentinel attestation core.
 Proves that a response was produced by genuine, unmodified code running inside
 a trusted execution environment (TEE). A report binds three things:
 
-    * the launch measurement  — WHICH code booted (integrity)
-    * a fresh nonce           — that this proof is live, not replayed
-    * the response binding    — that the proof is for THIS exact response
+    * the launch measurement : WHICH code booted (integrity)
+    * a fresh nonce          : that this proof is live, not replayed
+    * the response binding   : that the proof is for THIS exact response
 
 The report is signed by the chip. In production the signer is an AMD SEV-SNP
 processor (VCEK, chained to the AMD root key). Here it is `MockSilicon`, which
 signs with an Ed25519 key held only by the mock chip; verification uses the
 matching PUBLIC key. That asymmetry is the point: a verifier needs no secret,
 so the same trust shape as a real VCEK signature checked against AMD's public
-certificate chain. The whole flow — generation, binding, verification,
-tamper-detection — works and is testable today, and the real SEV-SNP backend
+certificate chain. The whole flow, generation, binding, verification,
+tamper-detection, works and is testable today, and the real SEV-SNP backend
 swaps in behind the identical `Silicon` interface.
 
 MOCK, NOT PRODUCTION SECURITY. Ed25519 gives the correct *shape* (public
@@ -109,7 +109,7 @@ class _Ed25519Verifier:
 
 
 def verifier_from_public_key(public_key_hex: str) -> _Ed25519Verifier:
-    """Build a verifier from a published public key alone — no chip, no secret.
+    """Build a verifier from a published public key alone, no chip, no secret.
 
     Models the real world: you fetch the chip's certificate, and that is enough
     to check every report it ever signs.
@@ -178,7 +178,7 @@ class AttestationAgent:
         return report
 
 
-# --- Verification (runs anywhere — gateway, validator, or the agent itself) ---
+# --- Verification (runs anywhere: gateway, validator, or the agent itself) ---
 
 class VerificationError(Exception):
     pass

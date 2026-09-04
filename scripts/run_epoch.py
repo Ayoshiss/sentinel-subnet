@@ -1,5 +1,5 @@
 """
-Milestone 5 — one full subnet epoch against a live chain.
+Milestone 5, one full subnet epoch against a live chain.
 
 Run:  python scripts/run_epoch.py --netuid 2
 
@@ -17,7 +17,7 @@ address and the validator maps it back to 127.0.0.1 with --host-override. On a
 real deployment the published address is the one that actually answers.
 
 SIMULATION. MockSilicon signs in software rather than in an AMD-certified
-processor — this proves the protocol, not the hardware root of trust.
+processor, this proves the protocol, not the hardware root of trust.
 """
 
 import argparse
@@ -69,7 +69,7 @@ def start_miner(label: str, port: int, hotkey_ss58: str, measurement: str = APPR
 
 
 async def main(netuid: int, wallet_name: str, advertise_ip: str, host_override: str | None, endpoint: str):
-    print("Sentinel — full epoch")
+    print("Sentinel: full epoch")
     print("=" * 78)
 
     miner_w = bt.Wallet(name=wallet_name, hotkey="miner")
@@ -84,7 +84,7 @@ async def main(netuid: int, wallet_name: str, advertise_ip: str, host_override: 
         print(f"\n  netuid {netuid}  block={mg.block}  tempo={mg.tempo}  uids={mg.num_uids}")
 
         if not await has_validator_permit(st, netuid, val_hot):
-            print("\n  validator has no permit — it cannot set weights.")
+            print("\n  validator has no permit: it cannot set weights.")
             print("  Stake to the validator hotkey and wait for an epoch boundary.")
             server.shutdown()
             return
@@ -100,7 +100,7 @@ async def main(netuid: int, wallet_name: str, advertise_ip: str, host_override: 
             print(f"  {exc}")
         await st.wait_for_block()
 
-        # 2. discover from the metagraph — the validator is told nothing directly
+        # 2. discover from the metagraph: the validator is told nothing directly
         print("\n[2] validator discovers miners from the metagraph")
         print("-" * 78)
         miners = await discover_miners(st, netuid, exclude_hotkeys=[val_hot])
@@ -149,7 +149,7 @@ async def main(netuid: int, wallet_name: str, advertise_ip: str, host_override: 
 
     print("\n" + "=" * 78)
     print("Discovered on-chain, challenged over signed HTTP, verified by attestation,")
-    print("scored, and weighted — without trusting any miner at any point.")
+    print("scored, and weighted, without trusting any miner at any point.")
     server.shutdown()
 
 

@@ -43,7 +43,7 @@ type Signals struct {
 	TopDex         string  `json:"topDex,omitempty"`
 
 	// On-chain authority checks (the honeypot axis). OnChainChecked is false if
-	// the RPC lookup failed — distinguish "safe" from "unknown".
+	// the RPC lookup failed, distinguish "safe" from "unknown".
 	OnChainChecked bool `json:"onChainChecked"`
 	MintRenounced  bool `json:"mintRenounced"` // mint authority revoked → no inflation rug
 	Freezable      bool `json:"freezable"`     // freeze authority active → can freeze holders
@@ -54,13 +54,13 @@ type Signals struct {
 
 // established tokens (deep liquidity + age) legitimately hold freeze/mint
 // authority for compliance (USDC, USDT). Authority flags only signal danger on
-// young or thin tokens — this is what keeps the scanner from crying wolf.
+// young or thin tokens, this is what keeps the scanner from crying wolf.
 func (s *Signals) established() bool {
 	return s.AgeDays >= 30 && s.LiquidityUSD >= 100000
 }
 
 // ClearlySafe reports an established, deep-liquidity token with no red flags. As
-// unambiguous as a honeypot is in the other direction — so it returns instantly
+// unambiguous as a honeypot is in the other direction, so it returns instantly
 // without spending an inference; the AI is reserved for the murky middle.
 func (s *Signals) ClearlySafe() bool {
 	return s.Found && s.established() &&
@@ -91,7 +91,7 @@ type dexResp struct {
 
 // Gather pulls live signals for a token: market data (DexScreener) and on-chain
 // authorities (Solana RPC) fetched in parallel. It never returns a nil *Signals
-// on a recoverable miss — "no data" is itself a risk signal.
+// on a recoverable miss, "no data" is itself a risk signal.
 func Gather(chain, token string) (*Signals, error) {
 	s := &Signals{Chain: chain, Token: token, Source: "dexscreener+rpc"}
 
@@ -175,7 +175,7 @@ type rpcAccountResp struct {
 }
 
 // fetchOnChain reads the SPL mint account to learn whether the deployer can still
-// mint (inflation rug) or freeze holders (honeypot — buy but can't sell). On any
+// mint (inflation rug) or freeze holders (honeypot, buy but can't sell). On any
 // failure it leaves OnChainChecked=false so the caller treats it as unknown, not safe.
 func fetchOnChain(token string, s *Signals) {
 	body := fmt.Sprintf(
@@ -208,37 +208,37 @@ func fetchOnChain(token string, s *Signals) {
 func heuristics(s *Signals) []string {
 	var h []string
 
-	// ── Honeypot / authority axis (on-chain) — listed first; the scariest risk.
+	// ── Honeypot / authority axis (on-chain), listed first; the scariest risk.
 	// Only flagged on young/thin tokens: established tokens (USDC, USDT) hold
 	// these authorities for compliance, so flagging them would be crying wolf.
 	if s.OnChainChecked && !s.established() {
 		if s.Freezable {
-			h = append(h, "honeypot_risk: freeze authority is active — the deployer can freeze your token account, so you may be able to buy but never sell")
+			h = append(h, "honeypot_risk: freeze authority is active, the deployer can freeze your token account, so you may be able to buy but never sell")
 		}
 		if !s.MintRenounced {
-			h = append(h, "mint_authority_active: the deployer can mint unlimited new supply — dilution / inflation rug risk")
+			h = append(h, "mint_authority_active: the deployer can mint unlimited new supply, dilution / inflation rug risk")
 		}
 	}
 
 	// ── Market axis.
 	if !s.Found {
-		h = append(h, "no_market_data: token not listed on any tracked DEX — unknown or illiquid (high risk)")
+		h = append(h, "no_market_data: token not listed on any tracked DEX, unknown or illiquid (high risk)")
 		return h
 	}
 	if s.LiquidityUSD > 0 && s.LiquidityUSD < 10000 {
-		h = append(h, "low_liquidity: pool <$10k — trivially manipulated and hard to exit (rug risk)")
+		h = append(h, "low_liquidity: pool <$10k, trivially manipulated and hard to exit (rug risk)")
 	}
 	if s.PriceChange24h <= -30 {
 		h = append(h, fmt.Sprintf("crashing: down %.1f%% in 24h", s.PriceChange24h))
 	}
 	if s.PriceChange24h >= 100 {
-		h = append(h, fmt.Sprintf("pump_spike: up %.1f%% in 24h — possible manipulation / FOMO trap", s.PriceChange24h))
+		h = append(h, fmt.Sprintf("pump_spike: up %.1f%% in 24h, possible manipulation / FOMO trap", s.PriceChange24h))
 	}
 	if s.LiquidityUSD > 0 && s.Volume24hUSD/s.LiquidityUSD > 10 {
-		h = append(h, "abnormal_volume: 24h volume >10x liquidity — possible wash trading")
+		h = append(h, "abnormal_volume: 24h volume >10x liquidity, possible wash trading")
 	}
 	if s.AgeDays > 0 && s.AgeDays < 3 {
-		h = append(h, fmt.Sprintf("new_token: pair only %.1f days old — elevated rug risk", s.AgeDays))
+		h = append(h, fmt.Sprintf("new_token: pair only %.1f days old, elevated rug risk", s.AgeDays))
 	}
 
 	if len(h) == 0 {
@@ -247,7 +247,7 @@ func heuristics(s *Signals) []string {
 	return h
 }
 
-// Severe reports whether the deterministic signals alone justify a hard stop —
+// Severe reports whether the deterministic signals alone justify a hard stop,
 // the floor that holds even if the LLM is unavailable or over-optimistic.
 func (s *Signals) Severe() bool {
 	// Honeypot: freeze authority active on a token that isn't an established,

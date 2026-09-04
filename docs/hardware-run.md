@@ -10,7 +10,7 @@ Budget a few dollars and under an hour.
 
 ## 1. Get a confidential VM
 
-Verify current SKU names before booting — confidential-compute offerings move
+Verify current SKU names before booting, confidential-compute offerings move
 quickly.
 
 **Azure** (best-trodden path for `/dev/sev-guest`)
@@ -30,7 +30,7 @@ Confidential SKUs sometimes need a quota request. Start that before you need it.
 ## 2. Capture a report
 
 ```bash
-# on the VM — no clone, no pip, stdlib only
+# on the VM: no clone, no pip, stdlib only
 curl -sO https://raw.githubusercontent.com/Ayoshiss/sentinel-subnet/main/scripts/capture_report.py
 sudo python3 capture_report.py
 ```
@@ -57,7 +57,7 @@ available here.
 
 ## 3. Pin the real measurement
 
-`capture-summary.json` carries the actual launch measurement — the hash of the
+`capture-summary.json` carries the actual launch measurement, the hash of the
 image that really booted. Everything in the repo currently uses a placeholder
 (`sha384(b"sentinel-miner-image-v0.1")`), which is symbolic.
 
@@ -78,19 +78,19 @@ an AMD processor".
 
 ## If something fails
 
-**`/dev/sev-guest` missing** — the VM is not SEV-SNP, or the guest driver is not
+**`/dev/sev-guest` missing**, the VM is not SEV-SNP, or the guest driver is not
 loaded. `lsmod | grep sev`, `dmesg | grep -i snp`. Most often the instance was
 created without confidential computing actually enabled.
 
-**Permission denied** — run under `sudo`.
+**Permission denied**, run under `sudo`.
 
-**Firmware returns a non-zero status** — usually an unsupported VMPL or a
+**Firmware returns a non-zero status**: usually an unsupported VMPL or a
 malformed request. The status code is in the AMD ABI spec.
 
-**VCEK fetch fails** — KDS is rate-limited and occasionally slow. The chip ID and
+**VCEK fetch fails**, KDS is rate-limited and occasionally slow. The chip ID and
 TCB in the summary are all that is needed to retry later from anywhere.
 
-**Report signature does not verify** — the interesting failure. It means our
+**Report signature does not verify**, the interesting failure. It means our
 reading of the layout differs from the hardware. The report is saved, so this is
 a laptop problem now: compare against `sentinel/sevsnp/report.py`, adjust, and
 re-run the tests against the fixture. No further VM time required.

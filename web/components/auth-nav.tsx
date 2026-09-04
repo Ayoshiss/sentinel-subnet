@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSession } from "./use-session";
 import { AccountMenu } from "./account-menu";
 
-// Top-right landing nav — adapts to auth state.
+// Top-right landing nav, adapts to auth state.
 export function AuthNav() {
   const { loaded, loggedIn, email } = useSession();
 
@@ -29,7 +29,7 @@ export function AuthNav() {
   );
 }
 
-// Hero primary CTA — "Go to dashboard" when signed in, else "Get your API key".
+// Hero primary CTA, "Go to dashboard" when signed in, else "Get your API key".
 export function HeroCTA() {
   const { loaded, loggedIn } = useSession();
   return (

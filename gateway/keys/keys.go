@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/taogateway/gateway/db"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/db"
 )
 
 // APIKey holds the data we need per request after a successful lookup.
@@ -20,7 +20,7 @@ type APIKey struct {
 }
 
 // Generate creates a new API key for a customer, inserts it into the DB,
-// and returns the raw key (shown once — never stored).
+// and returns the raw key (shown once, never stored).
 func Generate(ctx context.Context, customerID, name string) (rawKey string, err error) {
 	// 32 random bytes → hex → prefix
 	buf := make([]byte, 24)
@@ -57,7 +57,7 @@ func Lookup(ctx context.Context, rawKey string) (*APIKey, error) {
 	`, hash).Scan(&k.ID, &k.CustomerID, &k.QuotaRPM, &k.QuotaTPM)
 
 	if err != nil {
-		// pgx returns pgx.ErrNoRows — treat as invalid key (return nil, nil)
+		// pgx returns pgx.ErrNoRows: treat as invalid key (return nil, nil)
 		return nil, nil
 	}
 
@@ -71,7 +71,7 @@ func Lookup(ctx context.Context, rawKey string) (*APIKey, error) {
 	return &k, nil
 }
 
-// RecordUsage writes a usage event to Postgres (async — best effort).
+// RecordUsage writes a usage event to Postgres (async, best effort).
 // costUSD is retail (what we billed); wholesaleUSD is our COGS for the model
 // that actually served the request (servedModel).
 func RecordUsage(keyID, customerID, subnet, model, status string, promptTok, completionTok, latencyMs int, costUSD, wholesaleUSD float64, servedModel string) {

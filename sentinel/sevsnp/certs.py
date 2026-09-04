@@ -10,7 +10,7 @@ Three keys, and the reason there are three is the whole trust argument:
           attestation reports.
 
 Because the VCEK is per-chip *and* per-TCB, a report cannot be replayed from a
-different machine or from the same machine on older, vulnerable firmware — the
+different machine or from the same machine on older, vulnerable firmware, the
 signing key itself changes. That is what makes attestation say something about
 hardware rather than about software claiming to be hardware.
 
@@ -52,7 +52,7 @@ DEFAULT_CACHE = pathlib.Path.home() / ".cache" / "sentinel" / "amd-certs"
 #: every check above it becomes decoration.
 #:
 #: "Self-signed" is not a substitute. Anyone can self-sign, including with the
-#: subject `CN=ARK-Milan, O=Advanced Micro Devices` — that string is not a
+#: subject `CN=ARK-Milan, O=Advanced Micro Devices`, that string is not a
 #: secret and copying it costs nothing. The only thing an attacker cannot
 #: reproduce is AMD's private key, so the public half is what gets compared.
 #:
@@ -223,7 +223,7 @@ def verify_vcek(vcek: x509.Certificate, chain: CertChain) -> None:
 def _verify_cert_signature(cert: x509.Certificate, issuer_key: object, what: str) -> None:
     """Verify one certificate against its issuer's public key.
 
-    RSA here is PSS, not PKCS#1 v1.5 — AMD signs with PSS and the padding has to
+    RSA here is PSS, not PKCS#1 v1.5, AMD signs with PSS and the padding has to
     be read off the certificate rather than assumed, or valid chains are rejected.
     """
     try:

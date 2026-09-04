@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/taogateway/gateway/db"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/db"
 )
 
 var jwtSecret = []byte(getEnv("JWT_SECRET", "dev-secret-change-in-prod"))
@@ -113,7 +113,7 @@ func ParseSession(tokenStr string) (*Session, error) {
 // sendEmail sends the magic link via Resend API.
 func sendEmail(to, magicLink string) error {
 	if resendKey == "" {
-		// Dev mode — just log the link
+		// Dev mode: just log the link
 		fmt.Printf("\n🔗 Magic link for %s:\n%s\n\n", to, magicLink)
 		return nil
 	}
@@ -135,7 +135,7 @@ func sendEmail(to, magicLink string) error {
   <p style="color:#999;font-size:12px">
     If you didn't request this, you can safely ignore this email.
   </p>
-  <p style="color:#bbb;font-size:11px;margin-top:24px">Bhairab — the guardian of decentralized AI</p>
+  <p style="color:#bbb;font-size:11px;margin-top:24px">Bhairab, the guardian of decentralized AI</p>
 </div>`, magicLink),
 	}
 

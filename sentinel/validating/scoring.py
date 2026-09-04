@@ -13,7 +13,7 @@ The scalar produced here is what the validator submits to Yuma Consensus.
 
 Attestation is a gate rather than merely the heaviest axis. The other four
 measure how *good* a miner is; attestation decides whether it is a Sentinel
-miner at all. Fail it and the weight is zero regardless of the rest — the
+miner at all. Fail it and the weight is zero regardless of the rest, the
 network exists to make exactly that one check, so a miner that fails it must
 earn nothing rather than four fifths of a full score.
 """
@@ -71,9 +71,9 @@ class MinerScores:
         prove it is running the approved image inside genuine silicon earns
         nothing, however fast and well-behaved it otherwise looks.
 
-        Without this, the weighted sum alone leaves a backdoored miner on 0.40 —
+        Without this, the weighted sum alone leaves a backdoored miner on 0.40,
         it still collects full marks for latency, cache hygiene and nonce
-        discipline — which would pay roughly a sixth of emissions to code that
+        discipline: which would pay roughly a sixth of emissions to code that
         failed the one check the subnet exists to make.
         """
         if self.attestation <= 0.0:

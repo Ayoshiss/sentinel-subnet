@@ -1,7 +1,7 @@
 """
 Database access for in-enclave tools.
 
-The enclave never holds a connection string at rest — it receives one from the
+The enclave never holds a connection string at rest, it receives one from the
 Key Broker Service only after proving what code it is running (see `kbs.py`).
 This module is what it does with that credential once released.
 
@@ -9,8 +9,8 @@ This module is what it does with that credential once released.
 in-memory dataset; `PostgresDatabase` is the real client. Both satisfy the same
 protocol, so the tool layer above them cannot tell the difference.
 
-MOCK, NOT AN INTEGRATION TEST. `MockDatabase` proves the *flow* — credential
-release, query execution, result binding — not that a real server returns the
+MOCK, NOT AN INTEGRATION TEST. `MockDatabase` proves the *flow*, credential
+release, query execution, result binding, not that a real server returns the
 right rows. Point `PostgresDatabase` at a live instance for that.
 """
 
@@ -114,7 +114,7 @@ class SqliteDatabase:
     query fails here rather than surviving until production. Unlike Postgres it
     needs no service, so CI keeps running in milliseconds.
 
-    Dialect differences remain — SQLite is not Postgres. Use
+    Dialect differences remain: SQLite is not Postgres. Use
     `PostgresDatabase` (see `tests/test_postgres_integration.py`) for anything
     that depends on real dialect behaviour.
     """

@@ -44,7 +44,7 @@ export default function Login() {
           {(step === "form" || step === "loading") && (
             <>
               <h1 className="text-2xl font-semibold tracking-tight mb-1">Sign in</h1>
-              <p className="text-sm text-[#8A8A8F] mb-8">We&apos;ll email you a magic link — no password needed.</p>
+              <p className="text-sm text-[#8A8A8F] mb-8">We&apos;ll email you a magic link, no password needed.</p>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-[#8A8A8F] mb-1.5">Email</label>

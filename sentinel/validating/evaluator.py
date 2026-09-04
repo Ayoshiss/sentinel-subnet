@@ -7,7 +7,7 @@ the approved launch measurement, so modified code cannot pass; and it decides
 correctness by agreement across miners rather than by asking any one of them.
 
 Correctness by consensus is the important part. A validator cannot know the
-right answer to a query against a customer's private database — that is the
+right answer to a query against a customer's private database, that is the
 whole point of the product. What it can do is send the same query to every
 miner and notice who disagrees with the majority. A miner returning fabricated
 rows is visible without the validator ever seeing the real data.
@@ -41,7 +41,7 @@ from .scoring import (
 
 logger = logging.getLogger("sentinel.validating")
 
-#: Deterministic probe sent to every miner in a round. Read-only by design —
+#: Deterministic probe sent to every miner in a round. Read-only by design,
 #: a validator must never mutate a customer's data while measuring.
 PROBE_TOOL = "postgres.query"
 PROBE_ARGUMENTS: dict[str, Any] = {"sql": "SELECT id, email, plan FROM customers ORDER BY id"}

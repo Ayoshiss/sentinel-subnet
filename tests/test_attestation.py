@@ -80,13 +80,13 @@ def test_public_key_alone_verifies():
     rd = bind_response("req-1", sha384(b"result"))
     report = agent.attest(nonce, rd)
 
-    # Verifier rebuilt from the published key alone — the chip is not involved.
+    # Verifier rebuilt from the published key alone: the chip is not involved.
     verifier = verifier_from_public_key(chip.public_key_hex)
     assert verify(report, verifier, APPROVED, nonce, expected_report_data=rd)
 
 
 def test_verifier_carries_no_private_key():
-    """A verifier must be safe to hand to anyone — it holds no signing power."""
+    """A verifier must be safe to hand to anyone, it holds no signing power."""
     chip, _ = make_agent()
     verifier = chip.public_verifier()
     leaked = [

@@ -8,7 +8,7 @@ misread report parses without error and then verifies the wrong bytes, so the
 system would confidently accept nonsense. Each field is asserted at its
 documented position rather than trusted.
 
-And the refusals, because verification only means something if it can say no —
+And the refusals, because verification only means something if it can say no,
 to a corrupted signature, a foreign chip, unapproved code, stale firmware, a
 debuggable guest, or a proof issued for a different request.
 
@@ -294,7 +294,7 @@ def test_ioctl_constant_matches_the_iowr_macro():
     """_IOWR('S', 0, sizeof(struct snp_guest_request_ioctl)).
 
     The struct is `__u8 msg_version` followed by three `__u64`s, so the u8 pads
-    out to 32 bytes — not the 24 this test originally asserted. Both the
+    out to 32 bytes: not the 24 this test originally asserted. Both the
     constant and this test were derived from that same wrong size, so the suite
     confirmed the bug rather than catching it, and the kernel only objected on
     real silicon with a bare ENOTTY. Hence the size is now taken from the format
@@ -411,7 +411,7 @@ def test_malformed_hex_is_rejected(verifier, vcek):
 def test_capture_script_agrees_with_the_parser(vcek_key):
     """scripts/capture_report.py duplicates the offsets on purpose, so it can run
     on a bare confidential VM before anything is installed. That duplication is
-    only safe while both readings agree — a drift would mean the script reports
+    only safe while both readings agree, a drift would mean the script reports
     one thing and the tested parser another, on the one machine where checking is
     expensive."""
     import importlib.util
@@ -638,8 +638,8 @@ def test_real_report_verifies_offline_against_amd(host_certs):
     """A genuine report, verified with no network at all.
 
     `offline=True` makes any attempt to reach AMD's KDS an error rather than a
-    silent fallback, so this passing means the whole chain — AMD's root, its
-    signing key, the chip's own key, and the report signature — was checked from
+    silent fallback, so this passing means the whole chain, AMD's root, its
+    signing key, the chip's own key, and the report signature, was checked from
     bytes the host handed over with the proof. That is the property that keeps a
     validator working on the day KDS is unreachable, which is the day this was
     written.

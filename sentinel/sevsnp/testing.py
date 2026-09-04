@@ -8,7 +8,7 @@ P-384 key, under a throwaway ARK → ASK → VCEK chain shaped like AMD's.
 This proves the parser reads the right offsets, the signature covers the right
 region, R and S are repacked correctly, and every policy check fires when it
 should. What it cannot prove is that a real AMD chip agrees with our reading of
-the spec — for that, one report captured from a confidential VM becomes a
+the spec, for that, one report captured from a confidential VM becomes a
 fixture here and the same tests run against it unchanged.
 
 NOT A SECURITY BOUNDARY. Never import this outside tests: these keys are
@@ -80,7 +80,7 @@ def build_report(
     r, s = decode_dss_signature(der)
     if corrupt_signature:
         r ^= 1
-    # Little-endian, zero-padded to 72 bytes each — the report's own encoding.
+    # Little-endian, zero-padded to 72 bytes each: the report's own encoding.
     blob[SIGNATURE_OFFSET:SIGNATURE_OFFSET + 72] = r.to_bytes(48, "little").ljust(72, b"\x00")
     blob[SIGNATURE_OFFSET + 72:SIGNATURE_OFFSET + 144] = s.to_bytes(48, "little").ljust(72, b"\x00")
     return bytes(blob)
@@ -90,7 +90,7 @@ def build_cert_chain(product: str = "Milan") -> tuple[CertChain, ec.EllipticCurv
     """A throwaway ARK → ASK → VCEK chain shaped like AMD's.
 
     RSA-4096 with PSS at the root, ECDSA P-384 at the chip, matching what KDS
-    actually serves — so the verifier exercises the same code paths it will use
+    actually serves, so the verifier exercises the same code paths it will use
     against real certificates.
     """
     ark_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -103,7 +103,7 @@ def build_cert_chain(product: str = "Milan") -> tuple[CertChain, ec.EllipticCurv
 
     # This root is synthetic, so it must say so. Passing its own fingerprint is
     # what lets the suite exercise the chain logic without the fixtures being
-    # able to impersonate AMD — a test chain that silently satisfied the
+    # able to impersonate AMD: a test chain that silently satisfied the
     # production pin would mean the pin was not being tested at all.
     from .certs import root_spki_sha256
 
@@ -131,7 +131,7 @@ def _issue(subject_cn: str, issuer_cn: str, public_key, signing_key, *, ca: bool
         .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
     )
     if isinstance(signing_key, rsa.RSAPrivateKey):
-        # PSS, as AMD uses — verifying with PKCS#1 v1.5 would reject a valid chain.
+        # PSS, as AMD uses: verifying with PKCS#1 v1.5 would reject a valid chain.
         return builder.sign(
             signing_key,
             hashes.SHA384(),

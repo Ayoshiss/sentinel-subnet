@@ -1,14 +1,14 @@
 # Sentinel on Bittensor testnet
 
-**netuid 554** — created 2026-08-29, block 7,894,075.
+**netuid 554**, created 2026-08-29, block 7,894,075.
 
 | | |
 |---|---|
 | Network | Bittensor **testnet** |
 | Netuid | **554** |
 | Owner coldkey | `5DvbHKF4E8To8zhGdEfgZKSZQCAqD2xVacE9y6GQmqw1E1Ut` |
-| uid 0 — validator | `5H5uDA7TRyisfPLgRJaFYhVZEQ7mhKPb2mZJVwSw6UvKo3RV` |
-| uid 1 — miner | `5Ea1gDXZj7pJgy8b4QSh1Umotr75THFoBAQDVDT9zahpFzjK` |
+| uid 0, validator | `5H5uDA7TRyisfPLgRJaFYhVZEQ7mhKPb2mZJVwSw6UvKo3RV` |
+| uid 1: miner | `5Ea1gDXZj7pJgy8b4QSh1Umotr75THFoBAQDVDT9zahpFzjK` |
 | Tempo | 360 blocks (~72 min) |
 
 Verify independently:
@@ -39,7 +39,7 @@ confirmed on hardware: a genuine report from an AMD EPYC 7B13 verifies end to
 end against AMD's pinned root, offline, and is committed as a fixture so CI
 re-checks it on every push.
 
-What has not happened is joining the two on this subnet — the miners registered
+What has not happened is joining the two on this subnet, the miners registered
 here still run `MockSilicon`, because putting them on real silicon means
 persistent confidential VMs and ongoing cost, which is deferred until there is
 someone to serve. See `sentinel/sevsnp/`, `docs/hardware-run.md` and ROADMAP.md.
@@ -51,7 +51,7 @@ Things the chain enforces that cost time to discover:
 - `burned_register` is MEV-shielded; the inner extrinsic expires if retried too
   fast. Space attempts ~30s, and use `btcli` rather than a hand-rolled
   `execute()`, which gets the nonce sequencing wrong.
-- Never set `max_spend_tao` in a policy for registration — the cost cannot be
+- Never set `max_spend_tao` in a policy for registration, the cost cannot be
   bounded in advance, so the policy blocks the call outright.
 - A new subnet has no alpha liquidity, so staking trips the slippage guard at
   any size. Bootstrapping legitimately needs `slippage_protection=False`.

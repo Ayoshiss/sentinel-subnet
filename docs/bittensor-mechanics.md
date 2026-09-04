@@ -1,11 +1,11 @@
-# Sentinel — Bittensor Mechanics v0.1
+# Sentinel: Bittensor Mechanics v0.1
 
 How Sentinel plugs into Yuma Consensus, configures weights, allocates emissions,
 and stays sustainable under Taoflow.
 
 ## 1. Yuma Consensus compatibility
 
-Sentinel produces a scalar weight in [0,1] per miner — the input Yuma expects.
+Sentinel produces a scalar weight in [0,1] per miner, the input Yuma expects.
 Validators score on the rubric (attestation 40%, latency 30%, correctness 20%,
 cache 5%, nonce 5%) and submit weights; Yuma aggregates via stake-weighted median
 with outlier clipping. Standard Yuma with a domain-specific scoring function.
@@ -51,7 +51,7 @@ toward zero.
 |---|---|---|
 | Subnets with positive external inflow | 6 of ~128 | Built to be #7 |
 | Network coverage (demand vs extraction) | ~19% | USDC → TAO buys directly |
-| Inflow to reach top-5 by real revenue | — | ~$20–30K/month |
+| Inflow to reach top-5 by real revenue |: | ~$20–30K/month |
 | No-revenue subnet emissions | Repriced to zero | Insulated by real inflow |
 
 **Flywheel:** customer USDC → TAO buys into alpha pool → net inflow → Taoflow
@@ -62,9 +62,9 @@ is both income and the ranking mechanism.
 
 | Item | Status |
 |---|---|
-| Yuma Consensus compatible | Yes — scalar weights, standard aggregation |
-| Commit-reveal configured | Yes — v3, 1-epoch reveal |
-| ActivityCutoff set | Yes — aligned to 360-block tempo |
-| Emissions allocation documented | Yes — standard dTAO split, owner 18% |
-| Stake concentration analysed | Yes — bootstrap-then-diversify + Nakamoto |
-| Taoflow impact modelled | Yes — revenue-as-inflow flywheel |
+| Yuma Consensus compatible | Yes, scalar weights, standard aggregation |
+| Commit-reveal configured | Yes: v3, 1-epoch reveal |
+| ActivityCutoff set | Yes: aligned to 360-block tempo |
+| Emissions allocation documented | Yes, standard dTAO split, owner 18% |
+| Stake concentration analysed | Yes, bootstrap-then-diversify + Nakamoto |
+| Taoflow impact modelled | Yes: revenue-as-inflow flywheel |

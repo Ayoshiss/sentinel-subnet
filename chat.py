@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TAO Gateway — interactive terminal chat (streaming)
+TAO Gateway: interactive terminal chat (streaming)
 """
 
 import json
@@ -88,7 +88,7 @@ def chat(user_message):
 
                 full.append(piece)
 
-                # Reasoning tokens arrive wrapped in <think>…</think> — dim them
+                # Reasoning tokens arrive wrapped in <think>…</think>: dim them
                 if "<think>" in piece:
                     in_think = True
                     piece = piece.replace("<think>", "")

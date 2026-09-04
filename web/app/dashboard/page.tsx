@@ -69,7 +69,7 @@ export default function Dashboard() {
     } catch {}
 
     const headers = { Authorization: `Bearer ${session}` };
-    // cache: "no-store" — these are live figures; never serve a stale cached copy
+    // cache: "no-store", these are live figures; never serve a stale cached copy
     const opts: RequestInit = { headers, cache: "no-store" };
     try {
       const [usageRes, keysRes, balanceRes] = await Promise.all([
@@ -145,7 +145,7 @@ export default function Dashboard() {
     });
     if (custRes.ok) {
       const { key } = await custRes.json();
-      alert(`Your new API key (save this — shown once):\n\n${key}`);
+      alert(`Your new API key (save this, shown once):\n\n${key}`);
       setShowNewKey(false);
       setNewKeyName("");
       fetchData();
@@ -208,7 +208,7 @@ export default function Dashboard() {
             <div className="text-xs font-medium text-[#8A8A8F] mb-0.5">Credit balance</div>
             <div className="text-2xl font-semibold">{balance !== null ? `$${balance.toFixed(4)}` : "—"}</div>
             {balance !== null && balance < 1 && (
-              <div className="text-xs text-[#E5827B] mt-0.5">Low balance — top up to keep making requests</div>
+              <div className="text-xs text-[#E5827B] mt-0.5">Low balance, top up to keep making requests</div>
             )}
           </div>
           <button onClick={() => setShowTopUp(!showTopUp)}
@@ -266,7 +266,7 @@ export default function Dashboard() {
 
           {!hasUsage ? (
             <div className="h-[220px] flex items-center justify-center text-sm text-[#55555B]">
-              No usage yet — make your first API call to see data here.
+              No usage yet, make your first API call to see data here.
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>

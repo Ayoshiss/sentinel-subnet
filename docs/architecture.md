@@ -12,7 +12,7 @@ Sentinel is a Bittensor subnet where independently-operated miners run hardware-
 
 ---
 
-## 1. System architecture — the big picture
+## 1. System architecture: the big picture
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
@@ -122,9 +122,9 @@ Sentinel is a Bittensor subnet where independently-operated miners run hardware-
 
 ---
 
-## 2. Trust model — who trusts what
+## 2. Trust model: who trusts what
 
-The whole design collapses into a single sentence: **the customer only has to trust silicon and cryptography — everything else (Sentinel, Dendrite equivalents, miners, cloud providers) is untrusted and constrained by hardware.**
+The whole design collapses into a single sentence: **the customer only has to trust silicon and cryptography, everything else (Sentinel, Dendrite equivalents, miners, cloud providers) is untrusted and constrained by hardware.**
 
 ### The trust hierarchy from customer's perspective
 
@@ -133,7 +133,7 @@ The whole design collapses into a single sentence: **the customer only has to tr
 | AMD (silicon vendor) | Yes | Root of trust; VCEK certificate chain terminates at AMD |
 | AMD EPYC hardware in miner's data center | Yes | Attestation proves this is real hardware, unmodified firmware |
 | Sentinel gateway | **Optional** | Customer can bypass and verify attestation independently |
-| Sentinel operators (us) | **No** | We can't see queries, credentials, or responses — enforced by hardware |
+| Sentinel operators (us) | **No** | We can't see queries, credentials, or responses, enforced by hardware |
 | Miner operator (individual) | **No** | Same enforcement; miner runs the hardware but can't peek inside |
 | Cloud provider (AWS/Azure/GCP hosting miner) | **No** | Hypervisor is explicitly outside trust boundary |
 | Public network in transit | **No** | End-to-end encryption via TLS + attestation-bound keys |
@@ -156,8 +156,8 @@ The whole design collapses into a single sentence: **the customer only has to tr
 
 | Component | Purpose | Technology | Owner |
 |---|---|---|---|
-| Public Developer Gateway | api.sentinel.dev — per-query x402 billing, developer DX | Go (chi) + Vercel AI SDK x402-mcp compatible | Sentinel |
-| Enterprise Gateway | enterprise.sentinel.dev — DID + Stripe + audit trails | TypeScript / Next.js + Nevermined SDK | Sentinel |
+| Public Developer Gateway | api.sentinel.dev, per-query x402 billing, developer DX | Go (chi) + Vercel AI SDK x402-mcp compatible | Sentinel |
+| Enterprise Gateway | enterprise.sentinel.dev, DID + Stripe + audit trails | TypeScript / Next.js + Nevermined SDK | Sentinel |
 | Routing & Attestation Cache | Miner selection, nonce generation, attestation caching | Go service + Redis | Sentinel |
 | Landing / Dashboard | User-facing site, API key management, usage reporting | Next.js on Vercel | Sentinel |
 
@@ -196,12 +196,12 @@ STEP 1: Miner operator provisions hardware
     │
     ├─► Bare metal: AMD EPYC 7003+ (Milan or newer), SEV-SNP capable BIOS enabled
     ├─► Or cloud: Azure DCasv5 / GCP N2D Confidential / Hetzner EPYC 9004
-    ├─► Disable SMT (hyperthreading) on host — mitigates StackWarp attack
+    ├─► Disable SMT (hyperthreading) on host: mitigates StackWarp attack
     └─► Install Ubuntu 24.04, KVM, QEMU 8.0+, CoCo runtime
 
 STEP 2: Miner operator installs sentinel-miner CLI
     │
-    ├─► `sentinel-miner init` — generates cold key, hot key, registers config
+    ├─► `sentinel-miner init`, generates cold key, hot key, registers config
     └─► Deposits collateral TAO into the EVM collateral contract on Subtensor
 
 STEP 3: Miner registers on Bittensor SN[Sentinel]
@@ -262,7 +262,7 @@ The full trace from an agent making a tool call to the response arriving back, w
 │  T=0ms:  CUSTOMER AGENT prepares MCP tool call                              │
 │                                                                             │
 │  POST https://api.sentinel.dev/mcp/tools/call                              │
-│  Headers: (none yet — no payment attached)                                 │
+│  Headers: (none yet, no payment attached)                                 │
 │  Body: {                                                                    │
 │    "jsonrpc": "2.0",                                                        │
 │    "method": "tools/call",                                                  │
@@ -569,7 +569,7 @@ Every 360 blocks (~72 minutes):
 
 ---
 
-## 10. Technology choices — with rationale
+## 10. Technology choices: with rationale
 
 | Choice | Rationale | Rejected alternatives |
 |---|---|---|
@@ -593,15 +593,15 @@ Every 360 blocks (~72 minutes):
 
 For v1 (first 12 months), the following are intentionally deferred:
 
-- **A2A (Agent-to-Agent) protocol support** — Google's horizontal peer protocol. Add in v2 after MCP is stable.
-- **AP2 (Agent Payments Protocol)** — Google/Coinbase agent-to-agent commerce. Adjacent, not required for tool access.
-- **Cross-chain settlement beyond Base + Solana** — thirdweb supports 170+ EVM networks but multichain complexity not worth it at MVP.
-- **Compliance API as a separate product** — MiCA/VARA disclosures ship as documentation, not a paid API tier.
-- **Multiple MCP servers per miner** — one MCP process per enclave keeps blast radius contained.
-- **In-enclave LLM inference** — route to Chutes (SN64) or gm (SN28) upstream instead of running models in our enclaves.
-- **Learned model router** — regex-based tool routing is good enough. Machine learning that decision is v2.
-- **Consumer-tier miner support** (like TargonOS uses TPM 2.0 for RTX GPUs) — hardware attestation is our moat, don't compromise.
-- **White-label / on-prem deployments** — enterprise contracts only, month 12+.
+- **A2A (Agent-to-Agent) protocol support**, Google's horizontal peer protocol. Add in v2 after MCP is stable.
+- **AP2 (Agent Payments Protocol)**, Google/Coinbase agent-to-agent commerce. Adjacent, not required for tool access.
+- **Cross-chain settlement beyond Base + Solana**, thirdweb supports 170+ EVM networks but multichain complexity not worth it at MVP.
+- **Compliance API as a separate product**, MiCA/VARA disclosures ship as documentation, not a paid API tier.
+- **Multiple MCP servers per miner**, one MCP process per enclave keeps blast radius contained.
+- **In-enclave LLM inference**, route to Chutes (SN64) or gm (SN28) upstream instead of running models in our enclaves.
+- **Learned model router**, regex-based tool routing is good enough. Machine learning that decision is v2.
+- **Consumer-tier miner support** (like TargonOS uses TPM 2.0 for RTX GPUs), hardware attestation is our moat, don't compromise.
+- **White-label / on-prem deployments**, enterprise contracts only, month 12+.
 
 ---
 
@@ -631,29 +631,29 @@ If those 13 boxes are checked, v1 is done. That's month 6 target under the $125K
 
 To decide before or during engineering kickoff:
 
-1. **Miner geography incentives** — do we boost rewards for underrepresented regions to ensure diversity, or let the market sort it?
-2. **KBS decentralization plan** — start centralized (trusted Sentinel operator), migrate to threshold cryptography in v2?
-3. **Attestation cache TTL** — 60s (aggressive) vs 300s (economic)? Trade-off between freshness and cost.
-4. **Fallback for AMD KDS outage** — hard fail closed, or serve with degraded trust label?
-5. **Tool schema versioning** — how do we roll out new MCP tools without breaking existing customers?
-6. **On-chain vs off-chain reputation** — persistent miner reputation lives where?
-7. **Fee tier for enterprise gateway** — 1% Nevermined-style, or 2-3% for the added enterprise features?
-8. **When to open validator operation to community** — day 1 (permissionless, higher risk of gaming) or after 6 months (trusted bootstrap first)?
+1. **Miner geography incentives**, do we boost rewards for underrepresented regions to ensure diversity, or let the market sort it?
+2. **KBS decentralization plan**, start centralized (trusted Sentinel operator), migrate to threshold cryptography in v2?
+3. **Attestation cache TTL**, 60s (aggressive) vs 300s (economic)? Trade-off between freshness and cost.
+4. **Fallback for AMD KDS outage**, hard fail closed, or serve with degraded trust label?
+5. **Tool schema versioning**, how do we roll out new MCP tools without breaking existing customers?
+6. **On-chain vs off-chain reputation**, persistent miner reputation lives where?
+7. **Fee tier for enterprise gateway**, 1% Nevermined-style, or 2-3% for the added enterprise features?
+8. **When to open validator operation to community**, day 1 (permissionless, higher risk of gaming) or after 6 months (trusted bootstrap first)?
 
 These get answered as we build. First engineer helps resolve #1–5; #6–8 are strategic and get resolved in ongoing product/business calls.
 
 ---
 
-## Appendix A — Glossary
+## Appendix A: Glossary
 
-- **SEV-SNP** — AMD's Secure Encrypted Virtualization with Secure Nested Paging; hardware memory encryption + integrity for VMs
-- **VCEK** — Versioned Chip Endorsement Key; unique cryptographic key per physical AMD EPYC CPU
-- **ARK / ASK** — AMD Root Key / AMD SEV Key; the certificate chain roots for VCEK verification
-- **KBS** — Key Broker Service; releases secrets only to attested workloads (Trustee project)
-- **RTMR** — Runtime Measurement Register; extends launch measurement dynamically
-- **MCP** — Model Context Protocol; standardized JSON-RPC interface between AI agents and external tools
-- **x402** — HTTP 402 Payment Required-based machine payment protocol; Linux Foundation-stewarded
-- **Yuma Consensus** — Bittensor's on-chain aggregation of validator scores with outlier clipping
-- **TCB** — Trusted Computing Base; the version level of trusted firmware/microcode
-- **CoCo** — Confidential Containers (CNCF project); Kubernetes-native TEE runtime
-- **PK_TEE / SK_TEE** — Ephemeral asymmetric keypair generated inside the enclave at boot
+- **SEV-SNP**, AMD's Secure Encrypted Virtualization with Secure Nested Paging; hardware memory encryption + integrity for VMs
+- **VCEK**, Versioned Chip Endorsement Key; unique cryptographic key per physical AMD EPYC CPU
+- **ARK / ASK**, AMD Root Key / AMD SEV Key; the certificate chain roots for VCEK verification
+- **KBS**, Key Broker Service; releases secrets only to attested workloads (Trustee project)
+- **RTMR**, Runtime Measurement Register; extends launch measurement dynamically
+- **MCP**, Model Context Protocol; standardized JSON-RPC interface between AI agents and external tools
+- **x402**, HTTP 402 Payment Required-based machine payment protocol; Linux Foundation-stewarded
+- **Yuma Consensus**, Bittensor's on-chain aggregation of validator scores with outlier clipping
+- **TCB**, Trusted Computing Base; the version level of trusted firmware/microcode
+- **CoCo**, Confidential Containers (CNCF project); Kubernetes-native TEE runtime
+- **PK_TEE / SK_TEE**, Ephemeral asymmetric keypair generated inside the enclave at boot

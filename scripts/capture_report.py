@@ -11,7 +11,7 @@ only if `cryptography` happens to be available.
 The order matters. On a metered VM the first job is to get the bytes off the
 machine, not to prove they verify. Capture takes seconds and barely fails;
 verification can be wrong for a dozen small reasons and is free to debug on a
-laptop afterwards. So this saves the raw report first and asks questions second —
+laptop afterwards. So this saves the raw report first and asks questions second,
 worst case you leave with a genuine report as a permanent test fixture, which is
 worth the rental on its own.
 
@@ -94,7 +94,7 @@ def preflight():
         readable.close()
         print(f"  {DEVICE:20} readable")
     except PermissionError:
-        print(f"\n  Cannot open {DEVICE} — re-run with sudo.")
+        print(f"\n  Cannot open {DEVICE}: re-run with sudo.")
         sys.exit(1)
     return model
 
@@ -233,7 +233,7 @@ def capture():
             pathlib.Path(f"{name}.pem").write_bytes(der_to_pem(der))
             print(f"  SAVED    {name}.der / {name}.pem  ({len(der)} bytes)")
     else:
-        print("  host attached no certificates — verification will need AMD's KDS")
+        print("  host attached no certificates, verification will need AMD's KDS")
     return blob, user_data, out, certs
 
 
@@ -268,13 +268,13 @@ def describe(blob, user_data):
     print()
     print(f"  LAUNCH MEASUREMENT")
     print(f"    {fields['measurement']}")
-    print("    ^ this is the real approved_measurement — pin it in the policy")
+    print("    ^ this is the real approved_measurement, pin it in the policy")
     print()
 
     ok = blob[0x050:0x090] == user_data
     print(f"  binding matches what we asked for: {ok}")
     if not ok:
-        print("    ⚠ REPORT_DATA differs — the offset reading may be wrong")
+        print("    ⚠ REPORT_DATA differs: the offset reading may be wrong")
 
     debug = (u64(0x008) >> 19) & 1
     print(f"  guest debug enabled (policy bit 19): {bool(debug)}"
@@ -300,7 +300,7 @@ def verify(blob, fields, cpu_model, host_certs=None):
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
     except ImportError:
-        print("  `cryptography` not installed — skipping verification.")
+        print("  `cryptography` not installed: skipping verification.")
         print("  The report is saved; verify it offline with:")
         print("     pip install cryptography  (or run it on your laptop)")
         return
@@ -311,14 +311,14 @@ def verify(blob, fields, cpu_model, host_certs=None):
     host_certs = host_certs or {}
     leaf_name = "VCEK" if "VCEK" in host_certs else ("VLEK" if "VLEK" in host_certs else None)
     if leaf_name and "ASK" in host_certs and "ARK" in host_certs:
-        print(f"  using the host's own certificates ({leaf_name}, ASK, ARK) — no network")
+        print(f"  using the host's own certificates ({leaf_name}, ASK, ARK), no network")
         vcek = x509.load_der_x509_certificate(host_certs[leaf_name])
         ask = x509.load_der_x509_certificate(host_certs["ASK"])
         ark = x509.load_der_x509_certificate(host_certs["ARK"])
         _finish(blob, vcek, ask, ark, leaf_name, x509, hashes, ec, padding)
         return
     if host_certs:
-        print(f"  host gave only: {', '.join(sorted(host_certs))} — need leaf+ASK+ARK, using KDS")
+        print(f"  host gave only: {', '.join(sorted(host_certs))}, need leaf+ASK+ARK, using KDS")
 
     tcb = fields["reported_tcb"]
     for product in guess_product(cpu_model):
@@ -332,7 +332,7 @@ def verify(blob, fields, cpu_model, host_certs=None):
             print(f"  {product:7} VCEK fetch failed: {str(exc)[:60]}")
             continue
 
-        print(f"  {product:7} VCEK fetched ({len(vcek_der)} bytes) — this is the product line")
+        print(f"  {product:7} VCEK fetched ({len(vcek_der)} bytes), this is the product line")
         pathlib.Path(f"vcek-{product}.der").write_bytes(vcek_der)
 
         with urllib.request.urlopen(f"{KDS}/{product}/cert_chain", timeout=30) as r:
@@ -377,15 +377,15 @@ def _finish(blob, leaf, ask, ark, leaf_name, x509, hashes, ec, padding):
         leaf.public_key().verify(
             encode_dss_signature(r_i, s_i), blob[:SIGNATURE_OFFSET],
             ec.ECDSA(hashes.SHA384()))
-        print("  ✓ REPORT SIGNATURE VERIFIES — genuine AMD silicon")
+        print("  ✓ REPORT SIGNATURE VERIFIES: genuine AMD silicon")
         print("\n  Everything checks out. This is real hardware attestation.")
     except Exception as exc:
         print(f"  ✗ report signature failed: {exc}")
-        print("    The report is saved — debug the parsing offline, the bytes are good.")
+        print("    The report is saved, debug the parsing offline, the bytes are good.")
 
 
 def main():
-    print("Sentinel — SEV-SNP report capture")
+    print("Sentinel: SEV-SNP report capture")
     print("=" * 70)
     cpu = preflight()
     blob, user_data, path, host_certs = capture()

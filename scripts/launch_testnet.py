@@ -1,5 +1,5 @@
 """
-Milestone 5 — launch Sentinel on public Bittensor testnet.
+Milestone 5, launch Sentinel on public Bittensor testnet.
 
 Run:  python scripts/launch_testnet.py --check          # dry run, spends nothing
       python scripts/launch_testnet.py --create         # create + start the subnet
@@ -10,7 +10,7 @@ against real TAO:
 
     * burned_register is MEV-shielded, and the shielded inner extrinsic expires
       if you retry too fast. Attempts are spaced ~30s.
-    * Never set max_spend_tao for registration — the cost cannot be bounded in
+    * Never set max_spend_tao for registration, the cost cannot be bounded in
       advance and the policy blocks the call outright.
     * A new subnet's alpha pool is tiny, so stake SMALL. τ500 blew the slippage
       guard locally; τ1 went through.
@@ -61,7 +61,7 @@ async def check(wallet_name: str) -> None:
                 addr = bt.Wallet(name=wallet_name, hotkey=hk).hotkey.ss58_address
                 print(f"  hotkey {hk:10}: {addr}")
             except Exception:
-                print(f"  hotkey {hk:10}: MISSING — btcli wallet new-hotkey "
+                print(f"  hotkey {hk:10}: MISSING: btcli wallet new-hotkey "
                       f"--wallet {wallet_name} --wallet-hotkey {hk}")
         print()
         if bal.tao < 5:
@@ -77,7 +77,7 @@ def create(wallet_name: str) -> None:
                          "-w", wallet_name, "-H", "validator", "--yes", "--json"])
     print("  " + out[-400:])
     if not ok:
-        print("\n  creation failed — not starting. Re-run once resolved.")
+        print("\n  creation failed: not starting. Re-run once resolved.")
         return
 
     netuid = _extract_netuid(out)
@@ -90,7 +90,7 @@ def create(wallet_name: str) -> None:
     ok, out = run_btcli(["sudo", "start", "--netuid", str(netuid), "--network", ENDPOINT,
                          "-w", wallet_name, "-H", "validator", "--yes", "--json"])
     print("  " + out[-300:])
-    print(f"\n  NETUID {netuid} — record this. It is the number for the review.")
+    print(f"\n  NETUID {netuid}, record this. It is the number for the review.")
 
 
 def register(wallet_name: str, netuid: int) -> None:
@@ -105,7 +105,7 @@ def register(wallet_name: str, netuid: int) -> None:
             if ok:
                 break
             if "era" in out.lower() or "expired" in out.lower():
-                print("    (shielded extrinsic expired — spacing and retrying)")
+                print("    (shielded extrinsic expired: spacing and retrying)")
             time.sleep(30)
         else:
             print(f"  {hotkey} did not register after 4 attempts; see output above")
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     logging.basicConfig(level=logging.WARNING)
-    print("Sentinel — public testnet")
+    print("Sentinel: public testnet")
     print("=" * 70)
 
     if args.create:

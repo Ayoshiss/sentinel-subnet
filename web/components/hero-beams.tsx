@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-// Animated crimson beams that undulate outward from the guardian eye — energy
+// Animated crimson beams that undulate outward from the guardian eye, energy
 // streaming from the hub into the decentralized network. Sits behind the eye.
 export function HeroBeams() {
   const ref = useRef<HTMLCanvasElement>(null);

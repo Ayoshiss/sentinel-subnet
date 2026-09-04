@@ -73,7 +73,7 @@ export default function Docs() {
           <h1 className="text-3xl font-semibold tracking-tight mb-3">API Reference</h1>
           <p className="text-[#8A8A8F] leading-relaxed">
             Bhairab is an OpenAI-compatible API for Bittensor&apos;s decentralized AI network.
-            If you&apos;ve used the OpenAI API, you already know how to use this — change one line
+            If you&apos;ve used the OpenAI API, you already know how to use this, change one line
             (the base URL) and your existing code works.
           </p>
 
@@ -110,7 +110,7 @@ print(resp.choices[0].message.content)`}</Code>
 
           <H2 id="chat">Chat completions</H2>
           <p className="text-[#8A8A8F] leading-relaxed">
-            <Tag>POST /v1/chat/completions</Tag> — accepts and returns the standard OpenAI
+            <Tag>POST /v1/chat/completions</Tag>, accepts and returns the standard OpenAI
             chat-completions shape.
           </p>
           <Code lang="cURL">{`curl ${GW}/v1/chat/completions \\
@@ -185,7 +185,7 @@ for chunk in stream:
           <p className="text-[#8A8A8F] leading-relaxed text-sm">
             Inference runs on Bittensor SN64 (Chutes). If the decentralized network is at capacity,
             requests transparently fail over to a centralized backstop so your app never sees an
-            outage — the <Tag>X-Routed-Subnet</Tag> header tells you exactly where each request ran.
+            outage, the <Tag>X-Routed-Subnet</Tag> header tells you exactly where each request ran.
           </p>
 
           <H2 id="headers">Response headers</H2>
@@ -219,9 +219,9 @@ for chunk in stream:
               <tbody className="text-[#B7B7BC]">
                 {[
                   ["401", "Invalid or missing API key"],
-                  ["402", "Insufficient balance — top up in the dashboard"],
-                  ["429", "Rate limit exceeded — see Retry-After header"],
-                  ["502", "All providers at capacity — retry in a moment"],
+                  ["402", "Insufficient balance, top up in the dashboard"],
+                  ["429", "Rate limit exceeded, see Retry-After header"],
+                  ["502", "All providers at capacity, retry in a moment"],
                 ].map((r) => (
                   <tr key={r[0]} className="border-b border-[#1E1E20] last:border-0">
                     <td className="px-4 py-2.5 font-mono text-xs text-[#E5392B]">{r[0]}</td>
@@ -237,7 +237,7 @@ for chunk in stream:
             {[
               ["Free tier", "100k tokens to start, no card required."],
               ["Rate limit", "60 requests/minute by default. X-RateLimit-Remaining tracks your window."],
-              ["Pricing", "$0.50 / 1M input tokens, $1.50 / 1M output tokens — billed against your prepaid balance. ~10× cheaper than OpenAI GPT-4o."],
+              ["Pricing", "$0.50 / 1M input tokens, $1.50 / 1M output tokens, billed against your prepaid balance. ~10× cheaper than OpenAI GPT-4o."],
               ["Top up", "credit packs via Stripe from your dashboard."],
             ].map(([k, v]) => (
               <li key={k} className="flex gap-2.5"><span className="text-[#E5392B] text-xs mt-1.5">◆</span><span><span className="text-[#ECECEC] font-medium">{k}:</span> {v}</span></li>

@@ -4,7 +4,7 @@ Submitting weights to Yuma Consensus.
 On a subnet with commit-reveal enabled (Sentinel's is), `set_weights` already
 takes the commit path: the weights are timelock-encrypted with drand and stay
 hidden until the chain auto-decrypts them at the reveal round. There is no
-separate reveal call in v4 — committing is the whole operation.
+separate reveal call in v4, committing is the whole operation.
 
 That hiding is the point. Published weights are copyable, and a validator that
 copies earns dividends for work it never did. If nobody can see your weights

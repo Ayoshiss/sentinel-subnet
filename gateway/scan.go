@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/taogateway/gateway/billing"
-	"github.com/taogateway/gateway/ratelimit"
-	"github.com/taogateway/gateway/risk"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/billing"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/ratelimit"
+	"github.com/Ayoshiss/sentinel-subnet/gateway/risk"
 )
 
 // riskResource scopes x402 payments to the scan endpoint.
@@ -54,10 +54,10 @@ const freeScanRPM = 20
 
 // scanAITimeout caps how long an ambiguous (non-severe, keyed) scan waits on the
 // model before falling back to the deterministic verdict. Severe/honeypot cases
-// never reach the model — they return instantly.
+// never reach the model, they return instantly.
 const scanAITimeout = 9 * time.Second
 
-const upgradeHint = "Set BHAIRAB_API_KEY for AI-reasoned verdicts and higher limits — free at https://tao-gateway.vercel.app"
+const upgradeHint = "Set BHAIRAB_API_KEY for AI-reasoned verdicts and higher limits, free at https://tao-gateway.vercel.app"
 
 // clientIP extracts the caller's IP for free-tier rate limiting (Fly sets
 // Fly-Client-IP / X-Forwarded-For in front of the app).
@@ -121,7 +121,7 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 		if !allowed {
 			w.Header().Set("X-RateLimit-Remaining", "0")
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(resetAt).Seconds())))
-			http.Error(w, `{"error":"free-tier rate limit exceeded — set BHAIRAB_API_KEY for higher limits","type":"rate_limit_error"}`, http.StatusTooManyRequests)
+			http.Error(w, `{"error":"free-tier rate limit exceeded, set BHAIRAB_API_KEY for higher limits","type":"rate_limit_error"}`, http.StatusTooManyRequests)
 			return
 		}
 		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
@@ -143,7 +143,7 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 
 		if c.method == "prepaid" {
 			if bal, err := billing.GetBalance(r.Context(), c.customerID); err == nil && bal <= 0 {
-				http.Error(w, `{"error":"insufficient balance — top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
+				http.Error(w, `{"error":"insufficient balance, top up at https://tao-gateway.vercel.app/dashboard","type":"billing_error"}`, http.StatusPaymentRequired)
 				return
 			}
 		}
@@ -159,7 +159,7 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 		req.Chain = "solana"
 	}
 
-	// 1) LIVE signals — the moat. v1 market axis on Solana via DexScreener.
+	// 1) LIVE signals, the moat. v1 market axis on Solana via DexScreener.
 	signals, sigErr := risk.Gather(req.Chain, req.Token)
 	if sigErr != nil {
 		log.Printf("risk: signal gather error for %s/%s: %v", req.Chain, req.Token, sigErr)
@@ -175,12 +175,12 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case freeTier:
-		// Heuristics only — zero LLM cost. The deterministic floor is the
+		// Heuristics only: zero LLM cost. The deterministic floor is the
 		// high-signal layer; the AI narrative is the keyed upsell.
 		verdict = deterministicVerdict(signals)
 
 	case signals.Severe():
-		// Danger is unambiguous (honeypot, crash, near-zero liquidity) — return
+		// Danger is unambiguous (honeypot, crash, near-zero liquidity): return
 		// the verdict INSTANTLY from the deterministic floor. Never make the user
 		// wait on the model for a STOP, and never spend an inference on an obvious
 		// trap. This is what makes the scary verdict fast.
@@ -188,7 +188,7 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 		source = "deterministic-severe"
 
 	case signals.ClearlySafe():
-		// Obviously-safe blue chip — also instant. The AI adds nothing here.
+		// Obviously-safe blue chip, also instant. The AI adds nothing here.
 		verdict = deterministicVerdict(signals)
 		source = "deterministic-clear"
 
@@ -226,7 +226,7 @@ func handleRiskScan(w http.ResponseWriter, r *http.Request) {
 
 // synthesizeVerdict asks the LLM to judge the transaction given the signals, and
 // falls back to a deterministic verdict if the model is unreachable or unparseable
-// — so the guardian never silently fails open.
+//, so the guardian never silently fails open.
 func synthesizeVerdict(req scanRequest, s *risk.Signals) (v scanVerdict, model string, promptTok, completionTok int, source string) {
 	ctx, _ := json.Marshal(map[string]any{
 		"intent":  req,
@@ -235,7 +235,7 @@ func synthesizeVerdict(req scanRequest, s *risk.Signals) (v scanVerdict, model s
 	chatBody, _ := json.Marshal(map[string]any{
 		"model":       "auto",
 		"temperature": 0,
-		"max_tokens":  220, // a verdict is short — bound generation time
+		"max_tokens":  220, // a verdict is short: bound generation time
 		"messages": []map[string]string{
 			{"role": "system", "content": scanSystemPrompt},
 			{"role": "user", "content": "Assess this transaction:\n" + string(ctx)},
@@ -318,7 +318,7 @@ func deterministicVerdict(s *risk.Signals) scanVerdict {
 		return scanVerdict{
 			Verdict:    "caution",
 			Confidence: 0.6,
-			Summary:    "No market data for this token — unknown or illiquid; proceed only if you know it.",
+			Summary:    "No market data for this token, unknown or illiquid; proceed only if you know it.",
 			Reasons:    s.Heuristics,
 		}
 	case len(s.Heuristics) == 1 && s.Heuristics[0] == "no_red_flags_in_market_data":

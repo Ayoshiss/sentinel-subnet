@@ -1,7 +1,7 @@
 """
 Chain discovery: reading the metagraph, publishing an endpoint.
 
-The chain is only a directory here — it says where a miner claims to be, never
+The chain is only a directory here, it says where a miner claims to be, never
 whether that miner is trustworthy. These tests cover the parsing and filtering
 around that, plus the two rules the chain enforced on us in practice: loopback
 axons are rejected, and a neuron that publishes nothing is not challengeable.

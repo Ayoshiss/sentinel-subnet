@@ -1,5 +1,5 @@
 """
-`postgres.query` — the first real Sentinel tool.
+`postgres.query`, the first real Sentinel tool.
 
 Runs a query against a customer's database from inside the enclave, using a
 credential the Key Broker released only after attestation. The tool itself is

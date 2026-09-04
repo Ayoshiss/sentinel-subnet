@@ -11,7 +11,7 @@ and response encoding is pure and tested, and only the ioctl itself touches the
 device.
 
 Thin did not mean safe. Every bug found here was in the parts a laptop could not
-reach — the ioctl number, the errno the kernel uses to report a short buffer, and
+reach, the ioctl number, the errno the kernel uses to report a short buffer, and
 the byte order of the certificate table's GUIDs. Encoding tests written next to
 the code they test share its assumptions and confirm them rather than check them.
 
@@ -51,7 +51,7 @@ def _iowr(type_: str, nr: int, size: int) -> int:
 
 #: The struct's size is encoded *into* the ioctl number, and the kernel rejects
 #: a mismatch with ENOTTY rather than anything descriptive. So derive it from
-#: the same format used to pack the struct instead of writing a literal — the
+#: the same format used to pack the struct instead of writing a literal, the
 #: u8 pads out to 32 bytes, and a hand-computed 24 fails only on real hardware.
 SNP_GET_REPORT: Final = _iowr("S", 0x0, struct.calcsize(IOCTL_FORMAT))  # 0xC0205300
 
@@ -66,7 +66,7 @@ REQ_SIZE: Final = 96
 #:     struct snp_report_req data;   /* 96 bytes */
 #:     __u64 certs_address;
 #:     __u32 certs_len;
-#: }  — trailing padding to the u64 alignment brings it to 112.
+#: } , trailing padding to the u64 alignment brings it to 112.
 EXT_REQ_FORMAT: Final = "<96sQI4x"
 
 #: How the kernel says "your certificate buffer is too small". Note it surfaces
@@ -132,7 +132,7 @@ def request_report(user_data: bytes, vmpl: int = 0, device: str = DEVICE) -> byt
     The only function here that touches hardware, and confirmed against an AMD
     EPYC 7B13. The ioctl number is derived from the struct rather than written as
     a literal, because the size is encoded into it and the kernel rejects a
-    mismatch with a bare ENOTTY — which is precisely how the original hand
+    mismatch with a bare ENOTTY: which is precisely how the original hand
     computed value failed.
     """
     import fcntl  # Linux-only; imported late so this module loads anywhere.
@@ -176,7 +176,7 @@ def request_ext_report(
     """Ask the chip for a report *and* the host's certificate table.
 
     Returns `(report_blob, certs_blob)`. The certificate blob is empty when the
-    host provisioned nothing — a normal outcome on some clouds, and the reason
+    host provisioned nothing, a normal outcome on some clouds, and the reason
     callers must handle it rather than assume certificates are always there.
 
     The buffer size is negotiated rather than guessed: ask with a zero-length
@@ -267,7 +267,7 @@ class SevSnpSilicon:
 
     @property
     def chip_id(self) -> str:
-        """CHIP_ID from a report. Cached — it does not change."""
+        """CHIP_ID from a report. Cached: it does not change."""
         if self._chip_id is None:
             blob = request_report(bytes(64), self.vmpl, self.device)
             self._chip_id = parse_report(blob).chip_id_hex

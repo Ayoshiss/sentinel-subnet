@@ -1,5 +1,5 @@
 """
-The enclave — confidential execution, from credential fetch to attested reply.
+The enclave, confidential execution, from credential fetch to attested reply.
 
 Everything a miner does on a customer's behalf happens in here. The enclave is
 the only component that ever holds a plaintext credential, and it holds it only
@@ -7,9 +7,9 @@ in memory, only after proving what it is running.
 
 Two attestations happen per request, and they are different proofs:
 
-    1. UNLOCK  — "I am the approved image on a genuine chip, give me the
+    1. UNLOCK : "I am the approved image on a genuine chip, give me the
                   credential for this resource."          (checked by the KBS)
-    2. RESPOND — "this exact result came out of that image, unmodified."
+    2. RESPOND: "this exact result came out of that image, unmodified."
                   (checked by the agent, the gateway, or a validator)
 
 Splitting them matters. The first controls access to secrets; the second makes

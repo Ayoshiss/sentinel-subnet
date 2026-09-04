@@ -1,7 +1,7 @@
 """
 Stdlib HTTP server wrapping `MinerHandler`.
 
-Kept deliberately thin — all behaviour lives in the handler, so this file has
+Kept deliberately thin, all behaviour lives in the handler, so this file has
 nothing worth testing and can be replaced by FastAPI/uvicorn (or anything else)
 without touching the logic. Threaded so a slow tool call cannot block a
 validator's challenge, which is the difference between a low score and no score.
@@ -17,7 +17,7 @@ from .handler import MinerHandler, Request
 
 logger = logging.getLogger("sentinel.serving")
 
-MAX_BODY_BYTES = 1 << 20  # 1 MiB — tool arguments, not uploads
+MAX_BODY_BYTES = 1 << 20  # 1 MiB: tool arguments, not uploads
 
 
 def _make_request_handler(handler: MinerHandler) -> type[BaseHTTPRequestHandler]:

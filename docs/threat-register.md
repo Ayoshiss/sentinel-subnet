@@ -1,4 +1,4 @@
-# Sentinel — Threat Register v0.1
+# Sentinel: Threat Register v0.1
 
 A structured inventory of attack and failure modes, each scored by
 **impact × likelihood** (1–5 each; risk = product, range 1–25), ranked, and
@@ -48,11 +48,11 @@ before the listed mitigation.
 
 ## Risk summary
 
-- **High (15–25):** 1 — T1, neutralised at root by the KBS.
-- **Medium (8–12):** 11 — payment, consensus, KBS, TCB.
-- **Low (1–6):** 7 — side-channel, outages, degradation.
+- **High (15–25):** 1, T1, neutralised at root by the KBS.
+- **Medium (8–12):** 11, payment, consensus, KBS, TCB.
+- **Low (1–6):** 7, side-channel, outages, degradation.
 
 The single high-severity threat is neutralised because the KBS refuses
 credentials to any enclave whose launch measurement doesn't match the approved
-image — a compromised miner physically cannot obtain the data it would need to
+image, a compromised miner physically cannot obtain the data it would need to
 attack. Every remaining threat is medium or low with a named mitigation.

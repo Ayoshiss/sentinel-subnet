@@ -116,7 +116,7 @@ export default function ScanPage() {
         body: JSON.stringify({ chain: "solana", token: t, action, amountUsd: Number(amount) || 500 }),
       });
       const data = await res.json();
-      if (!res.ok || !data.verdict) setError(data.error ?? "Scan failed — try again.");
+      if (!res.ok || !data.verdict) setError(data.error ?? "Scan failed, try again.");
       else setResult(data);
     } catch { setError("Could not reach the scanner. Check your connection."); }
     finally   { setLoading(false); }
@@ -153,7 +153,7 @@ export default function ScanPage() {
             Is it safe?
           </h1>
           <p className="text-sm text-[#555] leading-relaxed max-w-sm">
-            Paste any Solana token. Bhairab checks the live market and answers in one word — before your money moves.
+            Paste any Solana token. Bhairab checks the live market and answers in one word, before your money moves.
           </p>
         </div>
 
@@ -235,7 +235,7 @@ export default function ScanPage() {
           </div>
         </div>
 
-        {/* Deciding — lights chase until the verdict lands */}
+        {/* Deciding: lights chase until the verdict lands */}
         {loading && (
           <div className="border border-[#1E1E20] rounded-lg bg-[#0D0D0F] p-8 flex flex-col items-center gap-4">
             <TrafficLight cycling />

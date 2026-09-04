@@ -4,7 +4,7 @@
 // trail of "what we believed margin was on a given day" than a mutable table.
 //
 // To move to dynamic, DB-backed rates later, replace Wholesale() with a cached
-// table lookup — callers don't change.
+// table lookup, callers don't change.
 package pricing
 
 import "log"
@@ -17,7 +17,7 @@ type rate struct {
 
 // wholesale = what the upstream provider charges US (cost of goods sold).
 // Keyed by the model that ACTUALLY served the request (response.model), not the
-// model the customer requested — the router/fallback/backstop may differ.
+// model the customer requested, the router/fallback/backstop may differ.
 //
 // Sources: Chutes published per-model rates; Groq list price (used for COGS
 // modelling even while on the free tier, so margin reflects true unit economics
@@ -38,7 +38,7 @@ var wholesale = map[string]rate{
 
 // Retail = what we charge the customer, regardless of which backend served it.
 // (Cost-plus model; on the rare Groq backstop we may earn thinner margin or eat
-// it to preserve the SLA — wholesale tracking is exactly how we'll see that.)
+// it to preserve the SLA, wholesale tracking is exactly how we'll see that.)
 const (
 	RetailInPerM  = 0.50
 	RetailOutPerM = 1.50
@@ -50,7 +50,7 @@ const (
 func Wholesale(model string, promptTok, completionTok int) float64 {
 	r, ok := wholesale[model]
 	if !ok {
-		log.Printf("pricing: no wholesale rate for model %q — COGS recorded as 0", model)
+		log.Printf("pricing: no wholesale rate for model %q, COGS recorded as 0", model)
 		return 0
 	}
 	return (float64(promptTok)*r.InPerM + float64(completionTok)*r.OutPerM) / 1_000_000

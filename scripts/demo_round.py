@@ -1,11 +1,11 @@
 """
-Milestone 4 — a full validator round against a mixed field of miners.
+Milestone 4, a full validator round against a mixed field of miners.
 
 Run:  python scripts/demo_round.py
 
 Four miners come up on real sockets. One is honest. The others are each
 dishonest in a different way, and the validator has to catch them using nothing
-but signed HTTP and attestation — no privileged access, no trust in any miner,
+but signed HTTP and attestation, no privileged access, no trust in any miner,
 and no knowledge of what the correct database rows actually are.
 
     miner 0   honest
@@ -14,7 +14,7 @@ and no knowledge of what the correct database rows actually are.
     miner 3   replaying a stale attestation
 
 The last one is the most interesting result. The validator cannot know the right
-answer to a query against a customer's private database — that is the entire
+answer to a query against a customer's private database, that is the entire
 point of the product. So it never tries. It asks every miner the same question
 and lets the majority expose the liar, while attestation stops the fakes from
 voting on what the majority is.
@@ -73,7 +73,7 @@ def build_miner(label, measurement=APPROVED, rows=None, replay=False):
 
 
 def run():
-    print("Sentinel — validator round")
+    print("Sentinel: validator round")
     print("(simulation: software Ed25519 stands in for an AMD SEV-SNP VCEK)")
     print("=" * 78)
 

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bhairab — The guardian of decentralized AI",
+  title: "Bhairab, The guardian of decentralized AI",
   description: "One API to Bittensor's decentralized inference network. 10× cheaper than OpenAI, fiat billing, no crypto. The guardian that keeps your AI online.",
 };
 

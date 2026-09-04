@@ -1,4 +1,4 @@
-// Bhairab brand marks — the guardian eye + wordmark.
+// Bhairab brand marks, the guardian eye + wordmark.
 // The eye's iris doubles as a network hub: the watchful guardian over a
 // decentralized network. Minimal, sigil-like, etched-on-obsidian.
 
@@ -46,7 +46,7 @@ export function EyeMark({ size = 28, className = "" }: { size?: number; classNam
           <circle key={i} cx={p.x} cy={p.y} r="1.9" />
         ))}
       </g>
-      {/* almond eye — bold double stroke */}
+      {/* almond eye: bold double stroke */}
       <g stroke="#ECECEC" fill="none" strokeLinejoin="round">
         <path d="M6 50 C 27 19, 73 19, 94 50 C 73 81, 27 81, 6 50 Z" strokeWidth="2.4" />
         <path d="M14 50 C 31 27, 69 27, 86 50 C 69 73, 31 73, 14 50 Z" strokeWidth="0.9" opacity="0.7" />
@@ -67,7 +67,7 @@ export function Wordmark({ className = "" }: { className?: string }) {
 }
 
 export function Logo() {
-  // Wordmark only in nav — the detailed eye mark reads muddy at small sizes.
+  // Wordmark only in nav, the detailed eye mark reads muddy at small sizes.
   // The eye lives in the hero, favicon, and decorative spots instead.
   return <Wordmark className="text-sm" />;
 }

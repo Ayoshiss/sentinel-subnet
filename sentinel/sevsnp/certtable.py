@@ -8,7 +8,7 @@ report, which removes the dependency entirely.
 
 That matters more than convenience. A validator that must reach KDS to verify
 anything inherits AMD's uptime and its own ISP's routing as consensus
-dependencies — and KDS was refusing connections on the day this was written,
+dependencies, and KDS was refusing connections on the day this was written,
 from two unrelated networks. Certificates carried with the proof turn a network
 outage into a non-event.
 
@@ -16,7 +16,7 @@ The format is from the GHCB specification: a table of 24-byte entries at the
 front of the blob, each a GUID naming a certificate plus the offset and length
 of its DER bytes elsewhere in the same blob, terminated by an all-zero entry.
 
-The GUIDs are stored big-endian, in RFC 4122 order — `uuid.UUID(bytes=...)`, not
+The GUIDs are stored big-endian, in RFC 4122 order, `uuid.UUID(bytes=...)`, not
 `bytes_le`. This was originally written the other way round, on the assumption
 that AMD followed the Microsoft mixed-endian convention. The unit test built its
 fixture with the same wrong assumption, so it passed; real hardware returned
@@ -24,7 +24,7 @@ fixture with the same wrong assumption, so it passed; real hardware returned
 reversed and the trailing eight bytes correct. A wrong reading here is not an
 error, it is three unrecognised GUIDs and a silent fall back to KDS.
 
-Nothing in this module touches hardware, so all of it is tested on a laptop —
+Nothing in this module touches hardware, so all of it is tested on a laptop,
 which is exactly why the fixtures below are built from the constants a real host
 emitted rather than from what the code expects.
 """
@@ -58,7 +58,7 @@ def parse_cert_table(blob: bytes) -> dict[str, bytes]:
     may attach certificates this code does not know about, and silently
     discarding them would hide that.
 
-    An empty or all-zero blob returns `{}` — that is not corruption, it is a
+    An empty or all-zero blob returns `{}`, that is not corruption, it is a
     host that declined to provision certificates, and the caller has to be able
     to tell those two cases apart.
     """

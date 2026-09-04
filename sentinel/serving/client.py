@@ -6,7 +6,7 @@ calls. Every request is signed with the caller's hotkey and addressed to a
 specific miner hotkey, so a captured request cannot be replayed against a
 different miner.
 
-Verification of the *response* is deliberately not done here — the caller does
+Verification of the *response* is deliberately not done here, the caller does
 it explicitly with `sentinel.attestation.verify`, because "who checked the
 attestation" should never be a hidden detail.
 """
@@ -61,7 +61,7 @@ class MinerClient:
     # -- routes ---------------------------------------------------------------
 
     def health(self) -> dict[str, Any]:
-        """Unauthenticated — used to discover a miner's chip and measurement."""
+        """Unauthenticated: used to discover a miner's chip and measurement."""
         return self._request("GET", "/health", signed=False)
 
     def list_tools(self) -> list[dict[str, Any]]:

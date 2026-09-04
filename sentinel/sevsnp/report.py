@@ -11,7 +11,7 @@ the chip's VCEK over everything preceding it.
 Layout follows the AMD SEV Secure Nested Paging Firmware ABI Specification
 (table "ATTESTATION_REPORT Structure"). Offsets are asserted in the tests rather
 than trusted, because a silently wrong offset would parse without error and
-verify against the wrong bytes — the worst possible failure mode here.
+verify against the wrong bytes, the worst possible failure mode here.
 
 Two details that are easy to get wrong and fatal if you do:
 
@@ -45,7 +45,7 @@ class ReportParseError(Exception):
 
 @dataclass(frozen=True)
 class TcbVersion:
-    """A packed Trusted Computing Base version — the firmware floor.
+    """A packed Trusted Computing Base version, the firmware floor.
 
     Verifying a measurement is not enough on its own: approved code running on
     vulnerable firmware is still exploitable, so a policy checks the TCB too.
@@ -73,7 +73,7 @@ class TcbVersion:
 
 @dataclass(frozen=True)
 class AttestationReportBlob:
-    """A parsed SEV-SNP report. Parsing proves nothing — verification does."""
+    """A parsed SEV-SNP report. Parsing proves nothing: verification does."""
 
     version: int
     guest_svn: int
@@ -85,14 +85,14 @@ class AttestationReportBlob:
     current_tcb: TcbVersion
     platform_info: int
     report_data: bytes        # 64 caller-supplied bytes (our nonce binding)
-    measurement: bytes        # 48 bytes — which code booted
+    measurement: bytes        # 48 bytes: which code booted
     host_data: bytes
     id_key_digest: bytes
     author_key_digest: bytes
     report_id: bytes
     report_id_ma: bytes
     reported_tcb: TcbVersion
-    chip_id: bytes            # 64 bytes — identifies the physical processor
+    chip_id: bytes            # 64 bytes, identifies the physical processor
     committed_tcb: TcbVersion
     launch_tcb: TcbVersion
     signature_r: bytes
