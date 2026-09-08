@@ -24,9 +24,13 @@ never changes.
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import logging
+import os
 import pathlib
 import struct
+import threading
 from typing import Final
 
 from .certtable import parse_cert_table
@@ -248,6 +252,38 @@ def _address_of(buf: bytearray) -> int:
 
 # --- Silicon protocol ---------------------------------------------------------
 
+#: Guards `/dev/sev-guest` across processes. Requests to the firmware are
+#: encrypted under the VMPCK, which carries a sequence counter; two requests in
+#: flight at once desync it, and the kernel then **permanently disables the key**
+#: rather than risk reusing an IV. The guest cannot attest again until it
+#: reboots. This is not theoretical: it took a live miner down, triggered by an
+#: operator running `--print-measurement` while the service was serving.
+#:
+#: A threading lock alone is not enough, because the second caller is usually a
+#: separate process. The file lock is what makes that case safe.
+SEV_GUEST_LOCK = "/var/lock/sentinel-sev-guest.lock"
+
+
+@contextlib.contextmanager
+def sev_guest_exclusive():
+    """Hold exclusive access to the SEV firmware channel."""
+    try:
+        fd = os.open(SEV_GUEST_LOCK, os.O_CREAT | os.O_RDWR, 0o666)
+    except OSError:
+        # An unwritable lock directory must not stop a miner attesting. The
+        # in-process lock still applies; only cross-process safety is lost.
+        yield
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
 class SevSnpSilicon:
     """Real AMD silicon behind the same `Silicon` interface as `MockSilicon`.
 
@@ -267,12 +303,14 @@ class SevSnpSilicon:
         self._chip_id: str | None = None
         self._certs: dict[str, bytes] | None = None
         self._measurement: str | None = None
+        self._lock = threading.Lock()
 
     @property
     def chip_id(self) -> str:
         """CHIP_ID from a report. Cached: it does not change."""
         if self._chip_id is None:
-            blob = request_report(bytes(64), self.vmpl, self.device)
+            with self._lock, sev_guest_exclusive():
+                blob = request_report(bytes(64), self.vmpl, self.device)
             self._chip_id = parse_report(blob).chip_id_hex
         return self._chip_id
 
@@ -292,7 +330,8 @@ class SevSnpSilicon:
         falling back to KDS rather than assuming certificates are always present.
         """
         if self._certs is None:
-            _, blob = request_ext_report(bytes(64), self.vmpl, self.device)
+            with self._lock, sev_guest_exclusive():
+                _, blob = request_ext_report(bytes(64), self.vmpl, self.device)
             self._certs = parse_cert_table(blob)
         return self._certs
 
@@ -310,7 +349,8 @@ class SevSnpSilicon:
         checked supply the answer to the check.
         """
         if self._measurement is None:
-            blob = request_report(bytes(64), self.vmpl, self.device)
+            with self._lock, sev_guest_exclusive():
+                blob = request_report(bytes(64), self.vmpl, self.device)
             self._measurement = parse_report(blob).measurement.hex()
         return self._measurement
 
@@ -323,7 +363,10 @@ class SevSnpSilicon:
         import hashlib
 
         user_data = hashlib.sha512(message).digest()
-        return request_report(user_data, self.vmpl, self.device).hex()
+        # Every validator challenge lands here, on a threading server, so this
+        # is the call that would collide under load.
+        with self._lock, sev_guest_exclusive():
+            return request_report(user_data, self.vmpl, self.device).hex()
 
     def public_verifier(self):  # pragma: no cover - needs hardware
         raise GuestError(
