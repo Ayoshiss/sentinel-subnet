@@ -31,10 +31,15 @@ from sentinel.validating.weights import set_weights
 
 logger = logging.getLogger("sentinel.validator")
 
-#: How long to wait after a round before starting the next one. A tempo on 554
-#: is 360 blocks, roughly 72 minutes at 12s blocks. Weights submitted faster than
-#: the chain accepts them are wasted transactions, not extra accuracy.
-DEFAULT_INTERVAL_SECONDS = 20 * 60
+#: How long to wait after a round before starting the next one.
+#:
+#: The binding constraint is `weights_rate_limit`, 100 blocks on 554, which at
+#: ~12s blocks is exactly 20 minutes. Defaulting to 20 minutes would sit on that
+#: boundary and lose submissions to any block-time jitter, so this leaves a
+#: margin. Check the subnet's own value rather than assuming this one:
+#:
+#:     btcli subnet hyperparameters 554 --network test
+DEFAULT_INTERVAL_SECONDS = 22 * 60
 
 
 async def one_round(st, args, wallet, evaluator) -> None:

@@ -91,12 +91,23 @@ your setup without spending a transaction or publishing a bad weight set.
 .venv/bin/python scripts/run_validator.py \
   --netuid 554 --network test \
   --wallet <your-wallet> --hotkey sentinel-validator \
-  --measurement <the measurement> \
-  --interval 1200
+  --measurement <the measurement>
 ```
 
-Default interval is 20 minutes. A tempo on 554 is 360 blocks, roughly 72 minutes,
-so submitting much faster than that spends transactions without buying accuracy.
+Default interval is 22 minutes. The limit that actually bites is
+`weights_rate_limit`, 100 blocks on 554, which is almost exactly 20 minutes at
+12s blocks. Running at 20 would sit on that boundary and lose submissions to
+block-time jitter, so the default leaves a margin. Check the subnet's own value
+before changing it:
+
+```bash
+.venv/bin/btcli subnet hyperparameters 554 --network test
+```
+
+Two other parameters are worth knowing. `activity_cutoff` is 5000 blocks, about
+16h40m, after which a validator that has set no weights counts as inactive. And
+`immunity_period` is the same, so a newly registered miner cannot be pruned for
+its first 17 hours.
 
 For a long-lived deployment, adapt `deploy/sentinel-miner.service`. The same
 `Restart=always` reasoning applies.
@@ -156,7 +167,8 @@ testnet, so every command needs `--network test`.
 ## Feedback worth sending
 
 - Did the scoring match what you would have judged by hand?
-- Is 20 minutes the right interval, or should it track tempo directly?
+- Is a fixed interval right, or should it track tempo and weights_rate_limit
+  from the chain instead of being configured?
 - The single-pinned-measurement model means every miner must run a byte-identical
   image. Workable, or does it break the moment a cloud provider rotates an image?
 - What would stop you running one of these on mainnet?
