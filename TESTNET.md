@@ -11,6 +11,34 @@
 | uid 1: miner | `5Ea1gDXZj7pJgy8b4QSh1Umotr75THFoBAQDVDT9zahpFzjK` |
 | Tempo | 360 blocks (~72 min) |
 
+## Approved launch measurement
+
+Miners must boot this image; a miner reporting anything else scores zero on
+attestation. Validators pin this value, and should take it from here rather than
+from a miner, since a miner supplying its own approved measurement is grading its
+own homework.
+
+```
+2d24cf9624ee36449e50c6c84042540b05898f6559f02741b7b354e0cc2ed18d108352ade7dfc4cecce4fa974e51c773
+```
+
+GCP `ubuntu-2204-lts` on `n2d-standard-2` with SEV-SNP, AMD Milan. Confirmed
+identical across three separate launches on two chips, so the image measures
+reproducibly. Read it on your own VM with:
+
+```bash
+sudo .venv/bin/python scripts/run_miner.py --print-measurement
+```
+
+**This value changes when GCP rotates the base image**, and every miner then
+fails at once. That coordination problem is unsolved and is one of the things
+worth arguing about in the subnet channel.
+
+**What it does and does not cover.** It covers the image that booted. It does not
+cover the application running on top of it, so an operator with root in their own
+VM can change the miner's code after boot and still produce a valid attestation.
+Tested, not assumed. See the honest section on sentinelsubnet.com.
+
 Verify independently:
 
 ```bash

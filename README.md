@@ -51,6 +51,17 @@ callers.
 
 ---
 
+## Run a node
+
+Netuid 554 on Bittensor **testnet**. There are no emissions; the reason to run
+one is to evaluate the design and report what breaks.
+
+- **[Run a miner](docs/mining.md)**. Needs an AMD SEV-SNP confidential VM,
+  roughly $30/month. Read the known limitation section before provisioning.
+- **[Run a validator](docs/validating.md)**. No special hardware; a validator
+  checks attestations rather than producing them.
+- **[Subnet facts and the approved measurement](TESTNET.md)**
+
 ## Project history
 
 Sentinel evolved from earlier gateway work into its current confidential-MCP form. The lineage (**Lattice → Bhairab (TAO Gateway) → Sentinel**) reflects a deliberate convergence, not churn: each step narrowed toward the same insight, that the missing layer in the agent economy is *trusted access to real systems*. The gateway layer carries forward from that work; the confidential-execution and attestation layers are new. The commit history in this repository reflects that continuous build.
