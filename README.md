@@ -2,7 +2,7 @@
 
 **The trust layer for the AI agent economy.**
 
-Sentinel is a Bittensor subnet where AI agents act on real systems (databases, wallets, APIs) through **hardware-attested confidential compute**. Miners run [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers inside AMD SEV-SNP enclaves. Customer credentials live only inside the enclave; the operator cannot see the queries, the credentials, or the responses. Every response ships with a cryptographic attestation, signed by the chip itself, proving the query ran on genuine, unmodified hardware. Agents pay per query via [x402](https://www.x402.org) micropayments. Miners post slashable TAO collateral and are continuously re-attested by validators under Yuma Consensus.
+Sentinel is a Bittensor subnet where AI agents act on real systems (databases, wallets, APIs) through **hardware-attested confidential compute**. Miners run [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers inside AMD SEV-SNP enclaves. Customer credentials are released only to code that has proved what it booted, and are never handed to a person. Every response ships with a cryptographic attestation, signed by the chip itself, checkable against AMD's root without contacting AMD or us. Agents pay per query via [x402](https://www.x402.org) micropayments. Miners post slashable TAO collateral and are continuously re-attested by validators under Yuma Consensus.
 
 > Trust the silicon, not the vendor.
 
@@ -12,7 +12,7 @@ Sentinel is a Bittensor subnet where AI agents act on real systems (databases, w
 
 **Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
 silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 167 tests, CI green on every push.
+independent verification, runs today under 182 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
@@ -38,14 +38,12 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 Run `python scripts/demo_mcp.py` to watch a miner running modified code be refused
 a customer credential.
 
-**The honest gap.** The miners registered on 554 still run `MockSilicon`. Capturing
-and verifying genuine reports is done and is in CI; putting live miners on
-persistent confidential VMs is ongoing infrastructure and cost, deferred until
-there is someone to serve. `MockSilicon` signs with a software Ed25519 key that has
-the same trust shape as a real VCEK (public verifiability, no shared secret) so it
-proves the protocol rather than the hardware root of trust. The `Silicon` and
-`Verifier` interfaces are what the real backend implements, and that swap changes no
-callers.
+**The honest gap.** The launch measurement covers the image that *booted*, not the
+application running on top of it. An operator with root in their own VM can change
+the miner's code after boot and still produce a valid attestation: tested on our own
+live miner, which scored full marks while serving fabricated data. So the guarantee
+currently holds against the host and the infrastructure, not against the operator.
+Closing it means binding the filesystem into the measurement, which is open work.
 
 **And no design partners yet.** The product works; nobody has signed up to use it.
 
@@ -84,7 +82,7 @@ Confidential computing for agents is a validated, emerging field. What does not 
 
 ## Architecture at a glance
 
-Five layers, with the customer at the top and AMD silicon at the bottom as the only trusted parties. Everything between (gateway, network, miner operator, cloud host) is deliberately untrusted and constrained by cryptography.
+Five layers, with the customer at the top and AMD silicon at the bottom as the only trusted parties. Everything between (gateway, network, cloud host) is deliberately untrusted and constrained by cryptography. The miner operator is the exception today: see the honest gap above, since the measurement does not yet cover the application they run.
 
 ```
 Customer AI Agent            (trusted)
@@ -114,7 +112,7 @@ Full component inventory, request/payment/attestation flows, failure modes, and 
 Three layers at different maturities. Being precise about which is which matters
 more than making the tree look finished.
 
-**Sentinel core: working, tested (167 tests, CI on every push)**
+**Sentinel core: working, tested (182 tests, CI on every push)**
 ```
 sentinel/
 ├── attestation.py            # reports, response binding, verification
@@ -133,7 +131,7 @@ sentinel/
     ├── certtable.py          # host certificates from the extended report
     ├── verifier.py           # the five checks a report must pass
     └── guest.py              # /dev/sev-guest ioctls, standard and extended
-tests/                        # 167 tests, weighted toward the refusal paths
+tests/                        # 182 tests, weighted toward the refusal paths
 └── fixtures/                 # a genuine AMD-signed report and AMD's real chain
 scripts/
 ├── demo.py                   # attestation, verification, tamper detection
@@ -141,8 +139,13 @@ scripts/
 ├── demo_round.py             # a validator round against dishonest miners
 ├── benchmark.py              # validator accuracy over N rounds
 ├── capture_report.py         # standalone report capture for a confidential VM
-├── run_epoch.py              # a full epoch against a chain
+├── run_epoch.py              # a full epoch against a chain, one round, demo
+├── run_miner.py              # the long-running miner, real silicon or nothing
+├── run_validator.py          # the long-running validator, discovers and scores
+├── publish_axon.py           # ServeAxon, run where the hotkey lives, not on the VM
+├── set_subnet_identity.py    # full on-chain identity, fields btcli cannot reach
 └── launch_testnet.py         # subnet creation and registration
+deploy/                       # GCP provisioning, startup script, systemd unit
 ```
 
 **Inherited gateway stack, live in production, carried forward from TAO Gateway**
