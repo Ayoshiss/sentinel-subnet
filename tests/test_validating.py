@@ -262,3 +262,74 @@ def test_gate_applies_in_a_live_round(evaluator):
     weights = MinerEvaluator.weights_from(list(out.values()))
     assert weights[0] == pytest.approx(1.0)
     assert weights[1] == 0.0
+
+
+# --- what being caught actually costs -----------------------------------------
+#
+# The tests above assert that dishonesty is *detected*: a cacheable miner loses
+# its hygiene axis, a replayer loses nonce discipline. None of them asserted what
+# detection was worth, which is exactly how the subnet shipped a rubric where a
+# caching cheat scored 0.95 against an honest slow miner's 0.887. Detection was
+# never the problem. The price was.
+
+def test_a_caching_cheat_earns_nothing(evaluator):
+    """It used to keep 0.95 by forfeiting one five-point axis."""
+    miners = [build_miner(), build_miner(allow_cache=True)]
+    out = run_round(evaluator, miners)
+    assert out[1].scores.cache_hygiene == 0.0
+    assert out[1].weight == 0.0
+    assert out[1].legacy_weight > 0.9
+
+
+def test_a_nonce_replayer_earns_nothing(evaluator):
+    """Answering a question it was not asked is not a five point deduction."""
+    miners = [build_miner(), build_miner(replay_nonce=True)]
+    out = run_round(evaluator, miners)
+    assert out[1].scores.nonce_discipline == 0.0
+    assert out[1].weight == 0.0
+
+
+def test_an_honest_slow_miner_beats_every_cheat(evaluator):
+    """The property the old rubric violated, stated directly.
+
+    Being slow is a quality problem and should cost points. Being dishonest is
+    an integrity problem and should cost everything. Any rubric where those two
+    can be compared on the same scale is broken, so this asserts the ordering
+    rather than any particular number.
+    """
+    slow = MinerScores(attestation=1.0, latency=0.05, correctness=1.0,
+                       cache_hygiene=1.0, nonce_discipline=1.0)
+    cacheable = MinerScores(attestation=1.0, latency=1.0, correctness=1.0,
+                            cache_hygiene=0.0, nonce_discipline=1.0)
+    fabricator = MinerScores(attestation=1.0, latency=1.0, correctness=0.0,
+                             cache_hygiene=1.0, nonce_discipline=1.0)
+
+    assert slow.weight() > cacheable.weight()
+    assert slow.weight() > fabricator.weight(gate_correctness=True)
+    # and the old rubric got both of these backwards
+    assert slow.legacy_weight() < cacheable.legacy_weight()
+
+
+def test_correctness_only_gates_once_a_majority_means_something():
+    """One miner is its own majority, so gating correctness below three is noise.
+
+    This is why the gate is a property of the round rather than of the miner.
+    """
+    fabricator = MinerScores(attestation=1.0, latency=1.0, correctness=0.0,
+                             cache_hygiene=1.0, nonce_discipline=1.0)
+    assert fabricator.weight(gate_correctness=False) > 0.0
+    assert fabricator.weight(gate_correctness=True) == 0.0
+
+
+def test_a_round_too_small_to_vote_does_not_gate_correctness(evaluator):
+    """Two miners cannot outvote each other, so neither is zeroed for it."""
+    miners = [build_miner(), build_miner(rows=[[9, "wrong@example.com", "free"]])]
+    out = run_round(evaluator, miners)
+    assert all(not o.correctness_gated for o in out.values())
+
+
+def test_the_old_rubric_is_still_computed_for_comparison(evaluator):
+    """Both numbers are logged every round so the fix can be shown, not argued."""
+    out = run_round(evaluator, [build_miner()])
+    assert out[0].weight > 0.9
+    assert out[0].legacy_weight > 0.9

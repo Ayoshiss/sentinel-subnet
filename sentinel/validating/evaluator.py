@@ -46,6 +46,13 @@ logger = logging.getLogger("sentinel.validating")
 PROBE_TOOL = "postgres.query"
 PROBE_ARGUMENTS: dict[str, Any] = {"sql": "SELECT id, email, plan FROM customers ORDER BY id"}
 
+#: Correctness is decided by majority, so it only gates once a round has enough
+#: verified miners for a majority to mean anything. With one miner it is its own
+#: majority and always agrees with itself; with two, a disagreement is a tie and
+#: whichever the counter happens to pick would zero the other. Three is the
+#: smallest number where being outvoted is evidence rather than an accident.
+MIN_MINERS_FOR_CORRECTNESS_GATE = 3
+
 
 @dataclass
 class MinerTarget:
@@ -63,10 +70,18 @@ class ChallengeOutcome:
     latency_ms: float = 0.0
     response_hash: str | None = None
     error: str | None = None
+    #: Set by the round, not the miner: whether there were enough participants
+    #: for a majority to be meaningful. See MIN_MINERS_FOR_CORRECTNESS_GATE.
+    correctness_gated: bool = False
 
     @property
     def weight(self) -> float:
-        return self.scores.weight()
+        return self.scores.weight(gate_correctness=self.correctness_gated)
+
+    @property
+    def legacy_weight(self) -> float:
+        """What the original rubric would have paid this miner."""
+        return self.scores.legacy_weight()
 
 
 class MinerEvaluator:
@@ -113,14 +128,29 @@ class MinerEvaluator:
         votes = Counter(o.response_hash for o in outcomes if o.verified and o.response_hash)
         majority = votes.most_common(1)[0][0] if votes else None
 
+        # Whether correctness gates is a property of the round, so it is decided
+        # once here and applied to every miner rather than per miner.
+        gate = sum(votes.values()) >= MIN_MINERS_FOR_CORRECTNESS_GATE
+
         for outcome in outcomes:
             if majority is not None and outcome.verified:
                 outcome.scores.correctness = 1.0 if outcome.response_hash == majority else 0.0
+            outcome.correctness_gated = gate
+            # Both rubrics are logged so the fix can be shown to have caught
+            # something specific rather than argued for in the abstract.
             logger.info(
-                "uid=%s verified=%s weight=%.4f%s",
-                outcome.uid, outcome.verified, outcome.weight,
+                "uid=%s verified=%s weight=%.4f (old rubric %.4f)%s",
+                outcome.uid, outcome.verified, outcome.weight, outcome.legacy_weight,
                 f" error={outcome.error}" if outcome.error else "",
             )
+            if outcome.verified and outcome.weight == 0.0 < outcome.legacy_weight:
+                logger.warning(
+                    "uid=%s scored %.4f under the old rubric and 0 under the new one; "
+                    "gates: attestation=%.2f cache=%.2f nonce=%.2f correctness=%.2f",
+                    outcome.uid, outcome.legacy_weight, outcome.scores.attestation,
+                    outcome.scores.cache_hygiene, outcome.scores.nonce_discipline,
+                    outcome.scores.correctness,
+                )
         return outcomes
 
     @staticmethod

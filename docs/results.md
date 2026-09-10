@@ -43,9 +43,9 @@ single voice. Every round issues fresh nonces; nothing carries between rounds.
 |---|---|---|---|---|---|
 | honest-a | 100.0% | 0.0% |: | **1.0000** | 1 ms |
 | honest-b | 100.0% | 0.0% |: | **1.0000** | 1 ms |
-| slow | 100.0% | 0.0% |: | 0.8872 | 909 ms |
-| cacheable | 100.0% | 100.0% | 100.0% | 0.9500 | 1 ms |
-| fabricator | 100.0% | 100.0% | 100.0% | 0.8000 | 1 ms |
+| slow | 100.0% | 0.0% |: | 0.8874 | 907 ms |
+| cacheable | 100.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
+| fabricator | 100.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
 | backdoored | 0.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
 | replay | 0.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
 | malformed | 0.0% | 100.0% | 100.0% | **0.0000** | 2 ms |
@@ -56,8 +56,12 @@ detection rate                   100.0%
 caught by the expected cause     100.0%
 false rejections                 0  (0.0%)
 honest mean weight               1.0000
-dishonest mean weight            0.2917
+degraded (slow) mean weight      0.8874
+dishonest mean weight            0.0000
+worst honest / best dishonest    1.0000 / 0.0000
 ```
+
+The last line is the one that matters, and it used to read the other way round.
 
 **Detection was perfect and correctly attributed.** Every dishonest miner was
 caught in all 100 rounds, and each was caught by the defence intended to catch
@@ -75,25 +79,44 @@ regardless of how fast or well-behaved it otherwise is.
 
 ---
 
-## What these numbers do not show
+## The rubric was wrong, and what fixed it
 
-**The populations overlap.** `cacheable` averages 0.9500 while the honest-but-slow
-miner averages 0.8872. A miner allowing attested responses to be cached
-currently outranks an honest miner with a slow link, which is the wrong ordering:
-a cached attested response is served to someone else without the proof that
-belongs to it, and that is a correctness problem, not a hygiene nicety.
+**Earlier runs of this same benchmark had the populations overlapping.**
+`cacheable` averaged 0.9500 and `fabricator` 0.8000, against the honest-but-slow
+miner's 0.8872. Both cheats outranked an honest miner with a slow link. Being
+dishonest cost less than being far away.
 
-`fabricator` keeps 0.8000. It passes attestation honestly, genuine chip,
-approved image, and simply lies about the data, losing only the 20% correctness
-axis. A miner returning fiction should not retain four fifths of its weight.
+Detection was never the problem: *both were caught 100% of the time*, then and
+now. The penalty was. Getting caught forfeited only the points for the axis that
+caught you, so a cheat kept the other 95%.
 
-Both follow from the rubric rather than from a failure of detection: *both were
-caught 100% of the time*. The defences work; the penalties are too small. The
-fix is to raise those weights or gate on them, and the reason it has not been
-done yet is that consensus correctness is probabilistic, a replica with lag or a
-non-deterministic query can make an honest miner disagree once, so the right
-correction is a moving average across epochs rather than an instant cliff. That
-needs multi-epoch data from a live subnet, which 554 now produces.
+**The fix was to stop averaging two different kinds of question.** Whether a
+miner cheated is a yes or no. How good it is is a matter of degree. So the
+integrity axes gate and only quality scores:
+
+- **Attestation, cache hygiene and nonce discipline gate.** Each is a
+  deterministic fact about a single response, measured directly rather than
+  voted on, so there is no noise to smooth and nothing to average. Fail one and
+  the miner earns nothing.
+- **Correctness gates only once a round has three or more verified miners.** It
+  is decided by majority, and a majority of one is just a miner agreeing with
+  itself. Below three, a disagreement is a tie rather than evidence, so
+  correctness stays as points.
+- **Latency still scores.** Being slow is a quality problem and should cost
+  points, not everything.
+
+That last split is what took time to see. The reason the fix stalled was the
+worry that consensus correctness is probabilistic, so gating it would punish an
+honest miner for one unlucky epoch. True, and it does not apply to cache hygiene
+or nonce discipline, which are not votes. Those could have been gated
+immediately, and separating them from correctness is what unblocked it.
+
+**Both rubrics are still computed.** Every round logs the new weight and what
+the old one would have paid, so a miner that behaves in a way the old rubric
+rewarded shows up in the record with a number attached rather than as an
+argument.
+
+## What these numbers still do not show
 
 **Attestation in this benchmark is `MockSilicon`.** These numbers measure the
 challenge-verify-score protocol, which is what catches each attack. Real

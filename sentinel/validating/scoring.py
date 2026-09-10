@@ -64,22 +64,56 @@ class MinerScores:
     cache_hygiene: float = 0.0
     nonce_discipline: float = 0.0
 
-    def weight(self) -> float:
+    def weight(self, *, gate_correctness: bool = False) -> float:
         """Aggregate the five axes into a single [0, 1] weight.
 
-        Attestation is a gate, not merely the heaviest axis. A miner that cannot
-        prove it is running the approved image inside genuine silicon earns
-        nothing, however fast and well-behaved it otherwise looks.
+        **Integrity gates. Quality scores.** The axes split into two kinds of
+        question, and mixing them was the original mistake. Whether a miner
+        cheated is a yes or no; how good it is is a matter of degree. Averaging
+        the two means a cheat forfeits only the points for the axis that caught
+        it and keeps everything else, so being dishonest cost less than being
+        slow: a caching cheat scored 0.95 against an honest slow miner's 0.887.
 
-        Without this, the weighted sum alone leaves a backdoored miner on 0.40,
-        it still collects full marks for latency, cache hygiene and nonce
-        discipline: which would pay roughly a sixth of emissions to code that
-        failed the one check the subnet exists to make.
+        So attestation, cache hygiene and nonce discipline are gates. Each is a
+        deterministic fact about one response, measured directly rather than
+        voted on, so there is no noise to average and nothing to smooth. Fail
+        any and the miner earns nothing.
+
+        Correctness is different. It is decided by agreement between miners,
+        which is a vote, and votes are noisy: gating it would punish an honest
+        miner for one unlucky epoch. It is also meaningless when a round has too
+        few miners, since one miner is its own majority. So it only gates when
+        the caller says the round had enough participants to make a majority
+        mean something, and otherwise stays as points.
+        """
+        if self.attestation <= 0.0:
+            return 0.0
+        if self.cache_hygiene <= 0.0:
+            return 0.0
+        if self.nonce_discipline <= 0.0:
+            return 0.0
+        if gate_correctness and self.correctness <= 0.0:
+            return 0.0
+        total = sum(WEIGHTS[axis] * getattr(self, axis) for axis in WEIGHTS)
+        return max(0.0, min(1.0, total))
+
+    def legacy_weight(self) -> float:
+        """What this miner would have scored under the original rubric.
+
+        Kept so the fix can be shown to have done something rather than argued
+        about in the abstract. Every round logs both, so a miner that behaves in
+        a way the old rubric rewarded and the new one refuses shows up in the
+        record with a number attached.
+
+        Delete this once there is enough history to make the point.
         """
         if self.attestation <= 0.0:
             return 0.0
         total = sum(WEIGHTS[axis] * getattr(self, axis) for axis in WEIGHTS)
         return max(0.0, min(1.0, total))
 
-    def as_dict(self) -> dict[str, float]:
-        return {axis: getattr(self, axis) for axis in WEIGHTS} | {"weight": self.weight()}
+    def as_dict(self, *, gate_correctness: bool = False) -> dict[str, float]:
+        return {axis: getattr(self, axis) for axis in WEIGHTS} | {
+            "weight": self.weight(gate_correctness=gate_correctness),
+            "legacy_weight": self.legacy_weight(),
+        }

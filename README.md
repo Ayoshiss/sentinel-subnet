@@ -12,7 +12,7 @@ Sentinel is a Bittensor subnet where AI agents act on real systems (databases, w
 
 **Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
 silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 182 tests, CI green on every push.
+independent verification, runs today under 188 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
@@ -112,7 +112,7 @@ Full component inventory, request/payment/attestation flows, failure modes, and 
 Three layers at different maturities. Being precise about which is which matters
 more than making the tree look finished.
 
-**Sentinel core: working, tested (182 tests, CI on every push)**
+**Sentinel core: working, tested (188 tests, CI on every push)**
 ```
 sentinel/
 ├── attestation.py            # reports, response binding, verification
@@ -131,7 +131,7 @@ sentinel/
     ├── certtable.py          # host certificates from the extended report
     ├── verifier.py           # the five checks a report must pass
     └── guest.py              # /dev/sev-guest ioctls, standard and extended
-tests/                        # 182 tests, weighted toward the refusal paths
+tests/                        # 188 tests, weighted toward the refusal paths
 └── fixtures/                 # a genuine AMD-signed report and AMD's real chain
 scripts/
 ├── demo.py                   # attestation, verification, tamper detection
@@ -175,13 +175,23 @@ ROADMAP.md                    # milestone plan and what is still open
 
 Validators challenge every miner with a fresh nonce every 360 blocks (~72 min) and score on five axes:
 
-| Axis | Weight |
-|---|---|
-| Attestation validity | 40% |
-| Response latency | 30% |
-| Correctness (mirrored queries) | 20% |
-| Cache-header hygiene | 5% |
-| Nonce discipline | 5% |
+| Axis | Weight | Behaviour |
+|---|---|---|
+| Attestation validity | 40% | **gate** |
+| Response latency | 30% | points |
+| Correctness (mirrored queries) | 20% | **gate** once a round has 3+ verified miners |
+| Cache-header hygiene | 5% | **gate** |
+| Nonce discipline | 5% | **gate** |
+
+**Integrity gates, quality scores.** Whether a miner cheated is a yes or no;
+how good it is is a matter of degree. Mixing the two meant a cheat forfeited
+only the axis that caught it and kept the rest, so a caching cheat scored 0.95
+against an honest slow miner's 0.887. The integrity axes now gate: fail one and
+the miner earns nothing, whatever else it did. Correctness is the exception,
+because it is decided by majority and a majority of one is a miner agreeing with
+itself, so it only gates when there are enough participants for a vote to mean
+something. Full numbers and the before/after are in
+[`docs/results.md`](docs/results.md).
 
 Weights are aggregated by Yuma Consensus with stake-weighted median clipping. Commit-reveal (v3) prevents weight-copying. Only attestation-verified miners are discoverable, defeating Sybil tool-servers. Failing attestation triggers on-chain slashing. See [`docs/bittensor-mechanics.md`](docs/bittensor-mechanics.md).
 
