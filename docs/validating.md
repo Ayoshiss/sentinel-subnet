@@ -137,7 +137,10 @@ uid=1  attest=1.00 latency=0.99 correct=1.00 cache=1.00 nonce=1.00 weight=0.9983
 
 - **attest** is a gate, not a weight. Zero here means zero overall, whatever else
   the miner did.
-- **latency** scores full marks under 250ms and zero at the ceiling.
+- **latency** scores full marks under 250ms and zero at the ceiling, which is
+  5000ms. **Do not change this.** It is protocol rather than preference: two
+  validators using different ceilings produce different weights for the same
+  miner, and Yuma penalises whoever ends up outside consensus.
 - **correct** is agreement with the majority of verified miners.
 - **cache** is zero if the miner allowed its attested reply to be cached. A
   cached body reaches the next caller without the proof that belongs to it.

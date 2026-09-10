@@ -19,9 +19,16 @@
 
 set -euo pipefail
 
-PROJECT="${PROJECT:-project-46c1af1b-86e0-4b9b-a77}"
+# No default. This used to fall back to the author's own project, which meant a
+# bare run tried to create a VM somewhere the operator has no access, and the
+# error said nothing useful about why.
+PROJECT="${PROJECT:?set PROJECT to your own GCP project id}"
 ZONE="${ZONE:-us-central1-a}"
 NAME="${NAME:-sentinel-miner-1}"
+
+# SEV-SNP capacity is genuinely scarce and a zone can simply refuse. If creation
+# fails with a resources error, try us-central1-b, us-east1-b or europe-west4-a
+# before assuming anything is wrong with your setup.
 MACHINE="${MACHINE:-n2d-standard-2}"
 NETUID="${NETUID:-554}"
 PORT="${PORT:-8091}"

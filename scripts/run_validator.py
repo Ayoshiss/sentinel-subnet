@@ -27,6 +27,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sentinel.chain import discover_miners, has_validator_permit
 from sentinel.validating import MinerEvaluator, MinerTarget
+from sentinel.validating.scoring import DEFAULT_LATENCY_CEILING_MS
 from sentinel.validating.weights import set_weights
 
 logger = logging.getLogger("sentinel.validator")
@@ -142,7 +143,10 @@ if __name__ == "__main__":
                    help="the approved launch measurement miners must prove")
     p.add_argument("--product", default="Milan", help="EPYC product line")
     p.add_argument("--interval", type=int, default=DEFAULT_INTERVAL_SECONDS)
-    p.add_argument("--latency-ceiling-ms", type=float, default=60_000.0)
+    # Protocol, not preference. Two validators using different ceilings score the
+    # same miner differently, and Yuma penalises whichever one disagrees with
+    # consensus. Change it only if the subnet changes it for everyone.
+    p.add_argument("--latency-ceiling-ms", type=float, default=DEFAULT_LATENCY_CEILING_MS)
     p.add_argument("--once", action="store_true", help="run one round and exit")
     p.add_argument("--dry-run", action="store_true",
                    help="score and print, but do not submit weights")
