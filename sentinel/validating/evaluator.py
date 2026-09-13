@@ -105,11 +105,11 @@ class MinerEvaluator:
         #: real-silicon miner fails, so it is explicit rather than sniffed.
         self.product = product
         #: `min_tcb` is one integer and a real TCB is four components, so the
-        #: hardware floor cannot be derived from it and is set separately.
-        #: Empty means no floor: approved code on vulnerable firmware still
-        #: passes, which is a gap and is tracked in ROADMAP.md. Populating it
-        #: needs a decision about which firmware levels to require, and getting
-        #: that wrong locks honest miners out of the subnet.
+        #: hardware floor cannot come from it. Left empty, the floor comes from
+        #: `MIN_TCB` in the verifier, which is the subnet-wide value both the
+        #: broker and the validator read. Overriding it here is for tests and
+        #: for experiments; two validators on different floors would accept
+        #: different miners and Yuma would penalise the one out of consensus.
         self.sevsnp_min_tcb = dict(sevsnp_min_tcb or {})
         self.min_tcb = min_tcb
         self.latency_target_ms = latency_target_ms
@@ -251,6 +251,7 @@ class MinerEvaluator:
 
         from ..sevsnp import SevSnpPolicy, SevSnpVerifier
         from ..sevsnp.certs import CertChain
+        from ..sevsnp.verifier import min_tcb_for
 
         certificates = health.get("certificates") or {}
         try:
@@ -279,7 +280,7 @@ class MinerEvaluator:
             self.product,
             SevSnpPolicy(
                 approved_measurement=bytes.fromhex(self.approved_measurement),
-                **self.sevsnp_min_tcb,
+                **(self.sevsnp_min_tcb or min_tcb_for(self.product)),
             ),
             chain=chain,
             offline=True,

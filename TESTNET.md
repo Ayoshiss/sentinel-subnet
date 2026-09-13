@@ -39,6 +39,56 @@ cover the application running on top of it, so an operator with root in their ow
 VM can change the miner's code after boot and still produce a valid attestation.
 Tested, not assumed. See the honest section on sentinelsubnet.com.
 
+## Required firmware
+
+A measurement says the right code booted. It says nothing about the firmware
+underneath it, and approved code on firmware with a known hole is still
+exploitable. So there is a floor, and a report below it is refused:
+
+```
+Milan   TCB[SNP] >= 0x1D
+```
+
+That is AMD's number, not ours. [AMD-SB-3030][sb3030] (May 2026) requires
+`TCB[SNP] >= 0x1D` on EPYC 7003 to mitigate CVE-2025-61971, where missing lock
+bits on NBIO registers let a host-privileged attacker alter MMIO routing and
+break SEV-SNP guest integrity. Reported by Benedict Schlüter, Philipp Giersfeld
+and Shweta Shinde at ETH Zurich.
+
+The floor is a constant in `sentinel/sevsnp/verifier.py`, not a per-validator
+setting, because two validators on different floors would accept different
+miners and Yuma penalises whichever one falls out of consensus. The miner's own
+Key Broker reads the same constant, so firmware below the floor never receives
+the database credential at all rather than merely scoring zero.
+
+A downgrade cannot be faked. The VCEK is derived from the TCB version, so a chip
+rolled back to older firmware signs with a different key and the certificate
+chain breaks before the floor is ever consulted.
+
+**Only SNP is floored, and that is deliberate.** AMD publishes TCB floors for the
+components where one is meaningful, and for Milan that is SNP alone. Microcode
+in particular cannot be floored globally: AMD patches Milan microcode per
+stepping, B1 `0x0A0011DE` and B2 `0x0A001247`, and the TCB field carries the low
+byte, so a fully patched B1 reports 222 and a fully patched B2 reports 71. Those
+do not compare. Flooring microcode properly means reading CPUID stepping from
+the report and keeping a per-stepping table; until that exists, a wrong floor
+would lock out patched hardware, which is worse than no floor.
+
+**What it does and does not prove.** It stops downgrade, and it enforces the
+level AMD currently names for this product. It does not prove `0x1D` is free of
+holes, only that it is the level AMD has published to date. A CVE disclosed
+against `0x1D` tomorrow needs a manual bump here, and nothing yet watches AMD's
+bulletins to tell us to make it.
+
+Our own hosts report `0x1D` exactly, so the floor is met with no margin. When AMD
+raises it, our miners fail their own floor until the host fleet updates, and the
+correct response then is to update, not to lower the number.
+
+Milan is the only product line with a pinned AMD root, so it is the only one
+with a floor. Any other product fails earlier, at the certificate chain.
+
+[sb3030]: https://www.amd.com/en/resources/product-security/bulletin/AMD-SB-3030.html
+
 Verify independently:
 
 ```bash

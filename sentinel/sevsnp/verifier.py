@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import pathlib
 from dataclasses import dataclass
+from typing import Final
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -38,6 +39,73 @@ from .certs import CertChain, CertificateError, fetch_cert_chain, fetch_vcek, ve
 from .report import AttestationReportBlob, ReportParseError, parse_report
 
 logger = logging.getLogger("sentinel.sevsnp")
+
+
+#: Minimum firmware the subnet accepts, per EPYC product line.
+#:
+#: This is **protocol, not preference**. Two verifiers using different floors
+#: would accept different miners, and on the validator side Yuma penalises
+#: whoever ends up outside consensus. Both the Key Broker and the validator read
+#: this same constant so they cannot drift apart.
+#:
+#: Why it exists: a correct launch measurement on vulnerable firmware is still
+#: exploitable. CVE-2025-54510 ("Fabricked") lets a malicious host on unpatched
+#: AMD firmware read guest memory and forge attestation reports, and
+#: CVE-2025-29952 lets an admin-level host corrupt RMP memory. AMD's own guidance
+#: is to verify the reported TCB before trusting a guest. Intel published
+#: equivalents for TDX in the same year, so this is the industry answer rather
+#: than an AMD workaround.
+#:
+#: **What a floor does and does not buy.** The VCEK is derived from chip secrets
+#: *and* the TCB version, so a report cannot credibly claim firmware newer than
+#: the key that signed it: downgrade is refused. It does **not** prove these
+#: versions are patched against everything, and it cannot help once a host has
+#: already compromised the TEE and can forge the report wholesale. It stops the
+#: case that actually happens, which is an honest operator on stale firmware.
+#:
+#: Keyed by product because TCB components are not comparable across
+#: generations. Only Milan is listed, which costs nothing today: `CertChain`
+#: already fails closed for products with no pinned AMD root, so a Genoa miner
+#: cannot participate either way. Adding a product means pinning its root *and*
+#: establishing its floor.
+#:
+#: Observed on the reference miner, GCP n2d-standard-2, 2026-09-11.
+#: The firmware floor, per product line, taken from AMD's security bulletins
+#: rather than from whatever our own hosts happen to report. Those are two
+#: different numbers and only the first one is a security boundary.
+#:
+#: Milan: AMD-SB-3030 (May 2026) requires TCB[SNP] >= 0x1D for EPYC 7003 to
+#: mitigate CVE-2025-61971, where missing NBIO register lock bits let a
+#: host-privileged attacker alter MMIO routing and break SEV-SNP guest
+#: integrity. 0x1D is 29, which is what our own silicon reports, so the floor
+#: is met with no margin rather than by luck.
+#:
+#: Only SNP is floored. AMD publishes TCB floors for the components where a
+#: floor is meaningful, and for Milan that is SNP alone: TCB[BL] and TCB[TEE]
+#: floors exist for Genoa and Turin respectively, not for this product.
+#:
+#: Microcode is deliberately not floored, and this is the subtle one. AMD
+#: publishes Milan microcode fixes per stepping, B1 0x0A0011DE and B2
+#: 0x0A001247, and the TCB field carries the low byte: 222 for B1 and 71 for
+#: B2. Both are patched, and the numbers are not comparable. A single global
+#: microcode floor of 222 would refuse every fully patched B2 part. Flooring
+#: microcode correctly means reading CPUID stepping out of the report and
+#: keeping a per-stepping table, which is a real feature and not a constant.
+MIN_TCB: Final[dict[str, dict[str, int]]] = {
+    "Milan": {
+        "min_snp": 0x1D,
+    },
+}
+
+
+def min_tcb_for(product: str) -> dict[str, int]:
+    """The firmware floor for `product`, or empty if none is established.
+
+    Empty means no floor rather than a refusal, because the refusal already
+    happens earlier and more decisively: an unpinned product has no AMD root to
+    verify its chain against, so it never reaches a policy check.
+    """
+    return dict(MIN_TCB.get(product, {}))
 
 
 @dataclass

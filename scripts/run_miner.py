@@ -93,6 +93,7 @@ def build_verifier(silicon, product: str, measurement_hex: str):
 
     from sentinel.sevsnp import SevSnpPolicy, SevSnpVerifier
     from sentinel.sevsnp.certs import CertChain
+    from sentinel.sevsnp.verifier import min_tcb_for
 
     certs = silicon.certificates
     missing = {"VCEK", "ASK", "ARK"} - set(certs)
@@ -109,7 +110,13 @@ def build_verifier(silicon, product: str, measurement_hex: str):
     )
     verifier = SevSnpVerifier(
         product,
-        SevSnpPolicy(approved_measurement=bytes.fromhex(measurement_hex)),
+        # The floor matters more here than at the validator. A validator scoring
+        # a miner zero stops it being paid; the broker refusing means firmware
+        # with known holes never receives the credential at all.
+        SevSnpPolicy(
+            approved_measurement=bytes.fromhex(measurement_hex),
+            **min_tcb_for(product),
+        ),
         chain=chain,
         offline=True,
     )

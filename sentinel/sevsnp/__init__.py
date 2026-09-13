@@ -42,7 +42,7 @@ from .report import (
     TcbVersion,
     parse_report,
 )
-from .verifier import SevSnpPolicy, SevSnpVerifier
+from .verifier import MIN_TCB, SevSnpPolicy, SevSnpVerifier, min_tcb_for
 
 __all__ = [
     # report
@@ -68,4 +68,6 @@ __all__ = [
     # verifier
     "SevSnpVerifier",
     "SevSnpPolicy",
+    "MIN_TCB",
+    "min_tcb_for",
 ]

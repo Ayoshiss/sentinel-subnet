@@ -26,11 +26,13 @@ from sentinel.attestation import VerificationError
 from sentinel.sevsnp import (
     REPORT_SIZE,
     SIGNATURE_OFFSET,
+    PRODUCTS,
     CertificateError,
     SevSnpPolicy,
     SevSnpVerifier,
     TcbVersion,
     load_cert_chain,
+    min_tcb_for,
     parse_report,
 )
 from sentinel.sevsnp.certs import CertChain
@@ -487,6 +489,105 @@ def test_real_guest_was_not_debuggable():
     r = parse_report(REAL_REPORT.read_bytes())
     assert not (r.policy >> 19) & 1
     SevSnpPolicy(approved_measurement=r.measurement).check(r)
+
+
+# --- the firmware floor -------------------------------------------------------
+
+#: Offset of REPORTED_TCB, the version the VCEK was derived under. Inside that
+#: packed u64: bootloader is byte 0, tee byte 1, snp byte 6, microcode byte 7.
+REPORTED_TCB_OFFSET = 0x180
+_TCB_BYTE = {"bootloader": 0, "tee": 1, "snp": 6, "microcode": 7}
+
+
+def _downgrade(blob: bytes, component: str, to: int) -> bytes:
+    """The same report, claiming older firmware.
+
+    A real downgrade cannot be faked this way: the VCEK is derived from the TCB,
+    so a chip rolled back to older firmware signs with a different key and the
+    chain breaks before the policy is consulted. Editing the bytes is how the
+    policy gets tested on its own, without the signature check standing in for it.
+    """
+    edited = bytearray(blob)
+    edited[REPORTED_TCB_OFFSET + _TCB_BYTE[component]] = to
+    return bytes(edited)
+
+
+def test_the_floor_is_amds_published_level():
+    """AMD-SB-3030 requires TCB[SNP] >= 0x1D on EPYC 7003 for CVE-2025-61971.
+
+    Pinned to AMD's number, not to ours. The distinction matters: a floor set
+    from whatever our own hosts report is an accident of one cloud's fleet, and
+    would have been whatever GCP happened to be running that week.
+    """
+    assert min_tcb_for("Milan") == {"min_snp": 0x1D}
+
+
+def test_microcode_is_not_floored():
+    """Milan microcode is patched per stepping, B1 0x0A0011DE and B2 0x0A001247,
+    and the TCB field carries the low byte: 222 and 71. Both are patched and the
+    numbers do not compare, so a global floor of 222 refuses every patched B2
+    part. This test exists because that floor was written and nearly shipped.
+    """
+    assert "min_microcode" not in min_tcb_for("Milan")
+
+    b2_patched = SevSnpPolicy(approved_measurement=b"\x00" * 48, **min_tcb_for("Milan"))
+    assert b2_patched.min_microcode == 0
+
+
+def test_no_floor_for_an_unpinned_product():
+    """Empty is safe here only because an unpinned product has no AMD root to
+    verify against, so it fails at the chain long before a policy sees it.
+
+    Genoa is a name the code knows and a root it does not trust, and those are
+    two different lists. Being in `PRODUCTS` only means KDS can be asked for its
+    chain; the verdict comes from `AMD_ROOT_SPKI_SHA256`, which holds Milan alone.
+    """
+    from sentinel.sevsnp.certs import AMD_ROOT_SPKI_SHA256
+
+    for product in PRODUCTS:
+        if product in AMD_ROOT_SPKI_SHA256:
+            assert min_tcb_for(product), f"{product} is verifiable but has no floor"
+        else:
+            assert min_tcb_for(product) == {}
+
+
+@pytest.mark.skipif(not REAL_REPORT.exists(), reason="hardware fixture not present")
+def test_real_hardware_is_at_or_above_the_floor():
+    """The failure mode that makes a floor dangerous is locking honest miners
+    out, so the floor is checked against a report a real chip actually signed."""
+    r = parse_report(REAL_REPORT.read_bytes())
+    SevSnpPolicy(
+        approved_measurement=r.measurement, **min_tcb_for("Milan")
+    ).check(r)
+
+
+@pytest.mark.skipif(not REAL_REPORT.exists(), reason="hardware fixture not present")
+@pytest.mark.parametrize("component,to", [("snp", 28), ("snp", 0)])
+def test_downgraded_firmware_is_refused_under_the_production_floor(component, to):
+    """One version below on any single component, and the report is refused."""
+    blob = _downgrade(REAL_REPORT.read_bytes(), component, to)
+    r = parse_report(blob)
+    policy = SevSnpPolicy(
+        approved_measurement=r.measurement, **min_tcb_for("Milan")
+    )
+    with pytest.raises(VerificationError, match=f"stale TCB: {component}"):
+        policy.check(r)
+
+
+@pytest.mark.skipif(not REAL_REPORT.exists(), reason="hardware fixture not present")
+def test_the_default_policy_would_have_let_it_through():
+    """Why this floor had to be set. Before it existed the defaults were zero,
+    so every component comparison was vacuous and downgraded firmware passed."""
+    r = parse_report(_downgrade(REAL_REPORT.read_bytes(), "snp", 0))
+    SevSnpPolicy(approved_measurement=r.measurement).check(r)
+
+
+def test_validator_inherits_the_floor_rather_than_carrying_its_own():
+    """Two validators on different floors would accept different miners, and
+    Yuma penalises the one out of consensus. The default has to be the constant."""
+    from sentinel.validating.evaluator import MinerEvaluator
+
+    assert MinerEvaluator(wallet=None, approved_measurement="00").sevsnp_min_tcb == {}
 
 
 # --- the host certificate table (extended report) -----------------------------
