@@ -32,7 +32,7 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 | Miner / validator neurons | **Working**, bittensor v11, weights land via timelock commit |
 | Testnet | **Live**, netuid 554 since 2026-08-29 |
 | Published results | `docs/results.md`: 100 rounds, 900 challenges |
-| Gateway stack | **Live in production** (`gateway/`, `sidecar/`, `web/`), routes paid inference to SN64 |
+| Gateway stack | **Live** (`gateway/`, `sidecar/`), routes paid inference to SN64, API only |
 | Architecture, threat register, Yuma mechanics, litepaper | Complete (`docs/`) |
 
 Run `python scripts/demo_mcp.py` to watch a miner running modified code be refused
@@ -148,11 +148,10 @@ scripts/
 deploy/                       # GCP provisioning, startup script, systemd unit
 ```
 
-**Inherited gateway stack, live in production, carried forward from TAO Gateway**
+**Inherited gateway stack, carried forward from TAO Gateway**
 ```
 gateway/                      # Go: auth, billing, x402, rate limiting, risk scan
 sidecar/                      # Python: model routing to Bittensor SN64 + backstop
-web/                          # Next.js frontend
 postgres/schema.sql           # gateway's own billing tables (not customer data)
 deploy/ · demo/ · chat.py · smoke-test.sh
 Dockerfile.fly · docker-compose.yml · fly.toml · supervisord.conf
