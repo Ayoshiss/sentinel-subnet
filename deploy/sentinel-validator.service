@@ -1,0 +1,53 @@
+[Unit]
+Description=Sentinel validator, netuid 554
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel
+WorkingDirectory=/opt/sentinel
+EnvironmentFile=/etc/sentinel/validator.env
+
+# Only the HOTKEY lives on this machine. Weight extrinsics are signed by the
+# hotkey, never the coldkey, so a validator runs unattended with no password and
+# no coldkey present. Copy the hotkey file and coldkeypub.txt, which is a public
+# key, and nothing else. Someone who takes this box can set weights as you on
+# one subnet; they cannot move, unstake or spend anything, because all of that
+# needs the coldkey. That is the whole point of the split, so do not undo it by
+# copying the wallet wholesale.
+#
+# --network test is written here rather than templated. 554 is a testnet subnet,
+# and pointing a validator at the wrong chain does not error: it connects, finds
+# no subnet it recognises, and scores nothing while looking healthy. Changing
+# chain should be a deliberate edit to this file.
+ExecStart=/opt/sentinel/.venv/bin/python scripts/run_validator.py \
+    --netuid ${NETUID} \
+    --wallet ${WALLET} \
+    --hotkey ${HOTKEY} \
+    --network test \
+    --measurement ${MEASUREMENT}
+
+# A validator that stops does not merely earn less. After activity_cutoff, 5000
+# blocks or about 16h40m, it counts as inactive, and every miner it was scoring
+# drops to zero incentive because nothing else is weighting them. An outage is
+# visible on the metagraph to anyone who looks.
+Restart=always
+# Longer than the miner's 10s. The usual reason this process dies is an
+# unreachable chain endpoint, and reconnecting every ten seconds through an RPC
+# outage is how you get rate limited by the thing you are waiting for.
+RestartSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# read-only rather than true: the hotkey is read from ~/.bittensor/wallets at
+# every start, and ProtectHome=true would hide it. Nothing here writes to home.
+ProtectHome=read-only
+ReadWritePaths=/opt/sentinel
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

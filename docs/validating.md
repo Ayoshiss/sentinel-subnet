@@ -109,8 +109,49 @@ Two other parameters are worth knowing. `activity_cutoff` is 5000 blocks, about
 `immunity_period` is the same, so a newly registered miner cannot be pruned for
 its first 17 hours.
 
-For a long-lived deployment, adapt `deploy/sentinel-miner.service`. The same
-`Restart=always` reasoning applies.
+### Keeping it running
+
+A validator that stops is not just idle. After `activity_cutoff` it counts as
+inactive, and the miners it was scoring fall to zero incentive, because nothing
+else is weighting them. That is visible on the metagraph to anyone who looks at
+the subnet, so an outage costs more than the rounds it misses.
+
+Run it under systemd rather than in a terminal. `deploy/sentinel-validator.service`
+and `deploy/validator.env.example` are in this repository:
+
+```bash
+sudo useradd --system --create-home --shell /usr/sbin/nologin sentinel
+sudo mkdir -p /etc/sentinel
+sudo install -m 0640 -o root -g sentinel \
+    deploy/validator.env.example /etc/sentinel/validator.env
+sudo $EDITOR /etc/sentinel/validator.env
+
+sudo cp deploy/sentinel-validator.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now sentinel-validator
+journalctl -u sentinel-validator -f
+```
+
+**Only the hotkey belongs on that machine.** Weight extrinsics are signed by the
+hotkey, never the coldkey, which is why this runs unattended with no password.
+Copy the hotkey file and `coldkeypub.txt`, which is a public key, into
+`/home/sentinel/.bittensor/wallets/<wallet>/`. Do not copy the coldkey. Someone
+who takes that box can set weights as you on one subnet; they cannot move,
+unstake or spend anything.
+
+**Do not run two validators on the same hotkey.** `weights_rate_limit` is 100
+blocks, so the second submission inside that window is rejected on-chain, and
+you end up debugging a rate limit that is working correctly. Stop the one on
+your laptop before enabling the service.
+
+### Where to run it
+
+Validating needs no special hardware. It verifies attestations rather than
+producing them, so there is no SEV-SNP requirement and no confidential VM to
+pay for. Any always-on Linux box will do, and a free-tier `e2-micro` is enough.
+
+A laptop is the one option that does not work. It sleeps, and a sleeping
+validator goes inactive in under 17 hours.
 
 ---
 
