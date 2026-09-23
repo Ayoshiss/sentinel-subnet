@@ -19,20 +19,48 @@ from a miner, since a miner supplying its own approved measurement is grading it
 own homework.
 
 ```
-2d24cf9624ee36449e50c6c84042540b05898f6559f02741b7b354e0cc2ed18d108352ade7dfc4cecce4fa974e51c773
+ccdc5cf01ba25526bd65503d95931b787b4385a3277cfe4448addf9c3e894948ae8cf7b099620e3e22717de2fb5d26fa
 ```
 
-GCP `ubuntu-2204-lts` on `n2d-standard-2` with SEV-SNP, AMD Milan. Confirmed
-identical across three separate launches on two chips, so the image measures
-reproducibly. Read it on your own VM with:
+GCP image `ubuntu-2204-jammy-v20260826` on `n2d-standard-2` with SEV-SNP, AMD
+Milan, in `us-central1-c`. The exact image name matters, not the `ubuntu-2204-lts`
+family: the family moves, and a different image measures differently.
+
+Read it on your own VM with:
 
 ```bash
 sudo .venv/bin/python scripts/run_miner.py --print-measurement
 ```
 
-**This value changes when GCP rotates the base image**, and every miner then
-fails at once. That coordination problem is unsolved and is one of the things
-worth arguing about in the subnet channel.
+### The measurement is not stable across zones, and that is a real problem
+
+Until 2026-09-23 this file published `2d24cf96...c773`, measured in
+`us-central1-a`. That value was confirmed identical across three launches on two
+different chips, so within one zone it is genuinely reproducible.
+
+Then the VM was rebuilt from a **snapshot of the same disk** in `us-central1-c`,
+because `us-central1-a` and `-b` had no SEV-SNP capacity. Same image, same bytes,
+same code. The measurement came back different, and the miner refused to serve,
+which is the control behaving correctly.
+
+What changed is the host side, the firmware the hypervisor loads into the guest
+at launch, which the measurement covers and the operator does not control.
+
+**The consequence is not small.** A single pinned value cannot describe a fleet
+of miners. Two honest operators running byte-identical images in two zones of the
+same cloud produce two different measurements, and a validator pinning one of them
+scores the other zero. Everything below follows from that:
+
+- Validators currently pin exactly one value, so today the subnet only works if
+  every miner runs in the same zone of the same cloud on the same image.
+- The fix is for validators to accept a **set** of approved measurements, one per
+  platform and zone, published here and verifiable by anyone who rebuilds.
+- Until that ships, a miner elsewhere will be refused however honest it is. This
+  is tracked as open work rather than solved.
+
+If you are running a miner and your measurement does not match, that is expected,
+and it is worth saying so in the subnet channel so the value can be published
+alongside this one rather than treated as a failure.
 
 **What it does and does not cover.** It covers the image that booted. It does not
 cover the application running on top of it, so an operator with root in their own
