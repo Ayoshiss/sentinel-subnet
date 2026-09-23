@@ -46,6 +46,11 @@ logger = logging.getLogger("sentinel.miner")
 
 RESOURCE = "customer-db"
 
+#: The allowlist is refreshed from chain rather than read per request, so an
+#: RPC outage cannot stop the miner answering. A stale list is a far better
+#: failure than a miner that goes dark for something it did not cause.
+ALLOWLIST_REFRESH_SECONDS = 600
+
 #: ServeAxon is rate limited per neuron (50 blocks by default), and a published
 #: endpoint does not expire. Re-publishing hourly is enough to recover from a
 #: chain-side loss without ever tripping the limit.
@@ -125,6 +130,74 @@ def build_verifier(silicon, product: str, measurement_hex: str):
 
 # --- assembly -----------------------------------------------------------------
 
+def resolve_allowlist(args) -> set[str] | None:
+    """Who may call this miner. None means anyone, and says so loudly.
+
+    Fails closed: if validators cannot be read from chain and no hotkey was
+    named explicitly, the miner refuses to start rather than serving the
+    network at large. Opening it has to be a decision someone typed.
+    """
+    if args.allow_any:
+        logger.warning(
+            "AUTHORISATION DISABLED: any registered hotkey may query this "
+            "enclave, including arbitrary reads of whatever database it is "
+            "attached to. Never run this against real data."
+        )
+        return None
+
+    allowed = set(args.allow_hotkey)
+    if not args.no_allow_validators:
+        import asyncio
+
+        import bittensor as bt
+
+        from sentinel.chain import validator_hotkeys
+
+        async def _fetch() -> set[str]:
+            async with bt.Subtensor(args.endpoint) as st:
+                return await validator_hotkeys(st, args.netuid)
+
+        try:
+            found = asyncio.run(_fetch())
+            logger.info("allowlist: %d validators on netuid %d", len(found), args.netuid)
+            allowed |= found
+        except Exception as exc:  # noqa: BLE001 - chain trouble must be explicit
+            if not allowed:
+                raise SystemExit(
+                    f"could not read validators from chain ({exc}) and no "
+                    "--allow-hotkey was given. Refusing to start rather than "
+                    "serving every hotkey on the network. Pass --allow-hotkey, "
+                    "or --allow-any if this enclave holds nothing real."
+                ) from exc
+            logger.warning("could not refresh validators (%s); using %d named hotkeys",
+                           exc, len(allowed))
+
+    logger.info("allowlist: %d hotkeys may call this miner", len(allowed))
+    return allowed
+
+
+async def refresh_allowlist(args, allowed: set[str], stop: threading.Event) -> None:
+    """Keep the allowlist current. On failure the previous set stands."""
+    import bittensor as bt
+
+    from sentinel.chain import validator_hotkeys
+
+    explicit = set(args.allow_hotkey)
+    while not stop.is_set():
+        stop.wait(ALLOWLIST_REFRESH_SECONDS)
+        if stop.is_set():
+            break
+        try:
+            async with bt.Subtensor(args.endpoint) as st:
+                found = await validator_hotkeys(st, args.netuid)
+            # Mutated in place: the handler holds this same object.
+            allowed.clear()
+            allowed.update(explicit | found)
+            logger.info("allowlist refreshed, %d hotkeys", len(allowed))
+        except Exception as exc:  # noqa: BLE001 - a stale list beats no miner
+            logger.warning("allowlist refresh failed, keeping previous: %s", exc)
+
+
 def build_miner(args, hotkey_ss58: str):
     """Wire chip to broker to enclave to MCP, and return a server ready to run."""
     silicon, real = open_silicon(args.allow_mock)
@@ -160,8 +233,9 @@ def build_miner(args, hotkey_ss58: str):
     mcp = MCPServer()
     mcp.register(PostgresQueryTool(open_database(credentials, args.seed)))
 
-    handler = MinerHandler(enclave, mcp, hotkey_ss58=hotkey_ss58)
-    return make_server(handler, args.bind, args.port), enclave
+    allowed = resolve_allowlist(args)
+    handler = MinerHandler(enclave, mcp, hotkey_ss58=hotkey_ss58, allowed_hotkeys=allowed)
+    return make_server(handler, args.bind, args.port), enclave, allowed
 
 
 DEFAULT_SEED = pathlib.Path(__file__).parent / "miner-seed.sql"
@@ -244,6 +318,16 @@ def main() -> int:
                    help="run without SEV-SNP, for wiring tests only")
     p.add_argument("--print-measurement", action="store_true",
                    help="print this VM's launch measurement and exit")
+    # Who may call. Authentication proves a caller holds a hotkey; it says
+    # nothing about whether they should be querying this enclave. Left open,
+    # any hotkey on the network can run arbitrary reads against whatever
+    # database the enclave is attached to.
+    p.add_argument("--allow-hotkey", action="append", default=[], metavar="SS58",
+                   help="permit this hotkey to call; repeat for more")
+    p.add_argument("--no-allow-validators", action="store_true",
+                   help="do not auto-permit validators holding a permit on this netuid")
+    p.add_argument("--allow-any", action="store_true",
+                   help="permit ANY registered hotkey; demos only, never with real data")
     p.add_argument("--no-chain", action="store_true",
                    help="serve without publishing on-chain")
     args = p.parse_args()
@@ -279,7 +363,7 @@ def main() -> int:
         wallet = bt.Wallet(name=args.wallet, hotkey=args.hotkey)
         hotkey_ss58 = wallet.hotkey.ss58_address
 
-    server, enclave = build_miner(args, hotkey_ss58)
+    server, enclave, allowed = build_miner(args, hotkey_ss58)
     stop = threading.Event()
 
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -293,6 +377,17 @@ def main() -> int:
 
         threading.Thread(
             target=lambda: asyncio.run(publish_forever(args, wallet, stop)),
+            daemon=True,
+        ).start()
+
+    # Validators come and go, so the allowlist has to as well. Runs even with
+    # --no-chain: not publishing an endpoint is a different decision from not
+    # reading who is allowed to call.
+    if allowed is not None and not args.no_allow_validators:
+        import asyncio
+
+        threading.Thread(
+            target=lambda: asyncio.run(refresh_allowlist(args, allowed, stop)),
             daemon=True,
         ).start()
 

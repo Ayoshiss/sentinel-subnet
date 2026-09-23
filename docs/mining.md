@@ -128,6 +128,28 @@ holds no private key for. It never signs with the hotkey: it verifies its
 callers' signatures, and its own answers are signed by the chip. If the VM is
 compromised, the attacker gets a miner that answers queries, not your identity.
 
+### Who is allowed to call you
+
+Checking a signature proves a caller holds a hotkey. It says nothing about
+whether they should be querying your enclave, and the query tool takes SQL, so
+an unrestricted miner lets any hotkey on the network run reads against whatever
+database it is attached to.
+
+So the miner keeps an allowlist. By default that is the validators holding a
+permit on the subnet, read from chain at startup and refreshed every ten
+minutes. If the chain cannot be reached the previous list stands, because a
+miner that goes dark during an RPC outage scores zero for something that is not
+its fault.
+
+```bash
+--allow-hotkey 5Fdv...ddf    # permit a specific caller, repeatable
+--no-allow-validators        # use only the hotkeys named above
+--allow-any                  # permit anyone: demos only, never real data
+```
+
+With no list and no reachable chain the miner refuses to start rather than
+serving everyone. Opening it up has to be something you typed.
+
 ## 6. Publish the endpoint
 
 From your laptop, where the wallet actually lives:

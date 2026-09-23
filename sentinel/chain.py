@@ -136,6 +136,26 @@ def _endpoint(neuron: Any) -> str | None:
     return f"{ip}:{port}" if ip and port else None
 
 
+async def validator_hotkeys(subtensor: Any, netuid: int) -> set[str]:
+    """Hotkeys permitted to set weights on `netuid`.
+
+    A miner uses this as its allowlist. Authentication proves a caller holds
+    some hotkey; it says nothing about whether that caller has any business
+    querying the enclave. On a subnet the answer is validators, because
+    challenging miners is what they are for.
+
+    Deliberately a snapshot rather than a per-request lookup: putting a chain
+    round trip in the authentication path would make the miner's availability
+    depend on the chain's, and a miner that stops answering during an RPC
+    outage scores zero for something that is not its fault.
+    """
+    metagraph = await fetch_metagraph(subtensor, netuid)
+    return {
+        neuron.hotkey for neuron in metagraph.neurons
+        if getattr(neuron, "validator_permit", False)
+    }
+
+
 async def has_validator_permit(subtensor: Any, netuid: int, hotkey_ss58: str) -> bool:
     """Whether this hotkey may set weights.
 

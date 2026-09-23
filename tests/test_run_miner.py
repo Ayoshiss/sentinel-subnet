@@ -50,6 +50,15 @@ def daemon_args(daemon, **overrides):
         seed=daemon.DEFAULT_SEED,
         bind="127.0.0.1",
         port=0,
+        # Authorisation as the daemon now defaults it: an explicit allowlist,
+        # and no chain lookup in a unit test. The caller below is named, so a
+        # regression that drops the allowlist check would not show up here,
+        # while a regression that wrongly refuses a permitted caller would.
+        allow_hotkey=[Keypair.create_from_uri("//Validator").ss58_address],
+        no_allow_validators=True,
+        allow_any=False,
+        netuid=554,
+        endpoint="test",
     )
     for key, value in overrides.items():
         setattr(args, key, value)
@@ -60,13 +69,37 @@ def daemon_args(daemon, **overrides):
 def running_miner(daemon):
     """The daemon's own `build_miner`, serving on a free port."""
     hotkey = Keypair.create_from_uri("//DaemonMiner")
-    server, enclave = daemon.build_miner(daemon_args(daemon), hotkey.ss58_address)
+    server, enclave, _ = daemon.build_miner(daemon_args(daemon), hotkey.ss58_address)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         yield hotkey, f"http://127.0.0.1:{server.server_port}", enclave
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_the_daemon_refuses_a_caller_not_on_the_allowlist(running_miner):
+    """The daemon sets an allowlist, not just the library supporting one.
+
+    The handler's own enforcement was always tested. What was not, and what was
+    therefore false in production, is that `run_miner.py` ever passed a list:
+    it did not, so every hotkey on the network could call the enclave and run
+    arbitrary reads against whatever database it was attached to. Found by an
+    outside operator on 2026-09-23, against seed data.
+    """
+    hotkey, base_url, _ = running_miner
+    stranger = MinerEvaluator(
+        Keypair.create_from_uri("//Stranger"), APPROVED, latency_ceiling_ms=60_000
+    )
+
+    outcomes = stranger.evaluate_round(
+        [MinerTarget(uid=0, hotkey_ss58=hotkey.ss58_address, base_url=base_url)]
+    )
+
+    outcome = outcomes[0]
+    assert not outcome.verified
+    assert outcome.error is not None
+    assert "not permitted" in outcome.error or "401" in outcome.error, outcome.error
 
 
 def test_the_daemon_as_configured_passes_a_validator_round(running_miner):
@@ -100,7 +133,7 @@ def test_an_unseeded_daemon_fails_the_probe_rather_than_serving_nothing(daemon):
     it serves, its attestations are perfectly valid. Only the answer is missing.
     """
     hotkey = Keypair.create_from_uri("//UnseededMiner")
-    server, _ = daemon.build_miner(
+    server, _, _ = daemon.build_miner(
         daemon_args(daemon, seed=None), hotkey.ss58_address
     )
     threading.Thread(target=server.serve_forever, daemon=True).start()
