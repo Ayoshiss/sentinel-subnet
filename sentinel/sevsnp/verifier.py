@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 import pathlib
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Iterable
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -112,7 +112,10 @@ def min_tcb_for(product: str) -> dict[str, int]:
 class SevSnpPolicy:
     """What a report must prove before it is accepted."""
 
-    approved_measurement: bytes
+    #: One measurement, or several. Several because the value covers the host
+    #: firmware as well as the image, so the same disk in another zone measures
+    #: differently. See `attestation.approved_set`.
+    approved_measurement: bytes | Iterable[bytes]
     #: Minimum acceptable TCB components. A report below any of these is
     #: refused: approved code on vulnerable firmware is still exploitable.
     min_bootloader: int = 0
@@ -123,8 +126,16 @@ class SevSnpPolicy:
     #: by its host, so a report from one proves nothing about confidentiality.
     allow_debug: bool = False
 
+    @property
+    def approved(self) -> frozenset[bytes]:
+        """The approved measurements, however many were supplied."""
+        value = self.approved_measurement
+        if isinstance(value, (bytes, bytearray)):
+            return frozenset({bytes(value)})
+        return frozenset(bytes(v) for v in value)
+
     def check(self, report: AttestationReportBlob) -> None:
-        if report.measurement != self.approved_measurement:
+        if report.measurement not in self.approved:
             raise VerificationError(
                 f"launch measurement mismatch (code was tampered): "
                 f"got {report.measurement.hex()[:32]}…"

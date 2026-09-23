@@ -91,8 +91,14 @@ your setup without spending a transaction or publishing a bad weight set.
 .venv/bin/python scripts/run_validator.py \
   --netuid 554 --network test \
   --wallet <your-wallet> --hotkey sentinel-validator \
-  --measurement <the measurement>
+  --measurement <a measurement> --measurement <another>
 ```
+
+`--measurement` is repeatable, and usually should be. The value covers the host
+firmware as well as the image, so honest miners on different hosts measure
+differently: moving one miner between zones of the same cloud changed it, with
+the same disk. Pin one value and you score every honest miner elsewhere zero.
+Take the current list from TESTNET.md.
 
 Default interval is 22 minutes. The limit that actually bites is
 `weights_rate_limit`, 100 blocks on 554, which is almost exactly 20 minutes at

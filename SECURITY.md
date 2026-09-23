@@ -32,9 +32,6 @@ boot and still produce a valid attestation. We tested this on our own live miner
 and it scored full marks while serving fabricated data. dm-verity does not fix it
 on GCP, because the kernel command line is not covered by the measurement there.
 
-**The scoring rubric under-punishes dishonesty.** A caching cheat scores 0.95
-against an honest but slow miner's 0.887. Published in `docs/results.md`.
-
 **Correctness is decided by agreement between miners**, which is meaningless
 with one miner and fragile with few. It also cannot survive real customers, where
 no two miners see the same data.

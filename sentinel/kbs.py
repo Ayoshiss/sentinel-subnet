@@ -30,6 +30,7 @@ unchanged either way. Tracked in ROADMAP.md under Milestone 2.
 from __future__ import annotations
 
 import time
+from typing import Iterable
 from dataclasses import dataclass, field
 
 from .attestation import (
@@ -52,7 +53,9 @@ class CredentialReleaseError(Exception):
 class ReleasePolicy:
     """What an enclave must prove before any secret is released."""
 
-    approved_measurement: str
+    #: One measurement, or several: identical code measures differently on
+    #: different hosts, so a single value describes one machine, not a fleet.
+    approved_measurement: str | Iterable[str]
     min_tcb: int = 7
     nonce_ttl_seconds: float = 60.0
 

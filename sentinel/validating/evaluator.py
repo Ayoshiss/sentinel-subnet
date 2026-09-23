@@ -25,6 +25,7 @@ from typing import Any, Iterable, Mapping
 
 from ..attestation import (
     AttestationReport,
+    approved_set,
     VerificationError,
     bind_response,
     new_nonce,
@@ -90,7 +91,7 @@ class MinerEvaluator:
     def __init__(
         self,
         wallet: Any,
-        approved_measurement: str,
+        approved_measurement: str | Iterable[str],
         *,
         min_tcb: int = 7,
         latency_target_ms: float = DEFAULT_LATENCY_TARGET_MS,
@@ -100,7 +101,10 @@ class MinerEvaluator:
         sevsnp_min_tcb: Mapping[str, int] | None = None,
     ) -> None:
         self.wallet = wallet
-        self.approved_measurement = approved_measurement
+        #: One value or many. The measurement covers host firmware as well as
+        #: the image, so honest miners in different zones measure differently
+        #: and a single pin would score all but one of them zero.
+        self.approved_measurement = approved_set(approved_measurement)
         #: EPYC product line, which selects AMD's root. Wrong here means every
         #: real-silicon miner fails, so it is explicit rather than sniffed.
         self.product = product
@@ -279,7 +283,7 @@ class MinerEvaluator:
         verifier = SevSnpVerifier(
             self.product,
             SevSnpPolicy(
-                approved_measurement=bytes.fromhex(self.approved_measurement),
+                approved_measurement=[bytes.fromhex(m) for m in self.approved_measurement],
                 **(self.sevsnp_min_tcb or min_tcb_for(self.product)),
             ),
             chain=chain,

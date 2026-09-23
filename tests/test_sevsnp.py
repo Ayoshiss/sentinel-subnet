@@ -491,6 +491,38 @@ def test_real_guest_was_not_debuggable():
     SevSnpPolicy(approved_measurement=r.measurement).check(r)
 
 
+# --- more than one approved measurement -------------------------------------
+
+def test_a_second_approved_measurement_is_accepted(chain, vcek_key, vcek):
+    """Identical code measures differently on different hosts.
+
+    Proven on live hardware 2026-09-23: the miner moved from us-central1-a to
+    us-central1-c, rebuilt from a snapshot of the same disk, and the measurement
+    changed because the host firmware did. A single pinned value would have
+    scored an honest miner zero for being in the wrong zone.
+    """
+    policy = SevSnpPolicy(approved_measurement=[OTHER_MEASUREMENT, MEASUREMENT])
+    v = SevSnpVerifier("Milan", policy, chain=chain, offline=True)
+    assert v.verify(build_report(vcek_key, measurement=MEASUREMENT), vcek=vcek)
+    assert v.verify(build_report(vcek_key, measurement=OTHER_MEASUREMENT), vcek=vcek)
+
+
+def test_a_set_still_refuses_everything_else(chain, vcek_key, vcek):
+    """Accepting several is not accepting any."""
+    policy = SevSnpPolicy(approved_measurement=[OTHER_MEASUREMENT])
+    v = SevSnpVerifier("Milan", policy, chain=chain, offline=True)
+    with pytest.raises(VerificationError, match="launch measurement mismatch"):
+        v.verify(build_report(vcek_key, measurement=MEASUREMENT), vcek=vcek)
+
+
+def test_one_measurement_still_works_unchanged(chain, vcek_key, vcek):
+    """A bare value keeps behaving exactly as before, so nothing downstream
+    has to be rewritten to adopt this."""
+    policy = SevSnpPolicy(approved_measurement=MEASUREMENT)
+    v = SevSnpVerifier("Milan", policy, chain=chain, offline=True)
+    assert v.verify(build_report(vcek_key, measurement=MEASUREMENT), vcek=vcek)
+
+
 # --- the firmware floor -------------------------------------------------------
 
 #: Offset of REPORTED_TCB, the version the VCEK was derived under. Inside that

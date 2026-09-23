@@ -139,8 +139,11 @@ if __name__ == "__main__":
     p.add_argument("--endpoint", "--network", dest="endpoint", default="test")
     p.add_argument("--wallet", default="sentinel")
     p.add_argument("--hotkey", default="validator")
-    p.add_argument("--measurement", required=True,
-                   help="the approved launch measurement miners must prove")
+    # Repeatable. Miners on different hosts measure differently through no
+    # fault of their own, so a validator pinning one value scores every honest
+    # miner elsewhere zero. Pass --measurement once per approved platform.
+    p.add_argument("--measurement", required=True, action="append",
+                   help="an approved launch measurement; repeat for each platform")
     p.add_argument("--product", default="Milan", help="EPYC product line")
     p.add_argument("--interval", type=int, default=DEFAULT_INTERVAL_SECONDS)
     # Protocol, not preference. Two validators using different ceilings score the

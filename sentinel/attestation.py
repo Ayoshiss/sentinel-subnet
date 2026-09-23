@@ -29,7 +29,7 @@ import hashlib
 import json
 import secrets
 from dataclasses import dataclass, asdict
-from typing import Protocol
+from typing import Iterable, Protocol
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -184,10 +184,32 @@ class VerificationError(Exception):
     pass
 
 
+def approved_set(value: str | Iterable[str]) -> frozenset[str]:
+    """One measurement or several, normalised to a set.
+
+    A measurement identifies a boot, and identical code boots differently on
+    different hosts: the value covers the firmware the hypervisor loads, which
+    the operator does not control. Moving one miner between zones of the same
+    cloud changed it, with the same disk and the same bytes. So a single pinned
+    value describes one machine, not a fleet, and two honest operators in two
+    zones would score each other zero.
+
+    Accepting a set is not a weakening. Every entry still has to be published
+    and reproducible by anyone who rebuilds that image; what changes is that
+    "approved" stops meaning "the one machine we happened to measure first".
+    """
+    if isinstance(value, str):
+        value = [value]
+    approved = frozenset(v.strip().lower() for v in value if v and v.strip())
+    if not approved:
+        raise ValueError("no approved measurement given")
+    return approved
+
+
 def verify(
     report: AttestationReport,
     verifier: Verifier,
-    approved_measurement: str,
+    approved_measurement: str | Iterable[str],
     expected_nonce: str,
     min_tcb: int = 7,
     expected_report_data: str | None = None,
@@ -195,7 +217,7 @@ def verify(
     """Verify a report. Raises VerificationError on any failed check."""
     if not verifier.valid(report.canonical(), report.signature):
         raise VerificationError("signature invalid (not signed by a genuine chip)")
-    if report.launch_measurement != approved_measurement:
+    if report.launch_measurement.strip().lower() not in approved_set(approved_measurement):
         raise VerificationError("launch measurement mismatch (code was tampered)")
     if report.tcb_level < min_tcb:
         raise VerificationError(f"stale TCB {report.tcb_level} < {min_tcb} (vulnerable firmware)")

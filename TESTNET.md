@@ -51,12 +51,27 @@ of miners. Two honest operators running byte-identical images in two zones of th
 same cloud produce two different measurements, and a validator pinning one of them
 scores the other zero. Everything below follows from that:
 
-- Validators currently pin exactly one value, so today the subnet only works if
-  every miner runs in the same zone of the same cloud on the same image.
-- The fix is for validators to accept a **set** of approved measurements, one per
-  platform and zone, published here and verifiable by anyone who rebuilds.
-- Until that ships, a miner elsewhere will be refused however honest it is. This
-  is tracked as open work rather than solved.
+Validators therefore accept a **set** of approved measurements rather than one.
+Pass `--measurement` once per approved platform:
+
+```bash
+python scripts/run_validator.py --netuid 554 --network test \
+  --wallet <wallet> --hotkey <hotkey> \
+  --measurement ccdc5cf0...26fa \
+  --measurement <another published value>
+```
+
+A miner matching any entry passes; a miner matching none is refused exactly as
+before. Verified on live hardware: with the current value plus a stale one the
+miner scores 0.98, and with only the stale one it scores zero.
+
+**This is not a weakening.** Every entry still has to be published here and
+reproducible by anyone who rebuilds that image. What changes is that "approved"
+stops meaning "the one machine we happened to measure first".
+
+**If you are running a miner and your measurement is not listed**, say so in the
+subnet channel with the image and zone you used, so the value can be published
+alongside these rather than treated as a failure.
 
 If you are running a miner and your measurement does not match, that is expected,
 and it is worth saying so in the subnet channel so the value can be published
