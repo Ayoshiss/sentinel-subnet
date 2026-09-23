@@ -68,7 +68,10 @@ def test_aggregates_and_ordering_work(db):
 
 
 def test_non_select_returns_empty_result():
-    d = SqliteDatabase(Credentials(dsn=DSN, resource=RESOURCE), seed_sql=SEED)
+    """Writes are refused by default, so this asks for one explicitly."""
+    d = SqliteDatabase(
+        Credentials(dsn=DSN, resource=RESOURCE), seed_sql=SEED, read_only=False
+    )
     r = d.query("DELETE FROM findings WHERE contract = ?", ("0xDEF",))
     assert r.columns == [] and r.rows == []
     assert d.query("SELECT COUNT(*) FROM findings").rows == [[2]]
@@ -151,3 +154,34 @@ def test_the_database_is_usable_from_the_threads_that_actually_serve():
         t.join()
 
     assert results == [[[1], [2], [3]]] * 8, results
+
+
+# --- read-only is enforced by the engine, not by reading the SQL --------------
+
+@pytest.mark.parametrize("sql", [
+    "INSERT INTO findings (contract, severity) VALUES ('0xAAA', 'high')",
+    # Every one of these begins with a word the tool's keyword filter allows,
+    # which is why the filter is not the boundary.
+    "REPLACE INTO findings (contract, severity) VALUES ('0xAAA', 'high')",
+    "SELECT * INTO copied FROM findings",
+    "CREATE TABLE sneaky (x int)",
+    "ATTACH DATABASE '/tmp/sentinel-should-not-exist.db' AS other",
+    "PRAGMA query_only = OFF",
+])
+def test_writes_are_refused_however_the_query_is_spelled(sql):
+    """The engine refuses, so a hole in any keyword filter above costs nothing.
+
+    `PRAGMA query_only = OFF` is in the list deliberately: if the connection
+    could turn the guard off, everything else here would be theatre.
+    """
+    d = SqliteDatabase(Credentials(dsn=DSN, resource=RESOURCE), seed_sql=SEED)
+    with pytest.raises(QueryError):
+        d.query(sql)
+    assert d.query("SELECT COUNT(*) FROM findings").rows == [[3]]
+    d.close()
+
+
+def test_reads_still_work_under_the_guard():
+    d = SqliteDatabase(Credentials(dsn=DSN, resource=RESOURCE), seed_sql=SEED)
+    assert d.query("SELECT COUNT(*) FROM findings").rows == [[3]]
+    d.close()

@@ -106,6 +106,24 @@ class MockDatabase:
 
 # --- SQLite backend (dev / CI with real SQL) ----------------------------------
 
+def _read_only_authorizer(action: int, *_: Any) -> int:
+    """Permit reads, refuse everything else, ATTACH and PRAGMA included.
+
+    An allowlist rather than a denylist. Forgetting an entry costs a refused
+    read that somebody reports; forgetting one in a denylist costs a silent
+    write.
+    """
+    import sqlite3
+
+    permitted = {
+        sqlite3.SQLITE_SELECT,
+        sqlite3.SQLITE_READ,
+        sqlite3.SQLITE_FUNCTION,
+        sqlite3.SQLITE_RECURSIVE,
+    }
+    return sqlite3.SQLITE_OK if action in permitted else sqlite3.SQLITE_DENY
+
+
 class SqliteDatabase:
     """A real SQL engine with no server to run.
 
@@ -124,6 +142,7 @@ class SqliteDatabase:
         credentials: Credentials,
         path: str = ":memory:",
         seed_sql: str | None = None,
+        read_only: bool = True,
     ) -> None:
         import sqlite3
         import threading
@@ -146,6 +165,19 @@ class SqliteDatabase:
                 self._conn.executescript(seed_sql)
             except Exception as exc:
                 raise QueryError(f"seed failed: {exc}") from exc
+        # After seeding, never before: the seed is the one legitimate write.
+        #
+        # Enforced by the engine rather than by inspecting SQL. Filtering the
+        # first keyword is a denylist and denylists leak: REPLACE INTO,
+        # EXPLAIN ANALYZE INSERT, WITH x AS (INSERT ...) SELECT and
+        # SELECT ... INTO all begin with a word that is not on the list.
+        #
+        # Not `PRAGMA query_only`, which was tried and is not a boundary: the
+        # caller can turn it off with `PRAGMA query_only = OFF`, and it does not
+        # stop ATTACH creating a file. Both are in the tests. SQLite consults
+        # the authorizer while compiling every statement, and no SQL disables it.
+        if read_only:
+            self._conn.set_authorizer(_read_only_authorizer)
 
     def query(self, sql: str, params: Sequence[Any] = ()) -> QueryResult:
         if self.closed:
@@ -182,7 +214,12 @@ class PostgresDatabase:
     database driver to be installed.
     """
 
-    def __init__(self, credentials: Credentials, connect_timeout: int = 10) -> None:
+    def __init__(
+        self,
+        credentials: Credentials,
+        connect_timeout: int = 10,
+        read_only: bool = True,
+    ) -> None:
         try:
             import psycopg  # noqa: F401
         except ModuleNotFoundError as exc:  # pragma: no cover - env dependent
@@ -199,6 +236,25 @@ class PostgresDatabase:
             self._conn = psycopg.connect(credentials.dsn, connect_timeout=connect_timeout)
         except Exception as exc:
             raise QueryError(f"could not connect to {credentials.resource}: {exc}") from exc
+        # The engine refuses writes, not a keyword filter. See the note in
+        # SqliteDatabase: filtering the first keyword is a denylist and leaks.
+        #
+        # Belt and braces, not a substitute for the credential itself being a
+        # role with SELECT and nothing else. This stops the connection writing;
+        # a restricted role stops it reaching tables it has no business in.
+        # On the connection, not `SET SESSION CHARACTERISTICS`: that is a
+        # session variable and the caller can set it back.
+        #
+        # Still not the whole answer for Postgres. The boundary that matters is
+        # the credential being a role with SELECT on approved views and nothing
+        # else, so data out of scope is unreachable rather than merely
+        # unrequested. This stops the connection writing; the role stops it
+        # reading what it should never see.
+        if read_only:
+            try:
+                self._conn.read_only = True
+            except Exception as exc:
+                raise QueryError(f"could not open a read-only session: {exc}") from exc
 
     def query(self, sql: str, params: Sequence[Any] = ()) -> QueryResult:
         if self.closed:
