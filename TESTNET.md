@@ -32,24 +32,35 @@ Read it on your own VM with:
 sudo .venv/bin/python scripts/run_miner.py --print-measurement
 ```
 
-### The measurement is not stable across zones, and that is a real problem
+### The measurement is not stable across hosts, and that is a real problem
 
 Until 2026-09-23 this file published `2d24cf96...c773`, measured in
 `us-central1-a`. That value was confirmed identical across three launches on two
-different chips, so within one zone it is genuinely reproducible.
+different chips, so on hosts running the same firmware it is reproducible.
 
 Then the VM was rebuilt from a **snapshot of the same disk** in `us-central1-c`,
 because `us-central1-a` and `-b` had no SEV-SNP capacity. Same image, same bytes,
-same code. The measurement came back different, and the miner refused to serve,
+same code. The measurement came back different and the miner refused to serve,
 which is the control behaving correctly.
 
-What changed is the host side, the firmware the hypervisor loads into the guest
-at launch, which the measurement covers and the operator does not control.
+What changed is on the host side. AMD's ABI specification builds the launch
+digest from inputs the hypervisor supplies: page contents, page type, VMPL
+permissions, guest physical address, the order pages are inserted, and the VMSA,
+which means the vCPU count is in there too. The firmware blob the hypervisor
+loads is not part of your disk image and is not yours to pin.
 
-**The consequence is not small.** A single pinned value cannot describe a fleet
-of miners. Two honest operators running byte-identical images in two zones of the
-same cloud produce two different measurements, and a validator pinning one of them
-scores the other zero. Everything below follows from that:
+Google says the same thing about its own platform: small changes in measurement
+inputs, such as firmware updates or a change in measurement order, produce
+different values, which makes them unstable criteria to base a policy on.
+
+**Zone is not the cause, firmware version is.** We observed the change while
+moving zones, and the documented variable is the host's firmware, which rolls out
+unevenly. Two hosts in one zone can differ, and two zones can match.
+
+**The consequence is not small.** A single pinned value cannot describe a fleet.
+Two honest operators running byte-identical images on hosts at different firmware
+levels produce different measurements, and a validator pinning one of them scores
+the other zero. Everything below follows from that:
 
 Validators therefore accept a **set** of approved measurements rather than one.
 Pass `--measurement` once per approved platform:

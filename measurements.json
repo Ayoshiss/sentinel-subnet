@@ -1,0 +1,23 @@
+{
+  "effective_from": 0,
+  "measurements": [
+    {
+      "image": "ubuntu-2204-jammy-v20260826",
+      "machine_type": "n2d-standard-2",
+      "measurement": "ccdc5cf01ba25526bd65503d95931b787b4385a3277cfe4448addf9c3e894948ae8cf7b099620e3e22717de2fb5d26fa",
+      "note": "current Sentinel miner",
+      "observed_in": "us-central1-c",
+      "platform": "gcp"
+    },
+    {
+      "image": "ubuntu-2204-jammy-v20260826",
+      "machine_type": "n2d-standard-2",
+      "measurement": "2d24cf9624ee36449e50c6c84042540b05898f6559f02741b7b354e0cc2ed18d108352ade7dfc4cecce4fa974e51c773",
+      "note": "earlier host firmware; kept so miners still on it are not refused",
+      "observed_in": "us-central1-a",
+      "platform": "gcp"
+    }
+  ],
+  "netuid": 554,
+  "version": 1
+}
