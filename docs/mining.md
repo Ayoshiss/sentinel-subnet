@@ -150,6 +150,22 @@ its fault.
 With no list and no reachable chain the miner refuses to start rather than
 serving everyone. Opening it up has to be something you typed.
 
+### Keeping it alive
+
+A SEV-SNP guest can lose attestation permanently while the process keeps
+running: a timed-out request to the AMD security processor makes the kernel
+disable the VMPCK, and only a reboot brings it back. `/health` returns 503 once
+that has happened rather than reporting healthy from cached identity.
+
+```bash
+sudo cp deploy/sentinel-watchdog.service /etc/systemd/system/
+sudo systemctl enable --now sentinel-watchdog
+```
+
+It reboots after three consecutive 503s and stops after two reboots in an hour,
+because a host whose security processor is failing will fail again and a boot
+loop hides that. See SECURITY.md for the full detail.
+
 ## 6. Publish the endpoint
 
 From your laptop, where the wallet actually lives:

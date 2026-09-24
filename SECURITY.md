@@ -42,6 +42,47 @@ for geography rather than performance.
 If you can make any of these worse than we think, or show that a fix we have
 proposed does not work, that is very much worth reporting.
 
+## Hardware operational limits
+
+Not vulnerabilities, and not ours to fix. Worth knowing before you run a miner,
+because both cost availability rather than confidentiality.
+
+**A guest can lose attestation permanently while still running.** If a request
+to the AMD security processor times out, the kernel driver disables the VMPCK
+rather than risk reusing an initialisation vector, and nothing short of a reboot
+restores it. The refusal is correct: after a timeout the driver cannot know
+whether the firmware consumed that sequence number, and IV reuse would be far
+worse than downtime.
+
+Observed in production on 2026-09-24:
+
+```
+sev-guest: Detected error from ASP request. rc: -110, exitinfo2: 0x200000000
+sev-guest: Disabling vmpck_id 0 to prevent IV reuse.
+```
+
+`rc -110` is a timeout. The miner had been unable to attest for ten hours.
+
+**Which made the failure shape the real problem.** `/health` reported `ok: true`
+throughout, because it served cached identity and never asked whether the chip
+still answered. A miner that looks alive, stays discoverable and proves nothing
+is worse than one that is plainly down. `/health` now returns **503** once a
+`GuestError` has been seen, and the latch is never cleared, because the
+condition it reports cannot clear without a reboot.
+
+**Recovery is a reboot of the guest.** Restarting the service does not help;
+the VMPCK is disabled for the life of the VM.
+
+`deploy/sentinel-watchdog.sh` automates it: it polls `/health`, reboots after
+several consecutive 503s, and stops after two reboots in an hour. The limit
+matters more than the automation. A host with a failing security processor will
+fail again immediately, and a watchdog without a ceiling turns broken hardware
+into a boot loop that reads as flapping. When the limit trips it leaves the
+miner down, which is louder and easier to diagnose. Move to another host.
+
+An unreachable miner, as opposed to a 503, is left alone: systemd already
+restarts the service, and rebooting the host for that would be a large hammer.
+
 ## What is not a vulnerability
 
 - Testnet has no emissions, so there is nothing to steal economically.

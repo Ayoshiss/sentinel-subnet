@@ -27,14 +27,18 @@ def payload(*measurements):
 class FakeChain:
     """A subtensor that returns whatever manifest the test wants."""
 
-    def __init__(self, manifest=None, raises=False):
+    def __init__(self, manifest=None, raises=False, hex_fields=False):
         self.manifest = manifest
         self.raises = raises
+        self.hex_fields = hex_fields
         self.pinned_to = None
 
     def at(self, block):
         self.pinned_to = block
         return self
+
+    def __init_subclass__(cls, **kw):  # pragma: no cover
+        super().__init_subclass__(**kw)
 
     async def read(self, name, **params):
         if self.raises:
@@ -42,6 +46,10 @@ class FakeChain:
         if self.manifest is None:
             return None
         head, url = self.manifest
+        if self.hex_fields:
+            # The shape the real SDK returns: a 0x hex STRING, not bytes.
+            return {"fields": [{f"Raw{len(head)}": "0x" + head.encode().hex()},
+                               {f"Raw{len(url)}": "0x" + url.encode().hex()}]}
         return {"fields": [{f"Raw{len(head)}": head.encode()},
                            {f"Raw{len(url)}": url.encode()}]}
 
@@ -190,3 +198,22 @@ def test_a_cached_registry_survives_a_restart(monkeypatch, tmp_path):
 
     restarted = source(fallback=frozenset({A}), cache_path=cache)
     assert restarted.approved_at(100) == {B}, "came back on the cached list"
+
+
+def test_hex_encoded_commitment_fields_are_decoded(monkeypatch):
+    """The shape the real chain returns, which the first version got wrong.
+
+    Published a genuine commitment and could not read it back: the SDK hands
+    fields over as "0x7365..." hex strings rather than bytes, so the manifest
+    parsed as nonsense. That reads as "nothing published", which is silent and
+    keeps every validator on its own local list, which is the exact divergence
+    the registry exists to prevent.
+    """
+    body = payload(B)
+    monkeypatch.setattr("sentinel.registry_source.fetch",
+                        lambda url: json.dumps(body).encode())
+
+    src = source(fallback=frozenset({A}))
+    chain = FakeChain(manifest_for(body, effective_from=0), hex_fields=True)
+    assert run(src.refresh(chain)), "a hex-encoded manifest was not read"
+    assert src.approved_at(100) == {B}

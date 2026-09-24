@@ -172,18 +172,34 @@ async def read_manifest(
 
 
 def _commitment_text(field: Any) -> str | None:
-    """A commitment field as text, whichever shape the SDK hands back."""
-    if isinstance(field, str):
-        return field
+    """A commitment field as text, whichever shape the SDK hands back.
+
+    Three shapes seen in practice, and the third is the one that matters: the
+    SDK returns `{"Raw108": "0x7365..."}`, a hex STRING rather than bytes.
+    Passing that through unchanged parses as a manifest that makes no sense,
+    which reads as "nothing published" and silently keeps every validator on its
+    local list. Found by publishing a real commitment and failing to read it.
+    """
     if isinstance(field, bytes):
         return field.decode(errors="replace")
+    if isinstance(field, str):
+        return _from_hex(field)
     if isinstance(field, dict):
-        for value in field.values():  # {"Raw108": b"..."}
+        for value in field.values():
             if isinstance(value, (bytes, bytearray)):
                 return bytes(value).decode(errors="replace")
             if isinstance(value, str):
-                return value
+                return _from_hex(value)
     return None
+
+
+def _from_hex(value: str) -> str:
+    if value.startswith("0x"):
+        try:
+            return bytes.fromhex(value[2:]).decode(errors="replace")
+        except ValueError:
+            return value
+    return value
 
 
 async def validator_hotkeys(subtensor: Any, netuid: int) -> set[str]:

@@ -1,0 +1,30 @@
+[Unit]
+Description=Sentinel miner watchdog, reboots on a dead chip
+After=sentinel-miner.service
+Wants=sentinel-miner.service
+
+[Service]
+Type=simple
+# Root, because it reboots the host. That is the whole job, and it is why the
+# script does nothing else: the smaller the thing running as root, the easier
+# it is to convince yourself it is safe.
+User=root
+ExecStart=/opt/sentinel/deploy/sentinel-watchdog.sh
+
+Environment=HEALTH_URL=http://127.0.0.1:8091/health
+Environment=CHECK_INTERVAL=60
+Environment=FAILURES_BEFORE_REBOOT=3
+# Two reboots an hour. A host whose security processor is failing will fail
+# again straight after a reboot, and a watchdog without a ceiling turns a broken
+# machine into a boot loop that reads as flapping rather than as hardware.
+Environment=MAX_REBOOTS=2
+Environment=WINDOW_SECONDS=3600
+
+Restart=always
+RestartSec=30
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
