@@ -92,6 +92,18 @@ class MinerHandler:
         #: Optional allowlist, e.g. the validator hotkeys in the metagraph.
         #: None means any registered hotkey may call.
         self.allowed_hotkeys = allowed_hotkeys
+        #: Set when the chip stops answering, and never cleared.
+        #:
+        #: A SEV-SNP guest can lose its firmware channel permanently while the
+        #: process keeps running: if a request to the AMD security processor
+        #: times out, the kernel disables the VMPCK rather than risk reusing an
+        #: IV, and nothing but a reboot brings it back. Observed in production
+        #: on 2026-09-24, rc -110 from the ASP, dead for ten hours.
+        #:
+        #: Without this the miner answers /health with ok=true the whole time,
+        #: which is the worst shape a failure can take: alive, discoverable,
+        #: scoring zero, and looking fine to whoever is watching.
+        self.attestation_error: str | None = None
 
     # -- routing ---------------------------------------------------------------
 
@@ -119,6 +131,10 @@ class MinerHandler:
         except ToolError as exc:
             return Response(400, {"error": str(exc), "type": "ToolError"})
         except Exception as exc:  # noqa: BLE001 - never leak internals to a caller
+            if type(exc).__name__ == "GuestError":
+                # Matched by name rather than imported: the mock path must not
+                # depend on the hardware package being installed.
+                self.attestation_error = str(exc)
             return Response(500, {"error": f"internal error: {type(exc).__name__}"})
 
     # -- routes ----------------------------------------------------------------
@@ -135,6 +151,19 @@ class MinerHandler:
         by design, and the chain is checked against a root pinned in the
         verifier, so a substituted one fails.
         """
+        if self.attestation_error is not None:
+            # 503, not 200 with a flag: a monitor that only reads status codes
+            # should see this, and so should anything deciding whether to route
+            # work here.
+            return Response(503, {
+                "ok": False,
+                "hotkey": self.hotkey_ss58,
+                "error": "attestation unavailable; the chip is not answering",
+                "detail": self.attestation_error,
+                "recovery": "a disabled VMPCK needs a host reboot; restarting "
+                            "the process does not clear it",
+            })
+
         body: dict[str, object] = {
             "ok": True,
             "hotkey": self.hotkey_ss58,

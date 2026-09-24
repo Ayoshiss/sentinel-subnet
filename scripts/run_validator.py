@@ -26,6 +26,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sentinel.chain import discover_miners, has_validator_permit
+from sentinel.registry_source import RegistrySource
 from sentinel.validating import MinerEvaluator, MinerTarget
 from sentinel.validating.scoring import DEFAULT_LATENCY_CEILING_MS
 from sentinel.validating.weights import set_weights
@@ -43,11 +44,18 @@ logger = logging.getLogger("sentinel.validator")
 DEFAULT_INTERVAL_SECONDS = 22 * 60
 
 
-async def one_round(st, args, wallet, evaluator) -> None:
+async def one_round(st, args, wallet, evaluator, source) -> None:
     """Discover, challenge, score, submit. Any failure ends this round, not the run."""
     import bittensor as bt
 
     val_hotkey = wallet.hotkey.ss58_address
+
+    # Refresh before scoring, not on a timer of its own: the approved list that
+    # matters is the one in force for this round, and reading it here means a
+    # round never scores against a list nobody else is using.
+    block = int((await st.read("metagraph", netuid=args.netuid))["block"])
+    await source.refresh(st)
+    evaluator.approved_measurement = source.approved_at(block)
 
     miners = await discover_miners(st, args.netuid, exclude_hotkeys=[val_hotkey])
     if not miners:
@@ -97,9 +105,20 @@ async def main(args) -> int:
     import bittensor as bt
 
     wallet = bt.Wallet(name=args.wallet, hotkey=args.hotkey)
+
+    # --measurement stops being the source of truth and becomes the fallback.
+    # The chain is authoritative, because every validator reading the same
+    # commitment at the same height is the only way two of them cannot disagree
+    # about which miners are honest.
+    source = RegistrySource(
+        args.netuid,
+        args.registry_hotkey,
+        fallback=frozenset(args.measurement or []),
+        cache_path=pathlib.Path(args.registry_cache).expanduser(),
+    )
     evaluator = MinerEvaluator(
         wallet.hotkey,
-        args.measurement,
+        source.fallback or {"0" * 96},
         latency_ceiling_ms=args.latency_ceiling_ms,
         product=args.product,
     )
@@ -116,7 +135,7 @@ async def main(args) -> int:
     while not stop.is_set():
         try:
             async with bt.Subtensor(args.endpoint) as st:
-                await one_round(st, args, wallet, evaluator)
+                await one_round(st, args, wallet, evaluator, source)
         except Exception as exc:  # noqa: BLE001 - one bad round must not end the run
             logger.warning("round failed: %s", exc)
 
@@ -142,8 +161,18 @@ if __name__ == "__main__":
     # Repeatable. Miners on different hosts measure differently through no
     # fault of their own, so a validator pinning one value scores every honest
     # miner elsewhere zero. Pass --measurement once per approved platform.
-    p.add_argument("--measurement", required=True, action="append",
-                   help="an approved launch measurement; repeat for each platform")
+    p.add_argument("--measurement", action="append", default=[],
+                   help="fallback approved measurement, used only when the "
+                        "on-chain registry cannot be read; repeat for each platform")
+    # Whose commitment carries the registry. The subnet owner by default,
+    # because approving an image is an owner decision, and the pallet requires
+    # the publishing hotkey to be registered on the subnet.
+    p.add_argument("--registry-hotkey",
+                   default="5H5uDA7TRyisfPLgRJaFYhVZEQ7mhKPb2mZJVwSw6UvKo3RV",
+                   help="hotkey whose on-chain commitment holds the measurement registry")
+    p.add_argument("--registry-cache", default="~/.cache/sentinel/registry.json",
+                   help="last verified registry, so a restart during an outage "
+                        "does not silently fall back to --measurement")
     p.add_argument("--product", default="Milan", help="EPYC product line")
     p.add_argument("--interval", type=int, default=DEFAULT_INTERVAL_SECONDS)
     # Protocol, not preference. Two validators using different ceilings score the

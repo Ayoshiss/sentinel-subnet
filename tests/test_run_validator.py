@@ -44,6 +44,36 @@ def args(**over):
 WALLET = SimpleNamespace(hotkey=SimpleNamespace(ss58_address="5Validator"))
 
 
+class FakeChain:
+    """Enough of a subtensor for one_round: it only asks for the head block."""
+
+    def __init__(self, block=8_000_000):
+        self.block = block
+
+    async def read(self, name, **params):
+        return {"block": self.block}
+
+
+class FakeSource:
+    """A registry that is already resolved.
+
+    Scoring against the on-chain list is covered in test_registry_source; here
+    the point is that one_round asks the source rather than reading a flag it
+    was handed at startup.
+    """
+
+    def __init__(self, approved=frozenset({"ab" * 48})):
+        self.approved = approved
+        self.refreshed = 0
+
+    async def refresh(self, st):
+        self.refreshed += 1
+        return False
+
+    def approved_at(self, block):
+        return self.approved
+
+
 def miner(uid=1):
     return SimpleNamespace(uid=uid, hotkey_ss58=f"5Miner{uid}",
                            base_url=f"http://10.0.0.{uid}:8091")
@@ -87,8 +117,33 @@ def run(rv, monkeypatch, *, miners, outcomes, permit) -> Spy:
     monkeypatch.setattr(bittensor, "resolve_signer", lambda w, role: "signer")
 
     evaluator = SimpleNamespace(evaluate_round=lambda targets: outcomes)
-    asyncio.run(rv.one_round(object(), args(), WALLET, evaluator))
+    asyncio.run(rv.one_round(FakeChain(), args(), WALLET, evaluator, FakeSource()))
     return spy
+
+
+def test_a_round_takes_its_measurements_from_the_registry(rv, monkeypatch):
+    """The flag is a fallback; the chain decides what is approved.
+
+    Two validators holding different lists score the same miner differently, and
+    the one that withheld weight from an honest miner accrues no bond in it. So
+    a round must read the list in force for that round rather than whatever it
+    was started with.
+    """
+    async def fake_discover(st, netuid, exclude_hotkeys=None):
+        return []
+
+    monkeypatch.setattr(rv, "discover_miners", fake_discover)
+
+    source = FakeSource(approved=frozenset({"cd" * 48}))
+    evaluator = SimpleNamespace(
+        evaluate_round=lambda targets: [], approved_measurement=frozenset({"ab" * 48})
+    )
+    asyncio.run(rv.one_round(FakeChain(), args(), WALLET, evaluator, source))
+
+    assert source.refreshed == 1, "the registry was not refreshed this round"
+    assert evaluator.approved_measurement == {"cd" * 48}, (
+        "the evaluator kept its startup list instead of the registry's"
+    )
 
 
 def test_no_miners_means_no_submission(rv, monkeypatch):
@@ -142,5 +197,5 @@ def test_dry_run_scores_but_never_writes(rv, monkeypatch):
     monkeypatch.setattr(rv, "set_weights", spy)
 
     evaluator = SimpleNamespace(evaluate_round=lambda targets: [outcome()])
-    asyncio.run(rv.one_round(object(), args(dry_run=True), WALLET, evaluator))
+    asyncio.run(rv.one_round(FakeChain(), args(dry_run=True), WALLET, evaluator, FakeSource()))
     assert spy.calls == []

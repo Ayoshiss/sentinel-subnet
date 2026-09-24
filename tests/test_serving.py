@@ -10,6 +10,7 @@ Runs a real threaded server over a real socket, so the wire format, header
 casing and body framing are exercised rather than mocked.
 """
 
+import json
 import threading
 
 import pytest
@@ -123,6 +124,42 @@ def test_hotkey_allowlist_is_enforced(handler, validator_wallet, miner_wallet):
     r = handler.handle(Request("GET", "/tools", headers))
     assert r.status == 401
     assert "not permitted" in r.payload["error"]
+
+
+# --- a dead chip must not report healthy -------------------------------------
+
+def test_health_reports_a_dead_chip_rather_than_ok(handler, validator_wallet, miner_wallet):
+    """The failure that actually happened, and the shape that made it expensive.
+
+    On 2026-09-24 a request to the AMD security processor timed out, the kernel
+    disabled the VMPCK to avoid reusing an IV, and the miner could not attest
+    anything for ten hours. It answered /health with ok=true throughout, because
+    health reported cached identity and never asked whether the chip still
+    worked. Discoverable, scoring zero, and looking fine.
+    """
+    class DeadChip(Exception):
+        pass
+
+    DeadChip.__name__ = "GuestError"  # matched by name, as the handler does
+
+    def boom(*_args, **_kwargs):
+        raise DeadChip("ioctl failed: VMPCK is disabled")
+
+    handler.enclave.run_attested = boom
+
+    body = json.dumps({"tool": "postgres.query", "arguments": {"sql": "SELECT 1"},
+                       "nonce": "00" * 16, "request_id": "r1"}).encode()
+    headers = signed(validator_wallet, miner_wallet.ss58_address, "POST", "/call", body)
+    assert handler.handle(Request("POST", "/call", headers, body)).status == 500
+
+    health = handler.handle(Request("GET", "/health"))
+    assert health.status == 503, "a miner that cannot attest is not healthy"
+    assert health.payload["ok"] is False
+    assert "reboot" in health.payload["recovery"]
+
+
+def test_health_is_ok_before_anything_has_failed(handler):
+    assert handler.handle(Request("GET", "/health")).payload["ok"] is True
 
 
 # --- health is public ---------------------------------------------------------
