@@ -84,6 +84,10 @@ class Registry:
     #: digest that does not match what they fetch.
     effective_from: int
     images: tuple[ApprovedImage, ...]
+    #: The exact text this was parsed from. Kept so the digest can be recomputed
+    #: without re-deriving it, and so a cached copy round-trips through the same
+    #: verification path as a freshly fetched one rather than a looser one.
+    source: str = ""
 
     @property
     def measurements(self) -> frozenset[str]:
@@ -153,6 +157,7 @@ def parse(
         netuid=int(payload["netuid"]),
         effective_from=effective_from,
         images=images,
+        source=body,
     )
 
 

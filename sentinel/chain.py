@@ -136,6 +136,56 @@ def _endpoint(neuron: Any) -> str | None:
     return f"{ip}:{port}" if ip and port else None
 
 
+async def read_manifest(
+    subtensor: Any, netuid: int, publisher_hotkey: str, block: int | None = None
+) -> tuple[int, str, str] | None:
+    """The approved-measurement manifest a hotkey has committed, or None.
+
+    Returns (effective_from, digest, url).
+
+    The read is pinned to a block. Without pinning, two validators polling a few
+    seconds apart across an update read different state and score the same miner
+    differently, which is the divergence the registry exists to prevent. Pinning
+    costs nothing and removes read-time skew entirely; the manifest's own
+    effective height removes publisher-timing skew. They are not redundant.
+    """
+    from .registry import RegistryError, parse_manifest
+
+    view = subtensor.at(block) if block is not None else subtensor
+    record = await view.read("commitment", netuid=netuid, hotkey_ss58=publisher_hotkey)
+    if not record:
+        return None
+
+    fields = getattr(record, "fields", None) or (
+        record.get("fields") if isinstance(record, dict) else None
+    )
+    texts = [t for t in (_commitment_text(f) for f in (fields or [])) if t]
+    if len(texts) < 2:
+        return None
+
+    try:
+        return parse_manifest(texts[0], texts[1])
+    except RegistryError:
+        # Someone else's commitment, or a format we do not understand. Not an
+        # error: the field is general purpose and other things may use it.
+        return None
+
+
+def _commitment_text(field: Any) -> str | None:
+    """A commitment field as text, whichever shape the SDK hands back."""
+    if isinstance(field, str):
+        return field
+    if isinstance(field, bytes):
+        return field.decode(errors="replace")
+    if isinstance(field, dict):
+        for value in field.values():  # {"Raw108": b"..."}
+            if isinstance(value, (bytes, bytearray)):
+                return bytes(value).decode(errors="replace")
+            if isinstance(value, str):
+                return value
+    return None
+
+
 async def validator_hotkeys(subtensor: Any, netuid: int) -> set[str]:
     """Hotkeys permitted to set weights on `netuid`.
 
