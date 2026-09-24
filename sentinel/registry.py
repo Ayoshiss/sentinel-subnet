@@ -74,9 +74,14 @@ class ApprovedImage:
 class Registry:
     version: int
     netuid: int
-    #: The block height from which these measurements apply. A validator that
-    #: reads a new registry early must keep using the previous one until this
-    #: height, or it diverges from every validator that has not polled yet.
+    #: The block height from which these measurements apply. It is NOT part of
+    #: the file and NOT covered by the digest: it comes from the chain.
+    #:
+    #: Keeping it out of the file removes a whole class of mistake. If the
+    #: height lived in the file, republishing at a new height would change the
+    #: digest, so the file and the commitment would have to be updated in
+    #: lockstep, and getting the order wrong would point every validator at a
+    #: digest that does not match what they fetch.
     effective_from: int
     images: tuple[ApprovedImage, ...]
 
@@ -91,17 +96,25 @@ class Registry:
 def canonical_bytes(payload: dict[str, Any]) -> bytes:
     """The exact bytes the digest is taken over.
 
-    Sorted keys and no whitespace, so that reformatting the file by hand cannot
-    change the digest and silently orphan every validator.
+    Sorted keys and no whitespace, so reformatting the file by hand cannot
+    change the digest and silently orphan every validator. `effective_from` is
+    stripped if present, because scheduling is the chain's business and the
+    file should not change when only the schedule does.
     """
-    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    body = {k: v for k, v in payload.items() if k != "effective_from"}
+    return json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
 
 
 def digest(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_bytes(payload)).hexdigest()
 
 
-def parse(raw: bytes | str, *, expect_digest: str | None = None) -> Registry:
+def parse(
+    raw: bytes | str,
+    *,
+    expect_digest: str | None = None,
+    effective_from: int = 0,
+) -> Registry:
     """Parse a registry file, optionally checking it against a known digest.
 
     `expect_digest` is the whole point of the design: it comes from the chain,
@@ -138,7 +151,7 @@ def parse(raw: bytes | str, *, expect_digest: str | None = None) -> Registry:
     return Registry(
         version=version,
         netuid=int(payload["netuid"]),
-        effective_from=int(payload["effective_from"]),
+        effective_from=effective_from,
         images=images,
     )
 

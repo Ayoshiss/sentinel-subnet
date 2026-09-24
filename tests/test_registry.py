@@ -22,11 +22,10 @@ B = "bb" * 48
 REPO_FILE = pathlib.Path(__file__).parent.parent / "measurements.json"
 
 
-def payload(*measurements, effective_from=0):
+def payload(*measurements):
     return {
         "version": 1,
         "netuid": 554,
-        "effective_from": effective_from,
         "measurements": [
             {
                 "measurement": m,
@@ -60,6 +59,17 @@ def test_reformatting_does_not_change_the_digest():
     p = payload(A)
     pretty = json.dumps(p, indent=4, sort_keys=False) + "\n\n"
     assert parse(pretty, expect_digest=digest(p)).measurements == {A}
+
+
+def test_the_digest_ignores_the_schedule():
+    """Republishing at a new height must not change what validators fetch.
+
+    If the height were covered, the file and the commitment would have to be
+    updated in lockstep, and the wrong order points every validator at a digest
+    that does not match the file they download.
+    """
+    p = payload(A)
+    assert digest(p) == digest(p | {"effective_from": 999_999})
 
 
 def test_a_matching_file_parses():
@@ -96,7 +106,7 @@ def test_a_registry_does_not_apply_before_its_height():
     every validator that has not polled yet, which costs it bond in the miners
     it scores differently.
     """
-    future = parse(json.dumps(payload(B, effective_from=1_000)))
+    future = parse(json.dumps(payload(B)), effective_from=1_000)
     assert not future.active_at(999)
     assert future.active_at(1_000)
 
@@ -111,8 +121,8 @@ def test_overlapping_registries_approve_the_union():
     and an independent validator kept scoring the miner zero until it was told
     the new value by hand.
     """
-    old = parse(json.dumps(payload(A, effective_from=0)))
-    new = parse(json.dumps(payload(B, effective_from=1_000)))
+    old = parse(json.dumps(payload(A)), effective_from=0)
+    new = parse(json.dumps(payload(B)), effective_from=1_000)
 
     assert approved_for([old, new], 999) == {A}
     assert approved_for([old, new], 1_000) == {A, B}
