@@ -234,7 +234,18 @@ def build_miner(args, hotkey_ss58: str):
     mcp.register(PostgresQueryTool(open_database(credentials, args.seed)))
 
     allowed = resolve_allowlist(args)
-    handler = MinerHandler(enclave, mcp, hotkey_ss58=hotkey_ss58, allowed_hotkeys=allowed)
+
+    api_keys = None
+    if args.api_keys:
+        from sentinel.serving.apikeys import ApiKeyStore
+
+        api_keys = ApiKeyStore.from_file(args.api_keys)
+        logger.info("%d API key(s) loaded; non-Bittensor callers may connect", len(api_keys))
+
+    handler = MinerHandler(
+        enclave, mcp, hotkey_ss58=hotkey_ss58,
+        allowed_hotkeys=allowed, api_keys=api_keys,
+    )
     return make_server(handler, args.bind, args.port), enclave, allowed
 
 
@@ -326,6 +337,11 @@ def main() -> int:
                    help="permit this hotkey to call; repeat for more")
     p.add_argument("--no-allow-validators", action="store_true",
                    help="do not auto-permit validators holding a permit on this netuid")
+    # Callers who are not on Bittensor. A customer running this over their own
+    # database has no hotkey, so without this the self-hosted deployment cannot
+    # be used by the people it exists for.
+    p.add_argument("--api-keys", metavar="FILE",
+                   help="JSON of label -> sha256 digest; see scripts/make_api_key.py")
     p.add_argument("--allow-any", action="store_true",
                    help="permit ANY registered hotkey; demos only, never with real data")
     p.add_argument("--no-chain", action="store_true",

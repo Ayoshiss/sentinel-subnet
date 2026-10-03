@@ -126,6 +126,109 @@ def test_hotkey_allowlist_is_enforced(handler, validator_wallet, miner_wallet):
     assert "not permitted" in r.payload["error"]
 
 
+# --- API keys, for callers who are not on Bittensor --------------------------
+
+def call_body():
+    return json.dumps({"tool": "postgres.query", "arguments": {"sql": "SELECT 1"},
+                       "nonce": "00" * 16, "request_id": "r1"}).encode()
+
+
+def test_an_api_key_authenticates_a_caller_with_no_hotkey(handler):
+    """The wall between "this works" and "a customer could try it".
+
+    Every route but /health required a Bittensor hotkey signature, and an
+    enterprise customer running this over their own database does not have one
+    and never will.
+    """
+    from sentinel.serving.apikeys import ApiKeyStore, mint
+
+    key, digest = mint()
+    handler.api_keys = ApiKeyStore({"analytics": digest})
+
+    r = handler.handle(Request("GET", "/tools", {"Authorization": "Bearer " + key}))
+    assert r.status == 200
+    assert "tools" in r.payload
+
+
+def test_an_unknown_api_key_is_refused(handler):
+    from sentinel.serving.apikeys import ApiKeyStore, mint
+
+    _, digest = mint()
+    handler.api_keys = ApiKeyStore({"analytics": digest})
+
+    r = handler.handle(Request("GET", "/tools", {"Authorization": "Bearer sk_sentinel_wrong"}))
+    assert r.status == 401
+    assert "unknown API key" in r.payload["error"]
+
+
+def test_a_key_is_refused_when_keys_are_not_enabled(handler):
+    """Default stays closed: enabling a second way in has to be a decision."""
+    assert handler.api_keys is None
+    r = handler.handle(Request("GET", "/tools", {"Authorization": "Bearer anything"}))
+    assert r.status == 401
+    assert "not enabled" in r.payload["error"]
+
+
+def test_a_rejected_key_does_not_fall_through_to_the_hotkey_path(handler, validator_wallet, miner_wallet):
+    """A bad token must fail, not quietly try the other scheme.
+
+    Falling through would let a caller probe keys and then present a signature
+    on the same request, and would make a wrong key indistinguishable from none.
+    """
+    from sentinel.serving.apikeys import ApiKeyStore, mint
+
+    _, digest = mint()
+    handler.api_keys = ApiKeyStore({"analytics": digest})
+
+    body = call_body()
+    headers = dict(signed(validator_wallet, miner_wallet.ss58_address, "POST", "/call", body))
+    headers["Authorization"] = "Bearer sk_sentinel_wrong"
+
+    r = handler.handle(Request("POST", "/call", headers, body))
+    assert r.status == 401, "a valid signature rescued a bad key"
+
+
+def test_hotkey_auth_still_works_with_keys_enabled(handler, validator_wallet, miner_wallet):
+    from sentinel.serving.apikeys import ApiKeyStore, mint
+
+    _, digest = mint()
+    handler.api_keys = ApiKeyStore({"analytics": digest})
+
+    headers = signed(validator_wallet, miner_wallet.ss58_address, "GET", "/tools")
+    assert handler.handle(Request("GET", "/tools", headers)).status == 200
+
+
+def test_an_api_key_caller_can_run_a_tool_and_gets_an_attested_answer(handler):
+    """Not just a 200: the point is that the answer is still attested."""
+    from sentinel.serving.apikeys import ApiKeyStore, mint
+
+    key, digest = mint()
+    handler.api_keys = ApiKeyStore({"analytics": digest})
+
+    body = call_body()
+    r = handler.handle(Request("POST", "/call", {"Authorization": "Bearer " + key}, body))
+    assert r.status == 200, r.payload
+    assert "attestation" in r.payload and "response_hash" in r.payload
+
+
+def test_key_comparison_is_constant_time():
+    """Pinned by inspection, because no behavioural test can see timing.
+
+    Comparing digests with == returns as soon as two bytes differ, which leaks
+    the shared prefix through response time; over enough requests that is the
+    key. A mutation to == passes every other test in this file, so this is the
+    only thing standing between the safe primitive and a plausible-looking
+    rewrite.
+    """
+    import inspect
+
+    from sentinel.serving import apikeys
+
+    source = inspect.getsource(apikeys.ApiKeyStore.label_for)
+    assert "compare_digest" in source, "key comparison must be constant time"
+    assert "==" not in source.replace("!=", ""), "digest compared with =="
+
+
 # --- a dead chip must not report healthy -------------------------------------
 
 def test_health_reports_a_dead_chip_rather_than_ok(handler, validator_wallet, miner_wallet):

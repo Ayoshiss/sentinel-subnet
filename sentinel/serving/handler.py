@@ -21,16 +21,43 @@ against the chip's public key alone.
 from __future__ import annotations
 
 import json
+import secrets
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from bittensor import http_auth
 
 from ..enclave import Enclave
+from .apikeys import ApiKeyStore
 from ..mcp import MCPServer, ToolError
 
 #: Routes that answer without a signature. Liveness only, no state, no secrets.
 PUBLIC_PATHS = frozenset({"/health"})
+
+
+def _bearer(headers: Mapping[str, str]) -> str | None:
+    """The token from `Authorization: Bearer ...`, header name case-insensitive."""
+    for name, value in headers.items():
+        if name.lower() == "authorization":
+            parts = value.split(None, 1)
+            if len(parts) == 2 and parts[0].lower() == "bearer" and parts[1].strip():
+                return parts[1].strip()
+    return None
+
+
+@dataclass(frozen=True)
+class Identity:
+    """Who is calling, however they proved it.
+
+    The handler needs two things from a caller and no more: something to name it
+    by, and a unique value to fall back on for a request id. Keeping that
+    explicit is what lets a second authentication scheme exist at all, rather
+    than the Bittensor `Caller` type being load-bearing throughout.
+    """
+
+    kind: str          # "hotkey" or "api-key"
+    name: str          # ss58 address, or the key's label
+    nonce_ns: str
 
 
 @dataclass
@@ -79,6 +106,7 @@ class MinerHandler:
         allowed_skew: float = http_auth.DEFAULT_ALLOWED_SKEW,
         require_receiver: bool = True,
         allowed_hotkeys: set[str] | None = None,
+        api_keys: ApiKeyStore | None = None,
     ) -> None:
         self.enclave = enclave
         self.mcp = mcp
@@ -92,6 +120,10 @@ class MinerHandler:
         #: Optional allowlist, e.g. the validator hotkeys in the metagraph.
         #: None means any registered hotkey may call.
         self.allowed_hotkeys = allowed_hotkeys
+        #: Keys for callers who are not on Bittensor. None means the only way in
+        #: is a hotkey signature, which is correct on the subnet and useless to
+        #: a customer running this over their own database.
+        self.api_keys = api_keys
         #: Set when the chip stops answering, and never cleared.
         #:
         #: A SEV-SNP guest can lose its firmware channel permanently while the
@@ -185,7 +217,7 @@ class MinerHandler:
             body["public_key"] = self.enclave.public_key_hex
         return Response(200, body)
 
-    def _call(self, request: Request, caller: http_auth.Caller) -> Response:
+    def _call(self, request: Request, caller: Identity) -> Response:
         """Execute one MCP tool call inside the enclave and attest the result."""
         body = request.json()
         tool = body.get("tool")
@@ -202,7 +234,7 @@ class MinerHandler:
         )
         return Response(200, {"request_id": request_id, **attested.to_dict()})
 
-    def _challenge(self, request: Request, caller: http_auth.Caller) -> Response:
+    def _challenge(self, request: Request, caller: Identity) -> Response:
         """Answer a validator's liveness/integrity challenge with an attestation.
 
         Proves, on demand, that this miner is still the approved image on a
@@ -217,7 +249,23 @@ class MinerHandler:
 
     # -- internals -------------------------------------------------------------
 
-    def _authenticate(self, request: Request) -> http_auth.Caller:
+    def _authenticate(self, request: Request) -> Identity:
+        """Identify the caller by API key if one is presented, else by hotkey.
+
+        A bearer token is checked first and never falls through to the hotkey
+        path on failure. Falling through would let an attacker probe keys and
+        then try signatures on the same request, and would make a rejected key
+        indistinguishable from an absent one.
+        """
+        token = _bearer(request.headers)
+        if token is not None:
+            if self.api_keys is None:
+                raise http_auth.AuthError("API key authentication is not enabled here")
+            label = self.api_keys.label_for(token)
+            if label is None:
+                raise http_auth.AuthError("unknown API key")
+            return Identity(kind="api-key", name=label, nonce_ns=secrets.token_hex(8))
+
         caller = http_auth.verify(
             request.headers,
             request.body,
@@ -231,7 +279,7 @@ class MinerHandler:
         )
         if self.allowed_hotkeys is not None and caller.hotkey_ss58 not in self.allowed_hotkeys:
             raise http_auth.AuthError(f"hotkey {caller.hotkey_ss58} is not permitted")
-        return caller
+        return Identity(kind="hotkey", name=caller.hotkey_ss58, nonce_ns=str(caller.nonce_ns))
 
     @staticmethod
     def _require_nonce(body: Mapping[str, Any]) -> str:

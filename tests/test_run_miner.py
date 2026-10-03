@@ -57,6 +57,7 @@ def daemon_args(daemon, **overrides):
         allow_hotkey=[Keypair.create_from_uri("//Validator").ss58_address],
         no_allow_validators=True,
         allow_any=False,
+        api_keys=None,
         netuid=554,
         endpoint="test",
     )

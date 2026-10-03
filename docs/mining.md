@@ -166,6 +166,28 @@ It reboots after three consecutive 503s and stops after two reboots in an hour,
 because a host whose security processor is failing will fail again and a boot
 loop hides that. See SECURITY.md for the full detail.
 
+### Callers who are not on Bittensor
+
+Validators authenticate with a hotkey signature. A customer running Sentinel
+over their own database has no hotkey, so for that deployment the miner also
+accepts API keys.
+
+```bash
+python scripts/make_api_key.py --label analytics-agent \
+  --keys /etc/sentinel/api-keys.json
+```
+
+The key is printed once and never stored. The file holds SHA-256 digests, so
+leaking it hands over nothing, and losing a key means minting another and
+removing the old label. Start the miner with `--api-keys /etc/sentinel/api-keys.json`
+and the caller sends `Authorization: Bearer <key>`.
+
+One difference worth understanding before choosing it. A signed request carries
+a nonce and a timestamp, so it cannot be replayed. A bearer token has no such
+property: anyone who captures a request can repeat it. Over TLS against
+read-only tools that is usually acceptable, but it is not equivalent, and on the
+subnet you should keep hotkey authentication.
+
 ## 6. Publish the endpoint
 
 From your laptop, where the wallet actually lives:

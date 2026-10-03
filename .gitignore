@@ -11,3 +11,6 @@ snapshot-context.sh
 GO_TO_MARKET.md
 .venv/
 .DS_Store
+
+# Key digests are not secret, but a local one is still nobody's business
+api-keys.json
