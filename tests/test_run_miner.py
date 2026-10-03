@@ -58,6 +58,7 @@ def daemon_args(daemon, **overrides):
         no_allow_validators=True,
         allow_any=False,
         api_keys=None,
+        scope=[],
         netuid=554,
         endpoint="test",
     )

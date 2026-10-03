@@ -35,6 +35,24 @@ from ..mcp import MCPServer, ToolError
 PUBLIC_PATHS = frozenset({"/health"})
 
 
+def _tool_allowed(tool: str, scopes: frozenset[str] | None) -> bool:
+    """Whether a caller limited to `scopes` may call `tool`.
+
+    Tools are named `<scope>.query`, so the scope is the part before the first
+    dot. A tool with no dot belongs to no scope and is reachable only by a
+    caller with no restriction.
+    """
+    if scopes is None:
+        return True
+    return "." in tool and tool.split(".", 1)[0] in scopes
+
+
+def _in_scope(tools: list[dict[str, Any]], scopes: frozenset[str] | None) -> list[dict[str, Any]]:
+    if scopes is None:
+        return tools
+    return [t for t in tools if _tool_allowed(str(t.get("name", "")), scopes)]
+
+
 def _bearer(headers: Mapping[str, str]) -> str | None:
     """The token from `Authorization: Bearer ...`, header name case-insensitive."""
     for name, value in headers.items():
@@ -55,9 +73,13 @@ class Identity:
     than the Bittensor `Caller` type being load-bearing throughout.
     """
 
-    kind: str          # "hotkey" or "api-key"
-    name: str          # ss58 address, or the key's label
+    kind: str                          # "hotkey" or "api-key"
+    name: str                          # ss58 address, or the key's label
     nonce_ns: str
+    #: Which scopes this caller may reach. None means all of them, which is
+    #: what a validator gets: it is challenging the miner, not querying a
+    #: customer's data, and a probe must be able to reach whatever is served.
+    scopes: frozenset[str] | None = None
 
 
 @dataclass
@@ -147,7 +169,10 @@ class MinerHandler:
             caller = self._authenticate(request)
 
             if request.method == "GET" and request.path == "/tools":
-                return Response(200, {"tools": self.mcp.list_tools()})
+                # Filtered, not annotated. A caller's tool list is exactly what
+                # it may reach, so there is nothing to tempt it into asking for
+                # something it will be refused.
+                return Response(200, {"tools": _in_scope(self.mcp.list_tools(), caller.scopes)})
             if request.method == "POST" and request.path == "/call":
                 return self._call(request, caller)
             if request.method == "POST" and request.path == "/challenge":
@@ -226,6 +251,15 @@ class MinerHandler:
         arguments = body.get("arguments") or {}
         if not isinstance(arguments, dict):
             raise BadRequest("`arguments` must be an object")
+        if not _tool_allowed(tool, caller.scopes):
+            # 403, not 404: pretending the tool does not exist would be a lie a
+            # caller can disprove by reading the docs, and an operator chasing a
+            # permissions problem deserves to be told it is a permissions
+            # problem.
+            raise http_auth.AuthError(
+                f"{caller.name!r} is not permitted the {tool!r} scope"
+            )
+
         nonce = self._require_nonce(body)
         request_id = str(body.get("request_id") or caller.nonce_ns)
 
@@ -264,7 +298,10 @@ class MinerHandler:
             label = self.api_keys.label_for(token)
             if label is None:
                 raise http_auth.AuthError("unknown API key")
-            return Identity(kind="api-key", name=label, nonce_ns=secrets.token_hex(8))
+            return Identity(
+                kind="api-key", name=label, nonce_ns=secrets.token_hex(8),
+                scopes=self.api_keys.scopes_for(label),
+            )
 
         caller = http_auth.verify(
             request.headers,

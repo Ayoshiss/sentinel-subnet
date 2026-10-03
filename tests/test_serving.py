@@ -211,6 +211,68 @@ def test_an_api_key_caller_can_run_a_tool_and_gets_an_attested_answer(handler):
     assert "attestation" in r.payload and "response_hash" in r.payload
 
 
+# --- scopes: what a caller may reach, not just whether it may call ----------
+
+def scoped_handler(handler, scopes):
+    """The handler with a second tool, and a key limited to one scope."""
+    from sentinel.database import Credentials, MockDatabase
+    from sentinel.mcp.tools import PostgresQueryTool
+    from sentinel.serving.apikeys import ApiKeyStore, mint
+
+    payments = MockDatabase(Credentials(dsn="sqlite:///", resource="payments"))
+    handler.mcp.register(PostgresQueryTool(payments, scope="payments"))
+
+    key, digest = mint()
+    handler.api_keys = ApiKeyStore({"support": {"digest": digest, "scopes": scopes}})
+    return key
+
+
+def test_a_scoped_key_cannot_call_a_tool_outside_its_scope(handler):
+    """The point of the whole feature.
+
+    Attestation decides which code runs, the allowlist decides who may call, and
+    read-only decides whether they may write. None of those limit what a caller
+    can read. Without scopes a stolen key reads the entire database.
+    """
+    key = scoped_handler(handler, ["analytics"])
+    body = json.dumps({"tool": "payments.query", "arguments": {"sql": "SELECT 1"},
+                       "nonce": "00" * 16, "request_id": "r1"}).encode()
+
+    r = handler.handle(Request("POST", "/call", {"Authorization": "Bearer " + key}, body))
+    assert r.status == 401
+    assert "payments" in r.payload["error"]
+
+
+def test_a_scoped_key_sees_only_its_own_tools(handler):
+    """Filtered rather than annotated: the list is what the caller may reach."""
+    key = scoped_handler(handler, ["payments"])
+    r = handler.handle(Request("GET", "/tools", {"Authorization": "Bearer " + key}))
+    assert r.status == 200
+    names = [t["name"] for t in r.payload["tools"]]
+    assert names == ["payments.query"], names
+
+
+def test_an_unscoped_key_reaches_everything(handler):
+    """A deployment with one database should not have to configure scopes."""
+    from sentinel.serving.apikeys import ApiKeyStore, mint
+
+    key, digest = mint()
+    handler.api_keys = ApiKeyStore({"full": digest})
+    r = handler.handle(Request("GET", "/tools", {"Authorization": "Bearer " + key}))
+    names = [t["name"] for t in r.payload["tools"]]
+    assert "postgres.query" in names
+
+
+def test_a_validator_is_not_scope_limited(handler, validator_wallet, miner_wallet):
+    """A validator probes the miner rather than querying a customer, so it has
+    to reach whatever is served or it would score an honest miner zero."""
+    scoped_handler(handler, ["analytics"])
+    headers = signed(validator_wallet, miner_wallet.ss58_address, "GET", "/tools")
+    r = handler.handle(Request("GET", "/tools", headers))
+    names = [t["name"] for t in r.payload["tools"]]
+    assert "payments.query" in names and "postgres.query" in names
+
+
 def test_key_comparison_is_constant_time():
     """Pinned by inspection, because no behavioural test can see timing.
 

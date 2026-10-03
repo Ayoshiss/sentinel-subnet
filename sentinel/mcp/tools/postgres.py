@@ -45,7 +45,24 @@ class PostgresQueryTool:
         "enclave. Returns columns and rows; the response is attested."
     )
 
-    def __init__(self, database: Database, allow_writes: bool = False, max_rows: int = 1000) -> None:
+    def __init__(
+        self,
+        database: Database,
+        allow_writes: bool = False,
+        max_rows: int = 1000,
+        scope: str | None = None,
+    ) -> None:
+        # One tool per scope, named for it, rather than one tool taking a scope
+        # argument. The difference matters: a caller's tool list then IS the
+        # list of what it may reach, so scope is enforced by what exists for
+        # that caller rather than by validating a parameter after the fact.
+        if scope:
+            self.name = f"{scope}.query"
+            self.description = (
+                f"Run a read-only SQL query against the {scope!r} scope inside a "
+                "confidential enclave. Returns columns and rows; the response is "
+                "attested."
+            )
         self.database = database
         self.allow_writes = allow_writes
         self.max_rows = max_rows

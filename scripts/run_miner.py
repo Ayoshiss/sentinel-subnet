@@ -130,6 +130,35 @@ def build_verifier(silicon, product: str, measurement_hex: str):
 
 # --- assembly -----------------------------------------------------------------
 
+def parse_scopes(args) -> dict[str, str]:
+    """Named scopes from --scope, or the single --dsn as the default scope.
+
+    Each scope should be a database role with SELECT on the views that scope is
+    allowed, and nothing else. The enclave then cannot read beyond it even if
+    everything above it fails: a stolen key, a bug in the handler, or an
+    operator who modified the miner after boot, which the launch measurement
+    does not cover.
+    """
+    if not args.scope:
+        return {RESOURCE: args.dsn}
+
+    scopes: dict[str, str] = {}
+    for entry in args.scope:
+        name, sep, dsn = entry.partition("=")
+        name, dsn = name.strip(), dsn.strip()
+        if not sep or not name or not dsn:
+            raise SystemExit(f"--scope must be NAME=DSN, got {entry!r}")
+        if "." in name:
+            # Tools are named "<scope>.query" and scope is matched on the part
+            # before the first dot, so a dot in the name would silently widen
+            # what a restricted key can reach.
+            raise SystemExit(f"scope name {name!r} must not contain a dot")
+        if name in scopes:
+            raise SystemExit(f"--scope {name!r} given twice")
+        scopes[name] = dsn
+    return scopes
+
+
 def resolve_allowlist(args) -> set[str] | None:
     """Who may call this miner. None means anyone, and says so loudly.
 
@@ -224,14 +253,22 @@ def build_miner(args, hotkey_ss58: str):
         broker = KeyBroker(policy=ReleasePolicy(approved_measurement=args.measurement))
         broker.trust_chip(silicon.chip_id, silicon.public_verifier().public_key_hex)
 
-    broker.store_secret(RESOURCE, args.dsn)
+    scopes = parse_scopes(args)
+    for name, dsn in scopes.items():
+        broker.store_secret(name, dsn)
 
     enclave = Enclave(silicon, launch_measurement=args.measurement)
-    credentials = enclave.unlock(broker, RESOURCE)
-    logger.info("credential released to the enclave for %r", RESOURCE)
-
     mcp = MCPServer()
-    mcp.register(PostgresQueryTool(open_database(credentials, args.seed)))
+    for name in scopes:
+        # One attestation per scope, not one for all of them. The report is
+        # bound to the scope being requested, so a proof obtained for the
+        # analytics credential cannot be replayed to unlock payments.
+        credentials = enclave.unlock(broker, name)
+        logger.info("credential released to the enclave for %r", name)
+        mcp.register(PostgresQueryTool(
+            open_database(credentials, args.seed),
+            scope=None if name == RESOURCE else name,
+        ))
 
     allowed = resolve_allowlist(args)
 
@@ -320,7 +357,15 @@ def main() -> int:
     p.add_argument("--port", type=int, default=8091)
     p.add_argument("--product", default="Milan", help="EPYC product line")
     p.add_argument("--measurement", help="the approved launch measurement, hex")
-    p.add_argument("--dsn", default="sqlite:///")
+    p.add_argument("--dsn", default="sqlite:///",
+                   help="one database, released as the 'customer-db' scope")
+    # Scopes are the answer to "how does the AI know which data is sensitive".
+    # It does not: the credential released into the enclave is a role that can
+    # only reach approved views, so data out of scope is unreachable rather
+    # than merely unrequested. Each scope is its own credential, unlocked by
+    # its own attestation, and exposed as its own tool.
+    p.add_argument("--scope", action="append", default=[], metavar="NAME=DSN",
+                   help="a named scope and the restricted credential for it; repeat")
     p.add_argument("--seed", type=pathlib.Path, default=DEFAULT_SEED,
                    help="SQL to seed a fresh SQLite database with")
     p.add_argument("--no-seed", action="store_true",

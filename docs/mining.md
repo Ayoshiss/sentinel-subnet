@@ -166,6 +166,34 @@ It reboots after three consecutive 503s and stops after two reboots in an hour,
 because a host whose security processor is failing will fail again and a boot
 loop hides that. See SECURITY.md for the full detail.
 
+### Scoping what a caller can read
+
+Attestation decides which code runs. The allowlist decides who may call. The
+read-only role decides whether they may write. None of those limit *what* can be
+read, so by default a caller reaches everything the credential reaches.
+
+Scopes fix that. Each is its own restricted credential, unlocked by its own
+attestation, and exposed as its own tool named `<scope>.query`:
+
+```bash
+--scope analytics=postgresql://sentinel_analytics:...@host/db \
+--scope support=postgresql://sentinel_support:...@host/db
+```
+
+An API key can then be limited to a subset. In the key file:
+
+```json
+{ "support-bot": { "digest": "...", "scopes": ["support"] } }
+```
+
+That key sees only `support.query` in `/tools` and is refused `analytics.query`.
+A key with a bare digest reaches every scope, which is the right default when
+there is only one database.
+
+`docs/scoping.sql` is a worked example of the views and roles a DBA creates. The
+important part is there rather than here: the enclave can only be as restricted
+as the credential it is given.
+
 ### Callers who are not on Bittensor
 
 Validators authenticate with a hotkey signature. A customer running Sentinel

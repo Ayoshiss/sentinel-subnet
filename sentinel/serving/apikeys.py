@@ -50,7 +50,23 @@ def mint() -> tuple[str, str]:
 class ApiKeyStore:
     """Labelled key digests. Labels exist so one key can be revoked by name."""
 
-    def __init__(self, digests: dict[str, str]) -> None:
+    def __init__(self, digests: dict[str, object]) -> None:
+        # Two accepted shapes. "label": "<digest>" means the key may reach every
+        # scope, which is the right default for a single-database deployment.
+        # "label": {"digest": ..., "scopes": [...]} restricts it, so a key for a
+        # support agent cannot read the payments scope even though the same
+        # enclave serves both.
+        self._scopes: dict[str, frozenset[str] | None] = {}
+        flat: dict[str, str] = {}
+        for label, value in digests.items():
+            if isinstance(value, dict):
+                flat[label] = str(value.get("digest", ""))
+                scopes = value.get("scopes")
+                self._scopes[label] = frozenset(scopes) if scopes else None
+            else:
+                flat[label] = str(value)
+                self._scopes[label] = None
+        digests = flat
         for label, digest in digests.items():
             if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest.lower()):
                 raise ApiKeyError(
@@ -86,6 +102,10 @@ class ApiKeyStore:
             if hmac.compare_digest(candidate, digest):
                 found = label
         return found
+
+    def scopes_for(self, label: str) -> frozenset[str] | None:
+        """Which scopes this key may reach. None means all of them."""
+        return self._scopes.get(label)
 
     def __len__(self) -> int:
         return len(self._digests)
