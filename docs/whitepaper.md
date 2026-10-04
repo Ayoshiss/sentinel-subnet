@@ -260,9 +260,13 @@ the subnet.** `scripts/run_broker.py` runs the broker as its own daemon and
 the network, verified across the boundary against AMD's pinned root using
 certificates the enclave hands over. Exercised end to end between two processes, with the
 transcript in `docs/split-proof.md` and the script in CI, including the
-forged-chain case, where a miner that supplies its own root is refused. What has not happened is a run with the broker on a machine the miner's
-operator does not control, which is the only configuration that demonstrates
-custody rather than describing it. The default remains self-brokering, and the
+forged-chain case, where a miner that supplies its own root is refused. Also run on real silicon across two VMs on 2026-10-04: an
+EPYC 7B13 enclave attested to a broker on another host, which verified the VCEK
+chain the enclave handed it against AMD's pinned root, and refused the same chip
+when it approved a different measurement. What has not happened is a run with the
+broker on a machine the miner's operator does not control, which is the only
+configuration that demonstrates custody rather than describing it, and a run over
+TLS rather than inside a private network. The default remains self-brokering, and the
 miner logs a warning when it starts that way.
 
 **The released credential can still be intercepted by the miner's operator.**

@@ -68,3 +68,87 @@ Broker log
 The miner held no credential until it proved what it booted, and the
 process that checked the proof was not the process that wanted the secret.
 ```
+
+## The same thing on real silicon
+
+Everything above runs on `MockSilicon`, because CI has no `/dev/sev-guest`. That
+is a fair constraint for a test suite and it was not a fair basis for calling the
+split proven, so this section is the run on the hardware.
+
+Two machines on 2026-10-04, both at commit `aa755e1`:
+
+- broker on `sentinel-validator-1`, `10.128.0.7:8100`, bound to the private VPC
+  address only, holding the secret
+- a second miner process on `sentinel-miner-2`, AMD EPYC 7B13, chip
+  `1D1F823A4C32…E40B`, measurement `ccdc5cf01ba2…26fa`
+
+The production miner on port 8091 was left running throughout. The test process
+used a spare port, so testnet 554 kept being served and scored.
+
+The broker trusted **no mock chips at all**. It was started with
+`--product Milan` and nothing else, so `verifier_factory` had to build a verifier
+from certificates the enclave handed over, and a software-signed report would
+have been refused for presenting an unknown chip.
+
+Miner:
+
+```
+SEV-SNP guest detected, chip 1D1F823A4C3294E2B92FC45B5368A08A4D70C19141E62E7521…
+brokering to http://10.128.0.7:8100; this host stores no credential for analytics
+credential released to the enclave for 'analytics'
+miner serving on 127.0.0.1:8092
+```
+
+Broker, on the other machine:
+
+```
+sentinel/kbs.py:242: vcek=x509.load_der_x509_certificate(leaf)
+released 'analytics' to an attested enclave
+```
+
+That `kbs.py:242` line is the useful part. It only executes inside
+`_verify_sevsnp`, so it is first-hand evidence that the real hardware path ran
+rather than the mock one, and that the VCEK, ASK and ARK crossed the network and
+chained to AMD's pinned root on a machine with no access to the miner's host.
+Until this run, that path had only ever been exercised against fixture
+certificates inside a single process.
+
+Negative control, the same real chip against a broker approving a different
+measurement:
+
+```
+the broker refused to release 'analytics': broker refused: attestation rejected:
+launch measurement mismatch (code was tampered): got ccdc5cf01ba25526bd65503d9…
+MINER EXIT: 1
+```
+
+### What this run cost, and what it found
+
+It was blocked before it started. The SEV firmware channel is guarded by a file
+lock in `/run/lock`, and `sentinel-miner.service` set `ProtectSystem=strict`
+without granting that path, so the lock could not be created and the fallback
+path continued silently. The live miner had been running with no cross-process
+lock since deployment. Concurrent requests to the firmware permanently disable
+the VMPCK until a reboot, which is what took a miner down on 2026-09-24, so
+running a second attesting process on that host would have repeated the outage.
+
+Fixed in `aa755e1` before this run: the unit grants `/run/lock`, the fallback
+logs an error naming the consequence and the fix, and `tests/test_sev_guest_lock.py`
+asserts against the unit file rather than only the code, because the unit was
+where it was broken. Afterwards, three processes having attested, `dmesg` still
+shows only the boot line and no disable:
+
+```
+[    1.589355] sev-guest sev-guest: Initialized SEV guest driver (using vmpck_id 0)
+```
+
+### Still not proven by this run
+
+**TLS.** This went over plain HTTP inside the VPC with `--broker-insecure`, so
+the transport is untested and the credential crossed the wire in the clear. That
+is a smaller gap than it sounds, for the bad reason given in T22: TLS would not
+have protected the credential from the miner's operator anyway.
+
+**Custody.** Both machines are ours. What this run proves is the hardware path
+across a network boundary, not that a party who cannot reach the miner's host
+holds the secret. That needs someone else's machine.

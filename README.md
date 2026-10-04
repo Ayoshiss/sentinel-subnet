@@ -26,7 +26,7 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 |---|---|
 | Attestation core | **Working** (`sentinel/attestation.py`), Ed25519, publicly verifiable |
 | Key Broker (credential release) | **Working** (`sentinel/kbs.py`), every refusal path tested |
-| Broker on a separate machine | **Working** (`sentinel/kbs_remote.py`, `scripts/run_broker.py`), two-process transcript in `docs/split-proof.md`, `bash scripts/demo_split.sh` in CI; not yet run with the broker outside the operator's control |
+| Broker on a separate machine | **Working, including on real silicon.** Two VMs, EPYC 7B13 enclave attesting to a broker on another host which verified the VCEK chain it was handed; transcript and negative control in `docs/split-proof.md`, `bash scripts/demo_split.sh` in CI. TLS and third-party custody still unproven |
 | MCP `postgres.query` tool | **Working** (`sentinel/mcp/`), read-only by default |
 | Attested query, end to end | **Working** (`scripts/demo_mcp.py`), CI on every push |
 | **SEV-SNP hardware** | **Verified on real silicon**, AMD EPYC 7B13, VCEK → ASK → ARK → report signature, offline, against a pinned AMD root |
