@@ -1,0 +1,46 @@
+# The key broker, on the machine that owns the data.
+#
+# This unit belongs on the CUSTOMER's host, not on the miner's. That is the
+# entire point: the miner receives a credential only after proving what it
+# booted, and the party checking that proof is the party holding the secret.
+# Installing this next to sentinel-miner.service recreates the arrangement it
+# exists to avoid.
+#
+# The DSN lives in the environment file and nowhere else. Keep it 0600 and owned
+# by root: anything that can read that file can read the database.
+
+[Unit]
+Description=Sentinel key broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel
+Group=sentinel
+WorkingDirectory=/opt/sentinel
+EnvironmentFile=/etc/sentinel/broker.env
+ExecStart=/opt/sentinel/.venv/bin/python scripts/run_broker.py \
+    --bind ${BIND} --port ${PORT} \
+    $MEASUREMENT_ARGS \
+    --product ${PRODUCT} \
+    $SCOPE_ARGS
+
+Restart=always
+RestartSec=10
+
+# This process holds plaintext database credentials in memory and reads one file.
+# Everything it does not need is taken away.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+# A core dump of this process is a copy of the credential.
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

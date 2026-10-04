@@ -26,6 +26,7 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 |---|---|
 | Attestation core | **Working** (`sentinel/attestation.py`), Ed25519, publicly verifiable |
 | Key Broker (credential release) | **Working** (`sentinel/kbs.py`), every refusal path tested |
+| Broker on a separate machine | **Working** (`sentinel/kbs_remote.py`, `scripts/run_broker.py`), verified across two processes; not yet run with the broker outside the operator's control |
 | MCP `postgres.query` tool | **Working** (`sentinel/mcp/`), read-only by default |
 | Attested query, end to end | **Working** (`scripts/demo_mcp.py`), CI on every push |
 | **SEV-SNP hardware** | **Verified on real silicon**, AMD EPYC 7B13, VCEK → ASK → ARK → report signature, offline, against a pinned AMD root |
@@ -112,11 +113,12 @@ Full component inventory, request/payment/attestation flows, failure modes, and 
 Three layers at different maturities. Being precise about which is which matters
 more than making the tree look finished.
 
-**Sentinel core: working, tested (188 tests, CI on every push)**
+**Sentinel core: working, tested (264 tests, CI on every push)**
 ```
 sentinel/
 ├── attestation.py            # reports, response binding, verification
 ├── kbs.py                    # Key Broker, releases secrets only to attested code
+├── kbs_remote.py             # the same broker across a network, so custody actually separates
 ├── enclave.py                # unlock → execute → attest the result
 ├── chain.py                  # metagraph discovery, ServeAxon, permit checks
 ├── database.py               # Database seam: Mock / Sqlite / Postgres backends

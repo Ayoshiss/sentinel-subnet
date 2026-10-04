@@ -92,7 +92,14 @@ class Enclave:
         """
         nonce = broker.challenge()
         report = self.agent.attest(nonce, release_binding(resource))
-        credentials = broker.release(resource, report)
+        # The certificates travel with the report. A broker on another machine
+        # cannot read this host's certificate store, and should not have to:
+        # AMD's root is pinned on the broker side, so supplying the chain lets
+        # an honest enclave be verified offline without letting a dishonest one
+        # mint its own.
+        credentials = broker.release(
+            resource, report, getattr(self.silicon, "certificates", None),
+        )
         self._credentials[resource] = credentials
         return credentials
 

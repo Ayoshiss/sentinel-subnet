@@ -45,14 +45,25 @@ before the listed mitigation.
 | T17 | AMD KDS outage | 2 | 2 | 4 | LOW | Cached VCEK (72h TTL) |
 | T18 | x402 facilitator downtime | 3 | 2 | 6 | LOW | Secondary facilitator failover; refunds |
 | T19 | Customer downstream failure | 2 | 3 | 6 | LOW | Structured isError; graceful degradation |
+| T20 | Miner operator reads the credential from its own broker | 5 | 4 | 20 | HIGH | Only closed by running the broker elsewhere: `run_broker.py` on the customer's host, miner started with `--broker-url`. Self-brokering remains the default and the miner warns at startup, so on the subnet this threat is open and accepted because the data is seeded |
+| T21 | Miner supplies a forged certificate chain to its remote broker | 5 | 3 | 15 | HIGH | AMD's root SPKI is pinned in `CertChain.verify_self` on the broker side, so a self-signed chain is refused; tested in `test_a_miner_supplied_chain_with_its_own_root_is_refused` |
+| T22 | Released credential read in transit or at TLS termination | 5 | 2 | 10 | MED | https enforced for the broker URL unless explicitly overridden, and TLS terminated on the broker's own host. Not closed: encrypting the credential to the enclave's ephemeral report key is the real fix and is unbuilt |
 
 ## Risk summary
 
-- **High (15–25):** 1, T1, neutralised at root by the KBS.
-- **Medium (8–12):** 11, payment, consensus, KBS, TCB.
+- **High (15–25):** 1, T1, T20, T21.
+- **Medium (8–12):** 11, payment, consensus, KBS, TCB, T22.
 - **Low (1–6):** 7, side-channel, outages, degradation.
 
-The single high-severity threat is neutralised because the KBS refuses
-credentials to any enclave whose launch measurement doesn't match the approved
-image, a compromised miner physically cannot obtain the data it would need to
-attack. Every remaining threat is medium or low with a named mitigation.
+T1 is neutralised because the KBS refuses credentials to any enclave whose launch
+measurement doesn't match the approved image, so a compromised miner cannot
+obtain the data it would need to attack.
+
+T20 is the one to read carefully, because it was previously missing from this
+table and it undercut T1. If the broker runs in the miner's own process, the
+operator holds the secret and the measurement check is a formality performed on
+themselves. The code to close it exists and is tested; what closes it is a
+deployment decision, and on testnet 554 it is deliberately not taken, because the
+database is seeded data and nobody is harmed. Against a real database, running
+the broker on the miner's host makes T1's mitigation void. T21 is the attack that
+separation invites, and the pinned root answers it.

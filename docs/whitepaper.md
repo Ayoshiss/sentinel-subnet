@@ -254,9 +254,21 @@ by definition.
 independent miners, because mining requires a confidential VM somebody must pay
 for.
 
-**The broker and the enclave have never been separated in deployment.** The
-architecture places the broker with the customer; today the miner runs both in
-one process.
+**The broker and the enclave are separable but the split is not yet deployed on
+the subnet.** `scripts/run_broker.py` runs the broker as its own daemon and
+`run_miner.py --broker-url` makes the miner obtain its credential from it over
+the network, verified across the boundary against AMD's pinned root using
+certificates the enclave hands over. Exercised end to end between two processes,
+including the forged-chain case, where a miner that supplies its own root is
+refused. What has not happened is a run with the broker on a machine the miner's
+operator does not control, which is the only configuration that demonstrates
+custody rather than describing it. The default remains self-brokering, and the
+miner logs a warning when it starts that way.
+
+**The released credential is still in the clear inside TLS.** Across the split
+that matters more than it did in one process: whatever terminates TLS at the
+broker sees the DSN. The fix is to encrypt it to the enclave's ephemeral key from
+the attestation report, so the transport is not trusted at all. Not built.
 
 ## 10. Limiting what a caller can read
 

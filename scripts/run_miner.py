@@ -36,7 +36,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sentinel.database import Credentials, PostgresDatabase, SqliteDatabase
 from sentinel.enclave import Enclave
-from sentinel.kbs import KeyBroker, ReleasePolicy
+from sentinel.kbs import CredentialReleaseError, KeyBroker, ReleasePolicy
+from sentinel.kbs_remote import BrokerUnreachable, RemoteBroker
 from sentinel.mcp import MCPServer
 from sentinel.mcp.tools import PostgresQueryTool
 from sentinel.serving import MinerHandler
@@ -59,7 +60,7 @@ REPUBLISH_SECONDS = 3600
 
 # --- silicon ------------------------------------------------------------------
 
-def open_silicon(allow_mock: bool):
+def open_silicon(allow_mock: bool, mock_seed: str | None = None):
     """The real chip if there is one, a mock only when explicitly permitted."""
     from sentinel.sevsnp import guest
 
@@ -81,6 +82,20 @@ def open_silicon(allow_mock: bool):
         "MOCK SILICON: signing in software. Attestations from this miner prove "
         "the protocol works and nothing about the hardware."
     )
+    if mock_seed:
+        # A mock chip normally has a fresh key per process, which makes it
+        # impossible to register with a separate broker ahead of time. A seed
+        # fixes the identity so the split can be rehearsed on one laptop. Real
+        # silicon needs none of this: AMD's chain identifies the chip.
+        try:
+            seed = bytes.fromhex(mock_seed)
+        except ValueError as exc:
+            raise SystemExit(f"--mock-chip-seed must be hex: {exc}") from exc
+        if len(seed) != 32:
+            raise SystemExit(f"--mock-chip-seed must be 32 bytes, got {len(seed)}")
+        silicon = MockSilicon.from_seed(seed, chip_id=f"MOCK-EPYC-{seed[:4].hex()}")
+        logger.warning("mock chip identity is derived from a seed and is not secret")
+        return silicon, False
     return MockSilicon(), False
 
 
@@ -139,14 +154,28 @@ def parse_scopes(args) -> dict[str, str]:
     operator who modified the miner after boot, which the launch measurement
     does not cover.
     """
+    remote = bool(getattr(args, "broker_url", None))
     if not args.scope:
-        return {RESOURCE: args.dsn}
+        # Remote: ask for the default scope by name. The DSN behind it is the
+        # broker's business, and this process is not entitled to know it before
+        # it has attested.
+        return {RESOURCE: "" if remote else args.dsn}
 
     scopes: dict[str, str] = {}
     for entry in args.scope:
         name, sep, dsn = entry.partition("=")
         name, dsn = name.strip(), dsn.strip()
-        if not sep or not name or not dsn:
+        if remote:
+            if sep:
+                raise SystemExit(
+                    f"--scope {entry!r} carries a DSN, but --broker-url was given. "
+                    "With a remote broker this host must not hold the secret; "
+                    "pass the scope name alone and store the DSN on the broker."
+                )
+            if not name:
+                raise SystemExit("--scope must be a NAME")
+            dsn = ""
+        elif not sep or not name or not dsn:
             raise SystemExit(f"--scope must be NAME=DSN, got {entry!r}")
         if "." in name:
             # Tools are named "<scope>.query" and scope is matched on the part
@@ -229,8 +258,9 @@ async def refresh_allowlist(args, allowed: set[str], stop: threading.Event) -> N
 
 def build_miner(args, hotkey_ss58: str):
     """Wire chip to broker to enclave to MCP, and return a server ready to run."""
-    silicon, real = open_silicon(args.allow_mock)
+    silicon, real = open_silicon(args.allow_mock, getattr(args, "mock_chip_seed", None))
 
+    remote = bool(getattr(args, "broker_url", None))
     if real:
         actual = silicon.measurement
         if actual != args.measurement:
@@ -243,19 +273,44 @@ def build_miner(args, hotkey_ss58: str):
                 "Either this is not the approved image, or the image changed "
                 "and the pinned value needs updating deliberately."
             )
-        verifier, certs = build_verifier(silicon, args.product, args.measurement)
-        broker = KeyBroker(
-            policy=ReleasePolicy(approved_measurement=args.measurement),
-            sevsnp=verifier,
-            sevsnp_certs=certs,
-        )
-    else:
-        broker = KeyBroker(policy=ReleasePolicy(approved_measurement=args.measurement))
-        broker.trust_chip(silicon.chip_id, silicon.public_verifier().public_key_hex)
-
     scopes = parse_scopes(args)
-    for name, dsn in scopes.items():
-        broker.store_secret(name, dsn)
+
+    if remote:
+        # The custody separation the whole design rests on. The broker is a
+        # different process on a different machine, owned by whoever owns the
+        # data, and this process holds no DSN until it has proved what it booted.
+        # Nothing here verifies the report: the party that checks the proof is
+        # the party that holds the secret, which is the only arrangement that
+        # means anything.
+        broker = RemoteBroker(args.broker_url, insecure=getattr(args, "broker_insecure", False))
+        logger.info(
+            "brokering to %s; this host stores no credential for %s",
+            broker.url, ", ".join(sorted(scopes)),
+        )
+        if not real:
+            # The mock chip has to be registered with the broker by hand, so
+            # print what the operator needs to hand over. Both values are public.
+            logger.info(
+                "register this mock chip with the broker: --allow-mock-chip %s=%s",
+                silicon.chip_id, silicon.public_verifier().public_key_hex,
+            )
+    else:
+        if real:
+            verifier, certs = build_verifier(silicon, args.product, args.measurement)
+            broker = KeyBroker(
+                policy=ReleasePolicy(approved_measurement=args.measurement),
+                sevsnp=verifier,
+                sevsnp_certs=certs,
+            )
+        else:
+            broker = KeyBroker(policy=ReleasePolicy(approved_measurement=args.measurement))
+            broker.trust_chip(silicon.chip_id, silicon.public_verifier().public_key_hex)
+        for name, dsn in scopes.items():
+            broker.store_secret(name, dsn)
+        logger.warning(
+            "no --broker-url: this miner releases credentials to itself, so the "
+            "operator of this host holds the secret. Development only."
+        )
 
     enclave = Enclave(silicon, launch_measurement=args.measurement)
     mcp = MCPServer()
@@ -263,7 +318,23 @@ def build_miner(args, hotkey_ss58: str):
         # One attestation per scope, not one for all of them. The report is
         # bound to the scope being requested, so a proof obtained for the
         # analytics credential cannot be replayed to unlock payments.
-        credentials = enclave.unlock(broker, name)
+        try:
+            credentials = enclave.unlock(broker, name)
+        except BrokerUnreachable as exc:
+            # Nobody has refused anything; the broker is simply not answering.
+            # Said separately because the fix is a network one, and an operator
+            # told "refused" would go and rebuild an image that is fine.
+            raise SystemExit(
+                f"{exc}\nThe broker has not refused this enclave, it did not "
+                "answer. Check the URL, the firewall and that run_broker.py is up."
+            ) from exc
+        except CredentialReleaseError as exc:
+            raise SystemExit(
+                f"the broker refused to release {name!r}: {exc}\n"
+                "This is the mechanism working. Either this image is not the one "
+                "the broker approved, the chip is not trusted, or the firmware is "
+                "below its floor. Nothing is served without the credential."
+            ) from exc
         logger.info("credential released to the enclave for %r", name)
         mcp.register(PostgresQueryTool(
             open_database(credentials, args.seed),
@@ -364,12 +435,28 @@ def main() -> int:
     # only reach approved views, so data out of scope is unreachable rather
     # than merely unrequested. Each scope is its own credential, unlocked by
     # its own attestation, and exposed as its own tool.
+    p.add_argument(
+        "--broker-url", metavar="URL",
+        help="release credentials from a broker at this URL instead of from a "
+             "broker in this process. With it, the operator of this host never "
+             "holds a DSN: --scope takes bare NAMEs and the secrets live on the "
+             "customer's machine. Without it the miner brokers to itself, which "
+             "is fine for development and proves nothing about custody.",
+    )
+    p.add_argument(
+        "--broker-insecure", action="store_true",
+        help="permit an http:// broker URL. The released credential travels in "
+             "that response body, so this is for loopback testing only.",
+    )
     p.add_argument("--scope", action="append", default=[], metavar="NAME=DSN",
                    help="a named scope and the restricted credential for it; repeat")
     p.add_argument("--seed", type=pathlib.Path, default=DEFAULT_SEED,
                    help="SQL to seed a fresh SQLite database with")
     p.add_argument("--no-seed", action="store_true",
                    help="do not seed; the database already has the data")
+    p.add_argument("--mock-chip-seed", metavar="HEX32",
+                   help="derive the mock chip's key from this 32-byte seed so a "
+                        "separate broker can trust it in advance. Development only.")
     p.add_argument("--allow-mock", action="store_true",
                    help="run without SEV-SNP, for wiring tests only")
     p.add_argument("--print-measurement", action="store_true",

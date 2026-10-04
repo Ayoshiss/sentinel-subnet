@@ -108,6 +108,12 @@ class KeyBroker:
     #: Certificates the enclave supplied with its report, `{name: der}`. The
     #: extended report carries these so verification never has to reach AMD.
     sevsnp_certs: dict[str, bytes] = field(default_factory=dict, repr=False)
+    #: Builds a verifier from certificates handed over with the report, used
+    #: when the broker runs on a different machine from the enclave and so
+    #: cannot read the host's own certificate store. `Callable[[dict[str, bytes]],
+    #: verifier]`. Safe because the root stays pinned inside `CertChain`: an
+    #: enclave that supplies its own invented chain fails rather than passing.
+    sevsnp_factory: object | None = None
     _secrets: dict[str, Credentials] = field(default_factory=dict, repr=False)
     _trusted_chips: dict[str, str] = field(default_factory=dict, repr=False)
     _issued_nonces: dict[str, float] = field(default_factory=dict, repr=False)
@@ -136,7 +142,12 @@ class KeyBroker:
         self._issued_nonces[nonce] = time.monotonic() + self.policy.nonce_ttl_seconds
         return nonce
 
-    def release(self, resource: str, report: AttestationReport) -> Credentials:
+    def release(
+        self,
+        resource: str,
+        report: AttestationReport,
+        certificates: dict[str, bytes] | None = None,
+    ) -> Credentials:
         """Verify the report and release the credential, or raise.
 
         Order matters: cheap structural checks first, signature last, and the
@@ -153,7 +164,7 @@ class KeyBroker:
         # Real silicon and mock silicon prove themselves differently, so the
         # shape of the signature decides which check applies.
         if looks_like_sevsnp(report.signature):
-            self._verify_sevsnp(report, resource)
+            self._verify_sevsnp(report, resource, certificates)
         else:
             self._verify_registered_key(report, resource)
 
@@ -182,7 +193,12 @@ class KeyBroker:
         except VerificationError as exc:
             raise CredentialReleaseError(f"attestation rejected: {exc}") from exc
 
-    def _verify_sevsnp(self, report: AttestationReport, resource: str) -> None:
+    def _verify_sevsnp(
+        self,
+        report: AttestationReport,
+        resource: str,
+        certificates: dict[str, bytes] | None = None,
+    ) -> None:
         """The hardware path: AMD's certificate chain, anchored to a pinned root.
 
         The chip registry is deliberately not consulted. A processor's identity
@@ -190,13 +206,23 @@ class KeyBroker:
         to add to a list, and consulting both would mean the weaker check could
         admit what the stronger one refuses.
         """
-        if self.sevsnp is None:
+        certs = certificates if certificates is not None else self.sevsnp_certs
+
+        verifier = self.sevsnp
+        if verifier is None and self.sevsnp_factory is not None:
+            # Remote broker: the certificates arrived with the report instead of
+            # from a local host, so the verifier is built per request around them.
+            try:
+                verifier = self.sevsnp_factory(certs)  # type: ignore[operator]
+            except Exception as exc:  # noqa: BLE001 - enclave-supplied, treat as hostile
+                raise CredentialReleaseError(f"attestation rejected: {exc}") from exc
+        if verifier is None:
             raise CredentialReleaseError(
                 "a SEV-SNP report was presented but this broker has no verifier "
                 "configured; refusing to release against a proof it cannot check"
             )
 
-        leaf = self.sevsnp_certs.get("VCEK") or self.sevsnp_certs.get("VLEK")
+        leaf = certs.get("VCEK") or certs.get("VLEK")
         if leaf is None:
             raise CredentialReleaseError(
                 "no VCEK available for this chip; the host provisioned no "
@@ -210,7 +236,7 @@ class KeyBroker:
         # recomputes it, which is what ties the signature to this exact nonce,
         # chip and binding rather than to any report the chip ever produced.
         try:
-            self.sevsnp.verify_signed_message(
+            verifier.verify_signed_message(
                 report.canonical(),
                 report.signature,
                 vcek=x509.load_der_x509_certificate(leaf),
