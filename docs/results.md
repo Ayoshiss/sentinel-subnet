@@ -206,7 +206,13 @@ was deleted afterwards rather than left on the miner host.
 
 The extra miners are permanent, as `sentinel-miner@8092` and `sentinel-miner@8093`
 from `deploy/sentinel-miner@.service`, so the gate stays armed across restarts
-rather than only during a demonstration.
+rather than only during a demonstration. Verified by rebooting the host: all three
+instances came back, the measurement was unchanged, and `dmesg` showed only the
+driver's boot line. That last part was the thing worth testing rather than
+assuming, because boot is when three processes contend for the SEV firmware
+channel at once, and concurrent requests there permanently disable the VMPCK.
+Three miners on one chip is only safe because of the lock in `/run/lock`, which
+had itself been inactive in production until the same day.
 
 One validator round, dry run so no weights were submitted:
 
