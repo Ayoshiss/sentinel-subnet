@@ -254,3 +254,62 @@ mechanism zeroes a liar, not that the majority cannot be bought.
 the data. An enclave running tampered code that returns *correct* rows while
 leaking them passes this round with 1.0000, which is the `exfiltrator` row in the
 benchmark above and `T23` in the register.
+
+---
+
+## What the launch measurement covers, measured rather than argued, 2026-10-04
+
+The documents used to say that a dm-verity root hash on the kernel command line
+would not help "because the command line is not covered". That was reasoning about
+the boot chain, not a result, and two published documents leaned on it. So it was
+tested, with `scripts/probe_measurement_scope.sh`.
+
+Method: add an inert kernel parameter, reboot, compare the measurement. The
+parameter went into `/etc/default/grub.d/99-sentinel-measurement-probe.cfg`,
+numbered to sort after GCP's own `50-cloudimg-settings.cfg`, which otherwise
+overwrites `GRUB_CMDLINE_LINUX_DEFAULT` wholesale. Confirmed in all six generated
+boot entries before spending the reboot, so that an unchanged measurement could not
+be an artifact of GRUB ignoring the file.
+
+Command line before:
+
+```
+BOOT_IMAGE=/boot/vmlinuz-6.8.0-1069-gcp root=PARTUUID=92cd8db3-… ro
+  console=ttyS0,115200 panic=-1
+```
+
+and after:
+
+```
+BOOT_IMAGE=/boot/vmlinuz-6.8.0-1069-gcp root=PARTUUID=92cd8db3-… ro
+  console=ttyS0,115200 sentinel.probe=1 panic=-1
+```
+
+Measurement before and after:
+
+```
+baseline: ccdc5cf01ba25526bd65503d95931b787b4385a3277cfe4448addf9c3e894948ae8cf7b099620e3e22717de2fb5d26fa
+now:      ccdc5cf01ba25526bd65503d95931b787b4385a3277cfe4448addf9c3e894948ae8cf7b099620e3e22717de2fb5d26fa
+```
+
+Identical. **The kernel command line is not in the launch measurement.**
+
+Taken with the boot chain on this host, which is shim then GRUB then kernel, all
+read from the disk after launch, with Secure Boot disabled, this establishes what
+`ccdc5cf0…26fa` actually attests: a genuine AMD processor, running SEV-SNP at
+VMPL0, in a particular firmware state. It is not a statement about the kernel, the
+initrd, the command line, the bootloader, or the root filesystem, and therefore not
+about the application either.
+
+So `T23` is not closed by enabling dm-verity, because the hash would sit somewhere
+unmeasured. The boot chain itself has to change, so that kernel, initrd and command
+line hashes are folded into the measurement before the guest runs: measured direct
+boot, or a unified kernel image measured before launch. Whether that is available on
+this provider for a confidential VM is the open question. The guest's vTPM does
+measure the chain into PCRs, but the host emulates it, and the threat model does not
+trust the host.
+
+The three miners stayed up throughout, because the measurement did not change and so
+nothing failed closed. Had it changed, every instance would have exited rather than
+serve under a value nobody approved, which is the behaviour you want from this
+experiment going the other way.
