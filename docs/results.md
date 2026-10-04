@@ -200,7 +200,13 @@ Three miner processes on one AMD EPYC 7B13 confidential VM, chip
 
 The tamper is the attack an operator would actually run: edit the served code on a
 machine you control. It changes no launch measurement, because the measurement
-covers boot state and not the root filesystem.
+covers boot state and not the root filesystem. Reproduce it with
+`scripts/tamper_checkout.py` against a copy of the deployment; the tampered tree
+was deleted afterwards rather than left on the miner host.
+
+The extra miners are permanent, as `sentinel-miner@8092` and `sentinel-miner@8093`
+from `deploy/sentinel-miner@.service`, so the gate stays armed across restarts
+rather than only during a demonstration.
 
 One validator round, dry run so no weights were submitted:
 

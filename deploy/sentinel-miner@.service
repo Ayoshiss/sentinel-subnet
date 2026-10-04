@@ -1,0 +1,61 @@
+# Additional miners beside the primary one, named by port: sentinel-miner@8092.
+#
+# Why more than one miner on a subnet you own. Correctness is scored by majority,
+# and `MIN_MINERS_FOR_CORRECTNESS_GATE` in the evaluator is 3, because with one
+# miner it is its own majority and with two a disagreement is a tie. Below three
+# the gate does not fire at all, so a miner serving fabricated rows keeps full
+# weight. That was the state of netuid 554 until 2026-10-04: one serving miner,
+# and the defence against the realistic attack had never executed. See the
+# hardware run in docs/results.md.
+#
+# Running three of your own miners arms the gate. It is not Sybil resistance and
+# it never will be: a majority you own can agree on anything. What it buys is that
+# the mechanism is live, so a dishonest participant is scored zero instead of
+# being counted in a quorum too small to notice.
+#
+# Each instance reads /etc/sentinel/miner-<port>.env for its own hotkey address.
+# They share the chip and therefore the launch measurement, which is correct:
+# they are separate processes on one attested machine, not separate machines.
+#
+# Safe to run several only because the SEV firmware channel is locked across
+# processes. Concurrent requests permanently disable the VMPCK until a reboot,
+# and the lock lives in /run/lock, which ProtectSystem=strict makes read-only
+# unless ReadWritePaths grants it. Do not remove that line to tidy this file up.
+
+[Unit]
+Description=Sentinel miner on port %i, netuid 554
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel
+WorkingDirectory=/opt/sentinel
+EnvironmentFile=/etc/sentinel/miner-%i.env
+Environment=HOME=/opt/sentinel/.home
+# Bound to the private address, not 0.0.0.0. These instances exist to arm the
+# correctness gate for our own validator, which is on the same VPC, so there is
+# no reason to put them on the public interface. The primary miner on 8091 is
+# the one that is publicly reachable.
+ExecStart=/opt/sentinel/.venv/bin/python scripts/run_miner.py \
+    --no-chain \
+    --bind ${BIND} \
+    --port %i \
+    --hotkey-ss58 ${HOTKEY_SS58} \
+    --measurement ${MEASUREMENT} \
+    $ALLOW_ARGS
+
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sentinel /run/lock
+DeviceAllow=/dev/sev-guest rw
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
