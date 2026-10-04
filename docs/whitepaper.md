@@ -258,9 +258,9 @@ for.
 the subnet.** `scripts/run_broker.py` runs the broker as its own daemon and
 `run_miner.py --broker-url` makes the miner obtain its credential from it over
 the network, verified across the boundary against AMD's pinned root using
-certificates the enclave hands over. Exercised end to end between two processes,
-including the forged-chain case, where a miner that supplies its own root is
-refused. What has not happened is a run with the broker on a machine the miner's
+certificates the enclave hands over. Exercised end to end between two processes, with the
+transcript in `docs/split-proof.md` and the script in CI, including the
+forged-chain case, where a miner that supplies its own root is refused. What has not happened is a run with the broker on a machine the miner's
 operator does not control, which is the only configuration that demonstrates
 custody rather than describing it. The default remains self-brokering, and the
 miner logs a warning when it starts that way.
