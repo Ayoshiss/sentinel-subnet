@@ -86,3 +86,57 @@ T22, and is the precondition for credential encryption
 being worth building at all. Until it lands, do not describe the operator as
 unable to obtain the credential. Describe them as unable to obtain it without
 tampering that leaves evidence.
+
+## T23: can the boot chain be fixed on our provider? Answered 2026-10-04
+
+**No, not on GCP Confidential VM as offered.** Established three ways rather than
+one, because the answer determines whether Sentinel's integrity claim is
+achievable on this platform at all.
+
+**1. Experiment on our own host.** Added an inert kernel parameter, rebooted, and
+the launch measurement was byte-identical (`docs/results.md`). The kernel command
+line is not in the measurement.
+
+**2. Google's own documentation.** The launch measurement is "a SHA-384 digest,
+based on its initial launch measurements taken before the Confidential VM instance
+UEFI executes". A launch endorsement binds that digest to a firmware build and a
+vCPU count, and nothing else. Bootloader, kernel and userspace measurements are
+explicitly routed elsewhere: Google calls the launch measurement "hardware
+attested" and the vTPM-based measurements "software attested". That split is the
+whole answer.
+
+**3. Why the vTPM cannot substitute.** Misono et al., *Confidential VMs Explained*
+(ACM, 2024), section 3.1: "the traditional vTPM is inappropriate for CVMs since the
+VMM manages it". Our threat model does not trust the host, and the host emulates
+the vTPM, so a PCR chain through it proves nothing against the adversary we
+actually named.
+
+The same section describes the fix and why it is not ours to apply: "AMD proposes a
+measured direct boot, where the VMM additionally inserts the hash of the kernel,
+initrd, and kernel parameters into the initial guest memory. Thus, they become part
+of the measurement in the attestation report." The VMM is the hypervisor. It is the
+provider's, not ours, so this is a platform choice and no amount of guest-side work
+substitutes for it.
+
+### What follows
+
+Sentinel cannot make an application-integrity claim on GCP Confidential VM. Not
+"has not yet"; cannot, with the current offering. Three options, and they are
+strategic rather than technical:
+
+1. **Move to a platform whose VMM does measured direct boot.** Reported to exist
+   elsewhere, including Azure via IGVM and self-hosted QEMU/KVM, which is the
+   obvious path since AMD's own flow supports it. **Unverified by us.** Do not
+   plan around it until someone reproduces the command-line experiment there and
+   sees the measurement move.
+2. **Self-host on bare metal**, where we control the VMM and can enable kernel
+   hashes. Maximum control, and a different business.
+3. **Stop claiming application integrity and sell what is actually true.** The
+   attestation proves a genuine AMD processor running SEV-SNP at VMPL0 in a known
+   firmware state, with the credential released only to that environment, scoped
+   so it cannot read beyond its views, and consensus catching a miner that lies
+   about data. That is a real product. It is confidential *access*, not
+   confidential *compute integrity*.
+
+Option 3 is available today and costs nothing. Options 1 and 2 are the only ones
+that close T23, and both are moves, not patches.
