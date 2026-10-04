@@ -33,7 +33,7 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 | Testnet | **Live**, netuid 554 since 2026-08-29 |
 | Published results | `docs/results.md`: 100 rounds, 900 challenges |
 | Gateway stack | **Live** (`gateway/`, `sidecar/`), routes paid inference to SN64, API only |
-| Architecture, threat register, Yuma mechanics, litepaper | Complete (`docs/`) |
+| Architecture, threat register, Yuma mechanics, whitepaper | Complete (`docs/`) |
 
 Run `python scripts/demo_mcp.py` to watch a miner running modified code be refused
 a customer credential.
@@ -161,7 +161,7 @@ Dockerfile.fly · docker-compose.yml · fly.toml · supervisord.conf
 ```
 docs/
 ├── architecture.md           # full engineering spec
-├── litepaper.md              # litepaper v0.1
+├── whitepaper.md             # what the system is, and what is not built
 ├── threat-register.md        # 19 threats, scored impact × likelihood
 ├── bittensor-mechanics.md    # Yuma, commit-reveal, emissions, Taoflow
 └── development.md            # setup, tests, demos, how the pieces fit
