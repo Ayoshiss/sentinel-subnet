@@ -265,10 +265,35 @@ operator does not control, which is the only configuration that demonstrates
 custody rather than describing it. The default remains self-brokering, and the
 miner logs a warning when it starts that way.
 
-**The released credential is still in the clear inside TLS.** Across the split
-that matters more than it did in one process: whatever terminates TLS at the
-broker sees the DSN. The fix is to encrypt it to the enclave's ephemeral key from
-the attestation report, so the transport is not trusted at all. Not built.
+**The released credential can still be intercepted by the miner's operator.**
+This is the sharpest remaining hole and it is worth stating precisely, because a
+milder version of it would be flattering and wrong. The broker client does not
+pin the broker's certificate, so TLS is validated against the guest's own trust
+store, and the operator of that guest owns that store. Since the launch
+measurement does not cover the root filesystem, the operator can install a
+certificate authority, proxy the broker, and read the credential without the
+measurement changing.
+
+The consequence for the claim: separating the broker raises the cost of taking
+the credential from reading a local variable to actively intercepting one's own
+guest, which is a real improvement and leaves evidence a customer can act on. It
+does not yet make the credential unobtainable, and this paper does not claim it
+does.
+
+Three fixes, in dependency order, none built. First, the root filesystem has to
+be covered by measured state, which is the same blocker as the application
+integrity gap above and is not merely a matter of enabling dm-verity: a root hash
+is only as trustworthy as the thing carrying it, and on our cloud the kernel
+command line that would carry it is not measured. It needs an anchor that is,
+whether a unified kernel image measured by firmware, measured direct boot with
+kernel hashes, or a provider that supports one of those. Second, a pinned broker
+certificate inside that measured image, so TLS stops being validated against a
+trust store the operator owns. Third, encryption of the released credential to an
+ephemeral key carried in the attestation report.
+
+The third is the one usually quoted as the fix, and on its own it is close to
+decoration: whoever can edit the code can read what it decrypts. The ordering is
+the point, and the first item is the expensive one.
 
 ## 10. Limiting what a caller can read
 

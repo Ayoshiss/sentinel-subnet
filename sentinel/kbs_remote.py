@@ -12,12 +12,34 @@ and `release()`, so a client with those two methods substitutes for the local
 broker without the enclave knowing the difference. The customer runs the broker
 on their own machine; the enclave runs on hardware they do not trust.
 
-**The credential crosses the wire in the clear.** `kbs.py` has always said so,
-and over a function call it was theoretical. Over a network it is not, so this
-module refuses a plaintext URL unless an operator explicitly asks for one. The
-better fix is to encrypt the released secret to the enclave's ephemeral public
-key carried in the attestation report, so the transport is not trusted at all;
-that is tracked and not done.
+**Read this before describing the split as closing the custody hole.** The
+credential crosses the wire in the clear, inside TLS. `kbs.py` has always said
+so, and over a function call it was theoretical. Over a network it is not, so
+this module refuses a plaintext URL unless an operator explicitly asks for one.
+
+That is not sufficient, and specifically it is not sufficient against the party
+this exists to defend against. There is no certificate pinning here: TLS is
+validated against the guest's system trust store, and the operator of the guest
+owns that store. Because the launch measurement does not cover the root
+filesystem, that operator can add a certificate authority, point the broker's
+hostname at a local proxy, and read the credential without the measurement
+changing. Threat register T22 and T23.
+
+So what separating the broker actually buys is a change in the cost and the
+evidence: taking the credential stops being a matter of reading one's own
+variable and becomes active interception of one's own guest, which is
+unambiguously deliberate and which a customer can act on. Worth having. Not the
+same as unobtainable, and the docstring says so because this is the sentence a
+reader will quote.
+
+Pinning the certificate here would be easy and would still be worth little on its
+own, because a trust store the operator can edit is one they can also point at a
+pinned value of their choosing unless the pin lives in measured state. The fixes
+in order: get the rootfs covered by measured state, then pin the broker
+certificate inside that measured image, then encrypt the released secret to an
+ephemeral key carried in the attestation report. The last one is the one usually
+named as the fix and is the least useful alone: whoever can edit the code can
+read what it decrypts. None of the three are built.
 
 What authenticates the enclave to the broker is the attestation itself. There is
 no API key here on purpose: anything else would be a second, weaker credential
