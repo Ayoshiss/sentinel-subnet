@@ -178,3 +178,67 @@ python -m venv .venv && .venv/bin/pip install pytest -r requirements.txt
 
 Full per-miner output is written to `results.json`. The suite behind it is 167
 tests, weighted toward the refusals, green on every push.
+
+---
+
+## The correctness gate firing on real hardware, 2026-10-04
+
+Everything above is `scripts/benchmark.py`, nine simulated miners in one process.
+This is netuid 554 with three real enclaves, and it is the first time the
+correctness gate has executed in production, because the gate needs
+`MIN_MINERS_FOR_CORRECTNESS_GATE = 3` verified miners and 554 had one serving
+miner until today.
+
+Three miner processes on one AMD EPYC 7B13 confidential VM, chip
+`1D1F823A4C32…E40B`, all reporting launch measurement `ccdc5cf01ba2…26fa`:
+
+| uid | port | code |
+|---|---|---|
+| 1 | 8091 | the production miner, unmodified |
+| 3 | 8092 | unmodified, second checkout |
+| 4 | 8093 | **`/opt/sentinel-tampered`, query tool patched to return rows that never came from the database** |
+
+The tamper is the attack an operator would actually run: edit the served code on a
+machine you control. It changes no launch measurement, because the measurement
+covers boot state and not the root filesystem.
+
+One validator round, dry run so no weights were submitted:
+
+```
+sentinel.chain: discovered 3 serving miners on netuid 554
+sentinel.validating: uid=1 verified=True weight=1.0000
+sentinel.validating: uid=3 verified=True weight=1.0000
+sentinel.validating: uid=4 verified=True weight=0.0000
+sentinel.validating: uid=4 scored 0.8000 under the old rubric and 0 under the new
+  one; gates: attestation=1.00 cache=1.00 nonce=1.00 correctness=0.00
+sentinel.validator: uid=4   attest=1.00 latency=1.00 correct=0.00 cache=1.00
+  nonce=1.00 weight=0.0000
+sentinel.validator: dry run, not submitting: {1: 0.5, 3: 0.5, 4: 0.0}
+```
+
+### The line that matters is `uid=4 attest=1.00`
+
+The tampered miner **passed attestation on genuine AMD silicon**. `verified=True`.
+Its VCEK chained to AMD's root, its measurement matched the approved one, its
+nonce was fresh. Every hardware check said yes, while it served fabricated rows,
+because editing a file on the root filesystem changes nothing the chip measures.
+
+So this is one round that demonstrates both halves honestly:
+
+- **Attestation cannot detect modified application code.** T23. Anyone who reads
+  "the chip checks the code" into this project is reading something we do not
+  claim.
+- **Consensus can, and did.** `correctness=0.00` zeroed it while the two honest
+  miners agreed. That is what makes mining not worth gaming for emissions.
+
+### What this does not show
+
+**Sybil resistance.** Three miners on one chip, all ours. Consensus among three
+processes we control is not independent verification, and a majority we own could
+agree on anything. What it establishes is that the gate fires and that the
+mechanism zeroes a liar, not that the majority cannot be bought.
+
+**Protection against a quiet attacker.** `uid=4` was caught because it lied about
+the data. An enclave running tampered code that returns *correct* rows while
+leaking them passes this round with 1.0000, which is the `exfiltrator` row in the
+benchmark above and `T23` in the register.
