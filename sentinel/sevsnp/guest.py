@@ -263,15 +263,33 @@ def _address_of(buf: bytearray) -> int:
 #: separate process. The file lock is what makes that case safe.
 SEV_GUEST_LOCK = "/var/lock/sentinel-sev-guest.lock"
 
+#: Set once the warning below has been emitted, so a per-request failure does
+#: not fill the journal with the same line.
+_LOCK_WARNED = False
+
 
 @contextlib.contextmanager
 def sev_guest_exclusive():
     """Hold exclusive access to the SEV firmware channel."""
     try:
         fd = os.open(SEV_GUEST_LOCK, os.O_CREAT | os.O_RDWR, 0o666)
-    except OSError:
-        # An unwritable lock directory must not stop a miner attesting. The
-        # in-process lock still applies; only cross-process safety is lost.
+    except OSError as exc:
+        # An unwritable lock directory must not stop a miner attesting, so this
+        # degrades rather than failing. But it degrades to the exact condition
+        # that permanently disables the VMPCK, so it must be loud: a silent
+        # version of this ran in production for weeks, because
+        # ProtectSystem=strict makes /run/lock read-only and nothing said so.
+        # Once per process is enough to put it in the journal without flooding it.
+        global _LOCK_WARNED
+        if not _LOCK_WARNED:
+            _LOCK_WARNED = True
+            logger.error(
+                "cannot create %s (%s): the SEV firmware channel is NOT guarded "
+                "across processes. A second process attesting at the same time "
+                "will permanently disable the VMPCK and only a reboot clears it. "
+                "If this is a systemd unit, add /run/lock to ReadWritePaths.",
+                SEV_GUEST_LOCK, exc,
+            )
         yield
         return
     try:

@@ -41,7 +41,13 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/sentinel
+# /run/lock is not optional. The SEV firmware channel is guarded by a file lock
+# there, and ProtectSystem=strict makes /run/lock read-only, so without this the
+# lock cannot be created and cross-process safety is silently lost. That is not
+# hypothetical: it is how a second process running --print-measurement bricked
+# the VMPCK on 2026-09-24 and cost a reboot. Found again on 2026-10-04, when the
+# live miner turned out to have been running without the lock the whole time.
+ReadWritePaths=/opt/sentinel /run/lock
 StateDirectory=sentinel
 # The one device that must stay reachable: without it there is no attestation
 # and the miner refuses to start.
