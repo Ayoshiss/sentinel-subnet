@@ -6,7 +6,7 @@ by hardware, rather than to a person or a company.
 Netuid 554 on Bittensor testnet, live since 2026-08-29. AMD EPYC, SEV-SNP.
 
 > This document describes the system that exists. Section 9 separates what is
-> built from what is designed, and section 12 lists the commands that reproduce
+> built from what is designed, and section 13 lists the commands that reproduce
 > every number in it. **Where this document and the code disagree, the code is
 > correct.**
 
@@ -239,12 +239,12 @@ miner: full marks while serving fabricated rows. dm-verity does not close it on
 our cloud, because the kernel command line is not covered. Credential scoping
 (section 10) bounds the damage without closing the hole.
 
-**Payment.** There is no payment path. Earlier material described per-query
-micropayments; no such code exists. Validators challenge miners and miners earn
-emissions.
+**Payment.** There is no payment path. The design is in section 11; no code
+implements it. Validators challenge miners and miners earn emissions.
 
-**Collateral and slashing.** Not implemented. Dishonesty costs a miner its
-weight, which is the only economic penalty in force.
+**Collateral and slashing.** Not implemented, and section 11 notes that the
+original slashing design assumed the measurement catches a tampered application,
+which it does not. Dishonesty costs a miner its weight and nothing more.
 
 **Correctness beyond consensus.** Correctness is decided by miners agreeing with
 each other, which requires them to hold identical data. Real customers break that
@@ -279,7 +279,70 @@ stored, comparison is constant time, and a rejected key never falls through to
 the signature path. A bearer token carries no replay protection, unlike a signed
 request; that is a real difference and an operator should choose it knowingly.
 
-## 11. Two deployment shapes
+## 11. Payment, as designed and not as built
+
+> **None of this section is implemented.** There is no payment code in the
+> repository. It is included because a subnet that intends to earn external
+> revenue rather than farm emissions owes a reader the mechanism it means to
+> use, and because the design predates and survives the implementation gap.
+
+The intent is per-query settlement in USDC over **x402**, so that reaching a
+tool costs a few cents at the moment of use rather than a contract and an
+onboarding cycle. The analogy that fits is a metro card rather than a gym
+membership: tap per turnstile, no account beyond a wallet.
+
+A gateway sits between the agent and the enclave and handles settlement, so the
+miner is never in the payment path:
+
+```
+agent                 gateway                enclave              customer db
+  │  POST tool call      │                      │                      │
+  │ ───────────────────► │                      │                      │
+  │  402 Payment Required│                      │                      │
+  │ ◄─────────────────── │                      │                      │
+  │  retry + PAYMENT-SIG │                      │                      │
+  │ ───────────────────► │ verify + settle      │                      │
+  │                      │ ──────────────────►  │  execute in enclave   │
+  │                      │                      │ ───────────────────► │
+  │                      │                      │ ◄─────────────────── │
+  │                      │                      │  sign + attest        │
+  │  200 + result + attestation                 │                      │
+  │ ◄─────────────────────────────────────────  │                      │
+```
+
+Settlement is budgeted at roughly 60ms inside a round trip of about 420ms with a
+cached attestation, or about 800ms with a fresh attestation per request. That
+makes settlement the most expensive single segment; everything else is
+single-digit milliseconds of work plus network hops.
+
+Three properties the design depends on. The agent signs but does not pay gas,
+because a facilitator covers it. Fees are sub-cent on the chains considered.
+And there is no account to create, since any wallet holding USDC can transact,
+which is what makes machine-to-machine purchase plausible at all.
+
+**Miner collateral** belongs to the same unbuilt layer: TAO posted on-chain and
+slashed when a miner is caught. Today the only penalty for dishonesty is scoring
+zero, which costs a miner that round's emissions and nothing else.
+
+**One claim from the original design is now known to be wrong**, and it is worth
+correcting rather than quietly dropping. It held that a miner tampering with its
+container image would change the launch measurement and be slashed. It would
+not. The measurement covers what booted, so tampering *after* boot leaves it
+unchanged, which is the limitation in section 9. A slashing design that assumes
+the measurement catches a modified application is assuming something false.
+
+**Why none of it is built yet.** A payment rail meters demand, and there is no
+demand to meter: no paying agents, and no independent miners to pay. Collateral
+has the same problem from the other side, since testnet alpha is worth nothing
+and there is no mainnet registration, so a slashed miner loses nothing it minds
+losing. Both become real work the moment either side of that market exists, and
+neither teaches anything before then.
+
+Note also that the self-hosted deployment in the next section needs none of it.
+A customer running Sentinel over their own database pays under a contract, not
+per query.
+
+## 12. Two deployment shapes
 
 The same software serves two situations with different trust properties, and
 conflating them causes most of the confusion about what Sentinel is.
@@ -298,7 +361,7 @@ The decentralised case pays when the data owner and the agent owner are differen
 parties who do not trust each other. Where they are the same party, a single
 enclave is sufficient and simpler.
 
-## 12. Reproducing every claim
+## 13. Reproducing every claim
 
 ```bash
 git clone https://github.com/Ayoshiss/sentinel-subnet
