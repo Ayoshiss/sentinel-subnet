@@ -232,12 +232,33 @@ exists.
 
 Stated plainly, because a reader can check the repository in minutes.
 
-**Application integrity after boot.** The launch measurement covers what booted,
-not what runs afterwards. An operator with root can modify the miner after boot
-and still produce a valid attestation. We demonstrated this against our own live
-miner: full marks while serving fabricated rows. dm-verity does not close it on
-our cloud, because the kernel command line is not covered. Credential scoping
-(section 10) bounds the damage without closing the hole.
+**Application integrity, and in fact everything above the firmware.** The launch
+measurement is computed at launch. On the confidential VMs we run, the boot chain
+is shim, then GRUB, then the kernel, all read from the disk after launch, with
+Secure Boot disabled; `/proc/cmdline` carries `BOOT_IMAGE=`, which is GRUB's
+signature. So the measurement does not cover the kernel, the initrd, the kernel
+command line, the bootloader, or the root filesystem. Checked on our own host on
+2026-10-04 rather than inferred from documentation, and the earlier version of this
+paragraph understated it by naming only the command line.
+
+What the attestation therefore establishes is narrower than a reader will assume:
+a genuine AMD processor, running SEV-SNP at VMPL0, in a given firmware state. It
+makes no statement about which operating system or application is running. We
+demonstrated the consequence against our own live miner, twice: full marks while
+serving fabricated rows, and on 2026-10-04 a miner with edited code passing
+attestation with `attest=1.00` and being caught only by consensus (section 7).
+
+dm-verity is not the fix, and nor is a root hash in the kernel command line, since
+that is unmeasured too. The boot chain itself has to change so that kernel, initrd
+and command line hashes land in the launch measurement before the guest runs:
+measured direct boot, or a unified kernel image measured before launch. Whether our
+provider offers either for a confidential VM is unestablished. The guest has a vTPM
+that does measure the chain into PCRs, but the host emulates it, and section 2 does
+not trust the host.
+
+Credential scoping (section 10) bounds the damage without closing the hole, and
+consensus (section 6) catches a miner that lies about data, though not one that
+answers correctly and leaks.
 
 **Payment.** There is no payment path. The design is in section 11; no code
 implements it. Validators challenge miners and miners earn emissions.
