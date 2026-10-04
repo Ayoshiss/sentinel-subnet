@@ -1,6 +1,6 @@
 # Validator results
 
-*100 rounds, 900 challenges, 2026-08-30. Reproduce with:*
+*100 rounds, 1000 challenges, re-run 2026-10-04. Reproduce with:*
 
 ```bash
 python scripts/benchmark.py --rounds 100
@@ -17,23 +17,25 @@ testnet (`btcli subnets metagraph 554 --network test`).
 
 ## The field
 
-Two honest miners, one merely slow, and six ways of being dishonest, each
-isolated so that a failure names one specific defence rather than a vague
-"something was wrong".
+Two honest miners, one merely slow, six ways of being dishonest that this design
+defends against, and one it does not, each isolated so that a failure names one
+specific defence rather than a vague "something was wrong".
 
 | Miner | Behaviour | Defence under test |
 |---|---|---|
 | `honest-a`, `honest-b` | correct | baseline |
 | `slow` | honest, answers ~900 ms late | latency scoring |
-| `backdoored` | runs a modified image | launch measurement |
+| `backdoored` | boots a different image | launch measurement |
 | `replay` | reuses a stale attestation | nonce binding |
 | `malformed` | returns a corrupt signature | signature verification |
-| `fabricator` | invents database rows | consensus correctness |
+| `fabricator` | approved image, invents rows | consensus correctness |
+| `exfiltrator` | approved image, correct rows, leaks what it reads | **none** |
 | `cacheable` | allows attested replies to be cached | cache hygiene |
 | `unreachable` | does not answer | liveness |
 
 Two honest miners rather than one, so consensus has a majority that is not a
-single voice. Every round issues fresh nonces; nothing carries between rounds.
+single voice, and nine verified miners in total, which is well above the three the
+correctness gate needs before it will gate anything. Every round issues fresh nonces; nothing carries between rounds.
 
 ---
 
@@ -43,7 +45,8 @@ single voice. Every round issues fresh nonces; nothing carries between rounds.
 |---|---|---|---|---|---|
 | honest-a | 100.0% | 0.0% |: | **1.0000** | 1 ms |
 | honest-b | 100.0% | 0.0% |: | **1.0000** | 1 ms |
-| slow | 100.0% | 0.0% |: | 0.8874 | 907 ms |
+| slow | 100.0% | 0.0% |: | 0.8873 | 908 ms |
+| **exfiltrator** | 100.0% | **0.0%** | : | **1.0000** | 1 ms |
 | cacheable | 100.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
 | fabricator | 100.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
 | backdoored | 0.0% | 100.0% | 100.0% | **0.0000** | 1 ms |
@@ -55,20 +58,47 @@ single voice. Every round issues fresh nonces; nothing carries between rounds.
 detection rate                   100.0%
 caught by the expected cause     100.0%
 false rejections                 0  (0.0%)
+UNDETECTED BY DESIGN             1 miner, mean weight 1.0000
 honest mean weight               1.0000
-degraded (slow) mean weight      0.8874
+degraded (slow) mean weight      0.8873
 dishonest mean weight            0.0000
 worst honest / best dishonest    1.0000 / 0.0000
 ```
 
-The last line is the one that matters, and it used to read the other way round.
+## Read the 100% before you read anything else
 
-**Detection was perfect and correctly attributed.** Every dishonest miner was
-caught in all 100 rounds, and each was caught by the defence intended to catch
-it, a miner failing for the wrong reason would be a bug wearing a success as a
+**`exfiltrator` scored full marks and is dishonest.** It runs the approved
+measurement and returns correct rows, so every defence here passes it, while it
+leaks what it reads. Consensus will never catch it, because its answers are right.
+It is in the field deliberately: a detection rate computed over a population
+chosen to be fully detectable is a statement about the population, not about the
+design.
+
+So `detection rate 100.0%` means *of the attacks this design defends against,
+every one was caught*. It does not mean the design is complete. The gap is
+`T23` in `docs/threat-register.md`, and it is bounded by credential scoping rather
+than detected.
+
+**Two further things not to read into this table.** `backdoored` boots a
+*different image*, so it reports a different launch measurement and attestation
+rejects it. An operator modifying application code inside the approved image
+changes no measurement at all, because the measurement covers boot state and not
+the root filesystem. That attack is `fabricator`, and what catches it is consensus,
+not attestation.
+
+Which leads to the second thing: consensus needs
+`MIN_MINERS_FOR_CORRECTNESS_GATE = 3` verified miners before it gates anything, so
+below three miners `fabricator` would score 1.0000 too. This benchmark has nine verified.
+**Testnet 554 has had two**, so the defence that catches the realistic attack has
+never fired in production. Arming it needs a third enclave, and that is why the
+count matters more than it looks.
+
+**Detection was perfect and correctly attributed, within the attacks this design
+defends against.** Every such dishonest miner was caught in all 100 rounds, and
+each was caught by the defence intended to catch it, a miner failing for the wrong reason would be a bug wearing a success as a
 disguise, so the harness checks the cause, not just the outcome.
 
-**No honest miner was ever rejected.** Zero false positives across 900
+**No honest miner was ever rejected.** Zero false positives across 1000
 challenges, including the slow one, which is the case most likely to be
 mistreated by an aggressive rule.
 

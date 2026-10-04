@@ -11,9 +11,10 @@ field of miners over many rounds and reports rates rather than anecdotes.
 The field is one honest miner plus six ways of being dishonest, each isolated so
 a failure names a specific defence:
 
-    backdoored      runs a modified image        -> launch measurement
+    backdoored      boots a different image      -> launch measurement
     replay          reuses a stale attestation   -> nonce binding
-    fabricator      invents database rows        -> consensus correctness
+    fabricator      approved image, wrong rows   -> consensus correctness
+    exfiltrator     approved image, right rows   -> NOTHING. See below.
     cacheable       lets replies be cached       -> cache hygiene
     slow            answers, but late            -> latency scoring
     unreachable     does not answer at all       -> liveness
@@ -27,6 +28,25 @@ being measured is whether the protocol catches each attack, which is a property
 of the challenge-verify-score design rather than of the silicon underneath it.
 Real hardware changes where the signature comes from, not whether a mismatched
 measurement is caught.
+
+Two things about this field that a reader will otherwise get wrong.
+
+`backdoored` boots a *different image*, so it reports a different launch
+measurement and attestation rejects it. That is not the attack an operator would
+actually run. Modifying application code inside the approved image does not change
+the launch measurement at all, because the measurement covers boot state and not
+the root filesystem. So do not read "attestation catches modified code" into these
+numbers. The attack that does work is `fabricator`: approved measurement,
+tampered behaviour, caught by consensus rather than by attestation. That matters
+because consensus needs `MIN_MINERS_FOR_CORRECTNESS_GATE` verified miners to fire,
+so this defence is live here and was not live on testnet 554, which had two.
+
+`exfiltrator` is the case nothing catches, and it is in the field so the headline
+numbers cannot be read as completeness. It runs the approved measurement and
+returns correct rows, so every defence passes it, while it leaks what it reads.
+Consensus will never catch it, because its answers are right. It is a
+confidentiality failure rather than an incentive one, and it is bounded by
+credential scoping rather than detected. Threat register T23.
 """
 
 import argparse
@@ -51,6 +71,7 @@ from sentinel.mcp.tools import PostgresQueryTool
 from sentinel.serving import MinerHandler
 from sentinel.serving.server import make_server
 from sentinel.validating import MinerEvaluator, MinerTarget
+from sentinel.validating.evaluator import MIN_MINERS_FOR_CORRECTNESS_GATE
 
 APPROVED = sha384(b"sentinel-miner-image-v0.1")
 DSN = "postgres://app:secret@customer-db:5432/prod"
@@ -66,6 +87,10 @@ FIELD = [
     ("backdoored",  {"measurement": sha384(b"backdoored-image")}),
     ("replay",      {"replay": True}),
     ("fabricator",  {"rows": FAKE_ROWS}),
+    # Approved measurement, correct answers, dishonest anyway. Present so the
+    # detection rate is reported against a field that includes something
+    # undetectable, instead of one curated to be fully detectable.
+    ("exfiltrator", {}),
     ("cacheable",   {"cacheable": True}),
     ("slow",        {"delay_ms": 900}),
     ("malformed",   {"malformed": True}),
@@ -76,6 +101,12 @@ FIELD = [
 #: counting them as undetected attacks would misstate the detection rate, and
 #: rejecting them would be a false positive.
 DEGRADED = {"slow"}
+
+#: Dishonest and undetectable by design, not by oversight. Reported separately:
+#: folding these into the detection rate would hide them inside a percentage,
+#: and leaving them out of the field entirely would be worse, because then the
+#: percentage would describe a field chosen to make it look good.
+UNDETECTABLE = {"exfiltrator"}
 
 #: What each dishonest miner should fail on. A miner failing for the *wrong*
 #: reason is a bug, not a success, so the harness checks the reason too.
@@ -207,7 +238,10 @@ def build_report(rounds, elapsed, names, weights, latencies, caught,
                  caught_correctly, verified, latency_ceiling_ms):
     honest = [n for n in weights if n.startswith("honest")]
     degraded = [n for n in weights if n in DEGRADED]
-    dishonest = [n for n in weights if not n.startswith("honest") and n not in DEGRADED]
+    dishonest = [n for n in weights
+                 if not n.startswith("honest")
+                 and n not in DEGRADED and n not in UNDETECTABLE]
+    undetectable = [n for n in weights if n in UNDETECTABLE]
 
     rows = []
     for name in weights:
@@ -215,7 +249,9 @@ def build_report(rounds, elapsed, names, weights, latencies, caught,
         lat = latencies.get(name, [])
         rows.append({
             "miner": name,
-            "expected_defence": EXPECTED.get(name, "none (honest)"),
+            "expected_defence": (
+                "NONE (undetectable)" if name in UNDETECTABLE
+                else EXPECTED.get(name, "none (honest)")),
             "rounds": len(w),
             "mean_weight": round(statistics.mean(w), 4),
             "max_weight": round(max(w), 4),
@@ -253,6 +289,15 @@ def build_report(rounds, elapsed, names, weights, latencies, caught,
             "correct_attribution_pct": round(
                 100 * sum(caught_correctly[n] for n in dishonest)
                 / sum(len(weights[n]) for n in dishonest), 2),
+            # Stated as a count, not folded into the rate above. The detection
+            # rate answers "of the attacks this design defends against, how many
+            # were caught". It does not answer "is the design complete", and
+            # these are the attacks it does not defend against at all.
+            "undetectable_miners": len(undetectable),
+            "undetectable_mean_weight": (
+                round(statistics.mean([w for n in undetectable for w in weights[n]]), 4)
+                if undetectable else None),
+            "correctness_gate_min_miners": MIN_MINERS_FOR_CORRECTNESS_GATE,
         },
     }
 
@@ -273,6 +318,16 @@ def render(report):
     print(f"  caught by expected cause  {s['correct_attribution_pct']}%")
     print(f"  false rejections          {s['false_rejections']}  ({s['false_rejection_rate_pct']}%)"
           "   [honest or merely slow, scored to zero]")
+    if s.get("undetectable_miners"):
+        print(f"\n  UNDETECTED BY DESIGN      {s['undetectable_miners']} miner(s), "
+              f"mean weight {s['undetectable_mean_weight']}")
+        print("    An enclave running the approved measurement and returning correct")
+        print("    rows passes every defence here while leaking what it reads.")
+        print("    Consensus cannot catch it: its answers are right. The detection")
+        print("    rate above is over the attacks this design defends against, and")
+        print("    this is not one of them. Threat register T23.")
+        print(f"    Note the correctness gate needs {s['correctness_gate_min_miners']} "
+              "verified miners to fire at all.")
     print(f"  honest mean weight        {s['honest_mean_weight']}")
     print(f"  degraded (slow) mean      {s['degraded_mean_weight']}")
     print(f"  dishonest mean weight     {s['dishonest_mean_weight']}")
