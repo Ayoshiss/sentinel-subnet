@@ -32,6 +32,7 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 | **SEV-SNP hardware** | **Verified on real silicon**, AMD EPYC 7B13, VCEK → ASK → ARK → report signature, offline, against a pinned AMD root |
 | Miner / validator neurons | **Working**, bittensor v11, weights land via timelock commit |
 | Testnet | **Live**, netuid 554 since 2026-08-29 |
+| What the measurement covers | **Measured, not assumed.** AMD SEV-SNP on GCP covers firmware only; the same change moves two Intel TDX registers on the same cloud. `scripts/probe_measurement_scope.sh`, results in `docs/results.md` |
 | Consensus catching a tampered miner | **Demonstrated on hardware 2026-10-04.** Three enclaves on 554; a miner with edited code passed attestation (`attest=1.00`) and was zeroed by consensus (`correct=0.00`). See `docs/results.md` |
 | Published results | `docs/results.md`: 100 rounds, 900 challenges |
 | Gateway stack | **Live** (`gateway/`, `sidecar/`), routes paid inference to SN64, API only |

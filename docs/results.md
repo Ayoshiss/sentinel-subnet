@@ -313,3 +313,61 @@ The three miners stayed up throughout, because the measurement did not change an
 nothing failed closed. Had it changed, every instance would have exited rather than
 serve under a value nobody approved, which is the behaviour you want from this
 experiment going the other way.
+
+---
+
+## Intel TDX measures what AMD SEV-SNP does not, 2026-10-05
+
+The same experiment that showed the kernel command line is absent from the
+SEV-SNP launch measurement was run on an Intel TDX confidential VM, on the same
+cloud and the same project: `c3-standard-4`, `--confidential-compute-type=TDX`,
+us-central1-a, Ubuntu 24.04. The guest reported `tdx: Guest detected`,
+`Memory Encryption Features active: Intel TDX`, and exposed `/dev/tdx_guest` and
+the ConfigFS TSM interface at `/sys/kernel/config/tsm/report`.
+
+An 8000-byte quote was read from `provider=tdx_guest`, before and after adding a
+single inert kernel parameter (`sentinel.probe=1`) and rebooting.
+
+| Register | Before | After | |
+|---|---|---|---|
+| MRTD | `c1ee9c16…70a5` | `c1ee9c16…70a5` | unchanged |
+| RTMR0 | `2eccde06…61c9` | `2eccde06…61c9` | unchanged |
+| RTMR1 | `0ce9ed87…095e` | `28d79edd…0129` | **changed** |
+| RTMR2 | `05625e4f…3df6` | `0af57d4d…3448` | **changed** |
+| RTMR3 | all zero | all zero | unused |
+
+**One kernel parameter moved two registers that are carried inside the
+hardware-signed quote.** MRTD is the build-time measurement of the initial trust
+domain and correctly did not move; RTMR0 covers firmware and configuration and
+also did not move.
+
+Compare with the AMD result on the same cloud, where the identical change left
+the launch measurement byte-identical. **Intel TDX on Google Cloud measures the
+guest boot chain in hardware-rooted attestation. AMD SEV-SNP on Google Cloud does
+not.**
+
+### Why this matters more than it first appears
+
+On SEV-SNP the recommended fix, a dm-verity root hash passed on the kernel
+command line, is worthless, because the command line is not measured and the hash
+would be as forgeable as the filesystem it describes. On TDX the command line
+**is** measured, so that hash is anchored. The standard approach becomes viable
+on a platform we already use.
+
+### Honest limits of this result
+
+**Runtime extension was not available.** This kernel (7.0.0-1011-gcp) exposes
+`/sys/kernel/config/tsm/report` but no `rtmr` interface, so a process cannot
+extend a measurement of itself into RTMR3 from userspace. That is a smaller
+problem than it sounds: if the application is covered by the measured boot chain,
+through a dm-verity root hash on the measured command line or a unified kernel
+image, then RTMR1 and RTMR2 already cover it and no runtime extension is needed.
+
+**Measurement is provenance, not honesty.** A correctly measured application can
+still contain an exfiltration path. This closes T23. It does not close the
+`exfiltrator` case above, and nothing in any platform does.
+
+**The signature was not verified here.** This experiment establishes what the
+quote measures, not the Intel PCK chain. Verifying a TDX quote end to end against
+Intel's roots is separate work, equivalent to what `sentinel/sevsnp/` already does
+for AMD.

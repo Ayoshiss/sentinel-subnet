@@ -309,9 +309,15 @@ Three fixes, in dependency order, none built. First, the root filesystem has to
 be covered by measured state, which is the same blocker as the application
 integrity gap above and is not merely a matter of enabling dm-verity: a root hash
 is only as trustworthy as the thing carrying it, and on our cloud the kernel
-command line that would carry it is not measured. It needs an anchor that is,
-whether a unified kernel image measured by firmware, measured direct boot with
-kernel hashes, or a provider that supports one of those. Second, a pinned broker
+command line that would carry it is not measured on **AMD SEV-SNP**. It needs an
+anchor that is, and as of 2026-10-05 we know where one is, without changing cloud:
+**Intel TDX on the same provider measures the guest boot chain** into runtime
+measurement registers carried inside the hardware-signed quote. The experiment
+that found this gap on AMD was repeated on TDX, where the identical command-line
+change moved two registers rather than none (section 7). Because the command line
+is measured there, a dm-verity root hash placed on it is anchored, and the
+standard fix becomes viable. The cost is reimplementing `sentinel/sevsnp/` against
+Intel's quote format and PCK chain, which is a module, not a migration. Second, a pinned broker
 certificate inside that measured image, so TLS stops being validated against a
 trust store the operator owns. Third, encryption of the released credential to an
 ephemeral key carried in the attestation report.
