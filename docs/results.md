@@ -371,3 +371,72 @@ still contain an exfiltration path. This closes T23. It does not close the
 quote measures, not the Intel PCK chain. Verifying a TDX quote end to end against
 Intel's roots is separate work, equivalent to what `sentinel/sevsnp/` already does
 for AMD.
+
+## TDX feasibility spike: are the measurements pinnable? 2026-10-05
+
+Knowing TDX measures the boot chain is not enough to build on. The operational
+question is whether a value can be computed once, published, and matched by every
+honest miner. On SEV-SNP the answer was no: the measurement changed when the
+miner moved between zones, because host firmware is folded in, which is why the
+measurement registry exists at all.
+
+Three TDX VMs, identical machine type, image and configuration:
+
+| VM | Zone |
+|---|---|
+| `sentinel-tdx-a` | us-central1-a |
+| `sentinel-tdx-b` | us-central1-a, different host |
+| `sentinel-tdx-c` | **europe-west4-a**, different continent |
+
+All three returned byte-identical values:
+
+```
+MRTD  = c1ee9c16e3afc506cfe042c5b846a368528f3b37618eafb27469bc114cf914e9222c91618470e7f2b28ac360968270a5
+RTMR0 = 2eccde064b5da2462c73d3a51fbc22ce6ed4559f62b6ebbca3d37b4d0d3daa9854fb1024990b6044114ce5edfca061c9
+RTMR1 = 0ce9ed8770bb1184759929745f9aa80efa687c68b05bde3bd58853c8005c5fda887fe955b48572f0b5ca6964191d095e
+RTMR2 = 05625e4f23b67aec47d02e33d11698e14f21396b4c3285d1ceb9d03c4538bc89d755d0eadee0b58b0a80bdddc4013df6
+```
+
+**Reproducible across hosts and across continents.** The opposite of the SEV-SNP
+behaviour, where one pinned value described one machine rather than a fleet.
+
+### And a change is reproducible too
+
+The same inert parameter (`sentinel.roothash=deadbeef`) was added to the kernel
+command line on the us-central1 and europe-west4 VMs, and both rebooted:
+
+```
+RTMR1 = 28d79edd08188dcf07fe95c974f9caa32beaf29574a06970ff19a0680c24790e05b393106184dfc72804c9e5eece0129
+RTMR2 = ba80a2714bb8a7c2baa1f7cf7459869d386bcb88af7cdd205638a26b72679ff61b20d6c6ac5d36bb2284e1f85fa0a42e
+```
+
+Identical on both, on different continents. So an approved value can be computed
+once and will match every honest miner, which is the property the whole design
+needs and which SEV-SNP did not provide.
+
+### The nuance, recorded because it will matter later
+
+`RTMR1` took the **same** value (`28d79edd…`) for two *different* command-line
+parameters, while `RTMR2` differed between them. So `RTMR2` is the register that
+tracks the command-line contents; `RTMR1` tracks kernel and boot components.
+
+The likely reason RTMR1 moved from its baseline at all is that these images set
+`GRUB_FORCE_PARTUUID` and attempt an initrdless boot, and adding a
+`GRUB_CMDLINE_LINUX_DEFAULT` override changes which boot components GRUB loads.
+**That explanation is inferred, not proven**, and should be confirmed before any
+approved value is published, because it means RTMR1 can move for reasons that
+have nothing to do with the application.
+
+### What this means for the port
+
+A dm-verity root hash placed on the kernel command line lands in `RTMR2`,
+deterministically, identically on every host. That is the exact fix that is
+worthless on SEV-SNP, and it is operationally simpler there than what we have
+today, because one approved set describes the fleet.
+
+### Availability and cost
+
+`c3-standard-4` is listed in **67 zones**, against 12 for SEV-SNP, and TDX
+instances were created without a quota request in both us-central1 and
+europe-west4. So moving the subnet toward TDX widens the hardware a prospective
+miner can use rather than narrowing it, which was the main worry about this path.
