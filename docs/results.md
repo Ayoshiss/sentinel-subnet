@@ -440,3 +440,39 @@ today, because one approved set describes the fleet.
 instances were created without a quota request in both us-central1 and
 europe-west4. So moving the subnet toward TDX widens the hardware a prospective
 miner can use rather than narrowing it, which was the main worry about this path.
+
+## A natural experiment, 2026-10-09
+
+Eleven days after the deliberate probe, production supplied a better version of
+it without being asked.
+
+The miner's chip stopped answering. The watchdog saw three consecutive 503s,
+rebooted the host, and the miner came back unattended. That is the second time
+this failure has occurred (the first was 2026-09-24) and the second time it was
+recovered without anyone watching.
+
+The reboot also picked up a kernel upgrade:
+
+```
+reboot  system boot  6.8.0-1070-gcp  Fri Oct  9 17:07   still running
+reboot  system boot  6.8.0-1069-gcp  Sun Oct  4 12:03 - 17:07
+```
+
+The launch measurement after that upgrade:
+
+```
+ccdc5cf01ba25526bd65503d95931b787b4385a3277cfe4448addf9c3e894948ae8cf7b099620e3e22717de2fb5d26fa
+```
+
+Byte-identical to the value pinned on 2026-10-04, before the upgrade.
+
+**An entire kernel binary was replaced and the measurement did not move.** The
+deliberate experiment above changed one inert command-line parameter; this
+changed the kernel itself. It is the same conclusion arrived at by accident, on
+the production miner, with a real change rather than a synthetic one, and it is
+the clearest demonstration available that the kernel is not covered.
+
+It also means the approved measurement survives routine patching, which is
+operationally convenient and epistemically alarming in equal measure: miners can
+take security updates without re-approval, precisely because the thing being
+updated is not attested.
