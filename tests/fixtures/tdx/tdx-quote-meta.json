@@ -1,0 +1,13 @@
+{
+  "captured": "2026-11-03T18:31:50Z",
+  "cmdline": "BOOT_IMAGE=/vmlinuz-7.0.0-1014-gcp root=PARTUUID=668bffdd-b002-4b46-9120-d69d230ce20b ro console=ttyS0,115200 panic=-1",
+  "confidential_compute_type": "TDX",
+  "generation": "1",
+  "image_family": "ubuntu-2404-lts-amd64",
+  "kernel": "7.0.0-1014-gcp",
+  "machine_type": "c3-standard-4",
+  "nonce_hex": "72587a1620998b6a1281d927aae0bdc9fd8c9d770d0b3854b2e3646cdf8c83c1f18721965b3bb41511c2864d1d7029ab7df6a888453837892d51274cea138b36",
+  "provider": "tdx_guest",
+  "quote_bytes": 8000,
+  "zone": "us-central1-a"
+}
