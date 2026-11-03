@@ -9,8 +9,11 @@
 # ten hours dead, /health answering 200 the whole time because it reported
 # cached identity and never asked whether the chip still worked.
 #
-# /health now returns 503 once a GuestError has been latched, so this watches
-# for that and reboots.
+# /health returns 503 once a GuestError has been latched, so this watches for
+# that and reboots. It also watches dmesg directly, because the chip can die
+# while the miner is stopped, in which case the miner crashes during startup and
+# never serves a 503 at all. That variant happened on 2026-11-03 and this script
+# sat through it logging "leaving the host alone".
 #
 # The circuit breaker is the important part. A host with degraded hardware will
 # fail again immediately after a reboot, and a watchdog without a limit turns
@@ -79,14 +82,27 @@ while true; do
         continue
     fi
 
-    # 000 means the miner is not listening at all, which systemd already handles
-    # by restarting the unit. Rebooting the host for that would be a large
-    # hammer for a small problem, so only a latched 503 justifies it.
+    # 000 means the miner is not listening at all, which systemd usually handles
+    # by restarting the unit. But there is one case where it cannot, and it cost
+    # an outage on 2026-11-03: if the chip dies while the miner is stopped, the
+    # miner crashes during startup (GuestError, ENOTTY) before it ever binds a
+    # port, so there is no /health to return 503. systemd then restarts it every
+    # RestartSec forever, and the reasoning below, that systemd has it covered,
+    # is wrong because systemd cannot clear a disabled VMPCK.
+    #
+    # So ask the authoritative source rather than inferring from an HTTP code.
+    # dmesg says plainly whether the firmware channel is dead.
     if [ "$code" != "503" ]; then
-        log "not a 503, leaving the host alone; systemd restarts the service"
-        failures=0
-        sleep "$CHECK_INTERVAL"
-        continue
+        if dmesg 2>/dev/null | grep -q "VMPCK is disabled"; then
+            log "health is $code but dmesg reports VMPCK is disabled: the chip is"
+            log "dead and the miner cannot start at all. systemd restarting it"
+            log "will not help. Treating this as a reboot condition."
+        else
+            log "not a 503, leaving the host alone; systemd restarts the service"
+            failures=0
+            sleep "$CHECK_INTERVAL"
+            continue
+        fi
     fi
 
     prune

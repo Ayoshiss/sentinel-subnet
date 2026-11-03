@@ -476,3 +476,42 @@ It also means the approved measurement survives routine patching, which is
 operationally convenient and epistemically alarming in equal measure: miners can
 take security updates without re-approval, precisely because the thing being
 updated is not attested.
+
+## The watchdog's blind spot, 2026-11-03
+
+Fourth chip death. The first three were recovered unattended. This one was not,
+and the reason is worth recording because the failure was in the recovery
+mechanism rather than the chip.
+
+Previously the chip died while the miner was running. `/health` latched a
+`GuestError`, returned 503, the watchdog counted three and rebooted.
+
+This time it died while the miner was stopped. So the miner crashed during
+startup instead:
+
+```
+GuestError: ioctl failed: [Errno 25] Inappropriate ioctl for device (exitinfo2=0x0)
+```
+
+It never bound a port, so `/health` was connection-refused rather than 503, and
+the watchdog did this:
+
+```
+watchdog: health returned 000 (3/3)
+watchdog: not a 503, leaving the host alone; systemd restarts the service
+```
+
+That reasoning is sound for an ordinary crash and wrong here. systemd restarted
+the miner every ten seconds, it crashed every ten seconds, and nothing escalated.
+A disabled VMPCK is cleared by a reboot and by nothing else, so the loop would
+have continued indefinitely.
+
+**The fix is to stop inferring the chip's state from an HTTP code.** `dmesg` says
+it outright, so the watchdog now checks for `VMPCK is disabled` directly and
+treats that as a reboot condition regardless of what `/health` returned.
+
+The general lesson is the one this project keeps relearning: a guard that was
+verified against the failure you had seen does not necessarily cover the next
+shape of the same failure. The three successful recoveries were real, and they
+quietly established confidence in a mechanism that only handled one of the two
+ways the chip can die.
