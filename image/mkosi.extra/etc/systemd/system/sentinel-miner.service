@@ -1,0 +1,24 @@
+[Unit]
+Description=Sentinel miner, from the measured image
+Wants=network-online.target
+After=network-online.target time-sync.target
+
+[Service]
+Type=simple
+# Root for configfs-tsm, where quotes are requested. The code it runs is on the
+# verified root filesystem and nothing on this machine can change it.
+ExecStart=/opt/sentinel/.venv/bin/python /opt/sentinel/scripts/miner_from_metadata.py
+WorkingDirectory=/opt/sentinel
+RuntimeDirectory=sentinel
+StateDirectory=sentinel
+Environment=HOME=/var/lib/sentinel PYTHONDONTWRITEBYTECODE=1
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

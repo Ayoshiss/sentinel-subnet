@@ -1,0 +1,19 @@
+#!/bin/bash
+# Install the miner and its locked dependencies at /opt/sentinel.
+#
+# Runs inside the image with network. The venv is built at its final path and
+# copied to $DESTDIR, so its shebangs and pyvenv.cfg are correct in the image.
+# Every wheel is pinned by hash and sdists are refused, so the same lock gives
+# the same files. SOURCE_DATE_EPOCH (set by mkosi) makes the bytecode use
+# hash-based invalidation instead of timestamps.
+set -euo pipefail
+src=/work/src/sentinel
+mkdir -p /opt/sentinel
+cp -r "$src/sentinel" "$src/scripts" "$src/requirements.txt" /opt/sentinel/
+find /opt/sentinel -name __pycache__ -prune -exec rm -rf {} +
+python3 -m venv /opt/sentinel/.venv
+/opt/sentinel/.venv/bin/pip install --quiet --no-cache-dir --disable-pip-version-check \
+    --require-hashes --only-binary=:all: -r "$src/image/requirements.lock"
+/opt/sentinel/.venv/bin/python -m compileall -q --invalidation-mode unchecked-hash /opt/sentinel/sentinel /opt/sentinel/scripts
+mkdir -p "$DESTDIR/opt"
+cp -a /opt/sentinel "$DESTDIR/opt/"

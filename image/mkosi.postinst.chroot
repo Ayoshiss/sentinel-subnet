@@ -1,0 +1,11 @@
+#!/bin/bash
+# No way in. No SSH or guest agent is installed; this locks root and removes the
+# consoles, so the only process an operator can influence is the miner, and only
+# through metadata it reads as data.
+set -euo pipefail
+usermod -L root
+passwd -l root >/dev/null
+systemctl mask getty@.service serial-getty@.service console-getty.service \
+    debug-shell.service emergency.service rescue.service
+systemctl enable systemd-networkd.service systemd-resolved.service \
+    systemd-timesyncd.service sentinel-miner.service
