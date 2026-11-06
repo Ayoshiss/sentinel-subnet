@@ -20,12 +20,14 @@ against the chip's public key alone.
 
 from __future__ import annotations
 
+import inspect
 import json
 import secrets
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from bittensor import http_auth
+from bittensor.sp_core import CRYPTO_SR25519
 
 from ..enclave import Enclave
 from .apikeys import ApiKeyStore
@@ -110,6 +112,19 @@ class Response:
         return json.dumps(self.payload, separators=(",", ":"), default=str).encode()
 
 
+#: Whether this bittensor makes the receiver name each sender's signature scheme.
+#: From 11.3.2 it does, and a call without one is refused: the scheme must come
+#: from the receiver's own configuration, never from the request, or a classical
+#: signature could pass for a hashed identity. Older versions took it from the
+#: request header, so the argument is passed only where it exists.
+_VERIFY_TAKES_SCHEME = "expected_crypto_type" in inspect.signature(http_auth.verify).parameters
+
+
+def _header(headers: Mapping[str, str], name: str) -> str | None:
+    wanted = name.lower()
+    return next((v for k, v in headers.items() if k.lower() == wanted), None)
+
+
 class BadRequest(Exception):
     """Malformed input from the caller. Never carries credential material."""
 
@@ -129,6 +144,7 @@ class MinerHandler:
         require_receiver: bool = True,
         allowed_hotkeys: set[str] | None = None,
         api_keys: ApiKeyStore | None = None,
+        sender_schemes: Mapping[str, int] | None = None,
     ) -> None:
         self.enclave = enclave
         self.mcp = mcp
@@ -146,6 +162,11 @@ class MinerHandler:
         #: is a hotkey signature, which is correct on the subnet and useless to
         #: a customer running this over their own database.
         self.api_keys = api_keys
+        #: The signature scheme each sender is trusted to use, by hotkey. Any
+        #: sender not listed is held to sr25519, which is what every validator
+        #: hotkey on the subnet uses today; a hashed or other key has to be
+        #: listed here to be accepted, so it fails closed rather than open.
+        self.sender_schemes = dict(sender_schemes or {})
         #: Set when the chip stops answering, and never cleared.
         #:
         #: A SEV-SNP guest can lose its firmware channel permanently while the
@@ -314,6 +335,12 @@ class MinerHandler:
                 scopes=self.api_keys.scopes_for(label),
             )
 
+        scheme = {}
+        if _VERIFY_TAKES_SCHEME:
+            # Chosen by the claimed sender from our own table, then enforced by
+            # verify: the request can name who it is, not how to check it.
+            sender = _header(request.headers, "X-Bittensor-Hotkey") or ""
+            scheme["expected_crypto_type"] = self.sender_schemes.get(sender, CRYPTO_SR25519)
         caller = http_auth.verify(
             request.headers,
             request.body,
@@ -324,6 +351,7 @@ class MinerHandler:
             allowed_skew=self.allowed_skew,
             require_receiver=self.require_receiver,
             nonce_store=self.nonce_store,
+            **scheme,
         )
         if self.allowed_hotkeys is not None and caller.hotkey_ss58 not in self.allowed_hotkeys:
             raise http_auth.AuthError(f"hotkey {caller.hotkey_ss58} is not permitted")

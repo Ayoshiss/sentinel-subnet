@@ -736,11 +736,13 @@ miner through instance metadata, read as data by `scripts/miner_from_metadata.py
 
 | Test | Result |
 |---|---|
-| Two builds on independent VMs in different zones, one with no cache | **Identical UKI digest `60c5a2b9…` and root hash `8d380973…`** |
+| Two builds of commit `7e5cdea` on independent VMs in different zones, one with no cache | **Identical UKI digest `60c5a2b9…` and root hash `8d380973…`** |
 | Boot on TDX under our test Secure Boot keys | Secure Boot on, root mounted through dm-verity as erofs, miner started from metadata |
 | Validator round from a laptop over the internet | **Verified, attestation 1.0** |
 | Image not approved / someone else's Secure Boot key | Refused / refused |
 | Same disk with bytes of the miner's code changed, same keys and UKI | **dm-verity refused the blocks, the miner crash-looped and never served** |
+
+Any later change to the miner's code or locked dependencies changes the root hash and so the digest; that is the point of measuring it. To reproduce these values, build commit `7e5cdea`.
 
 ### Honest limits
 

@@ -139,16 +139,16 @@ bitarray==3.12.3 \
     --hash=sha256:fb1da625a8b6f6485f6eff6bdbc13e5163055301bdf8b1e3bdd7d02fdfac6b75 \
     --hash=sha256:ff9a0a8ca2d04072e3cf771fcd2076c9877a8ed69a1410ebd69ce09d33e46c2d
     # via eth-account
-bittensor==11.3.0 \
-    --hash=sha256:4651d9125cd29ecfda1eed0ef758fe9e29563dd81ecd9d42a9f1c9ec6603cbaa \
-    --hash=sha256:8ce05029a712866048c6cf3e3d5df1592ac896175f5b4227f63044b7e7b7edb3
+bittensor==11.3.2 \
+    --hash=sha256:730bf1ee7f46617b2c5e9c83625dea4e8309363c560a7087824058aa77ca5efa \
+    --hash=sha256:a25adb9e9ce9614d188e1da9e4c56d1b0eda5d133b32238f7046fe4eb8cd3ee8
     # via -r requirements.txt
-bittensor-core==0.1.5 \
-    --hash=sha256:abe384cf8689e0112fc2c9a7792b893be72591b9aea2390ade11a25aceffa204 \
-    --hash=sha256:b47157117524124635f5ceb8bc9ac4ebdf622bfc357dbd553c68e85d91f4bccb \
-    --hash=sha256:b96d7f9cf385ee7aca41495f33fb2dbb620ae5f0ffdc5624f2ff183586bf5b5a \
-    --hash=sha256:bb6175643ef351e8afc5059cb907b6f13083bec7525ad287c1a6db30be9ee980 \
-    --hash=sha256:ef6f92ab308445842584c3adda28567fc138fa69c5c71633e10cfb84efdf76a0
+bittensor-core==0.1.9 \
+    --hash=sha256:217e20d8ffa0da610da52f360bbce67255dfa56882cab7d1b627cc29b309f394 \
+    --hash=sha256:5ca4484a65f6f354162458e793a87017546155bc4f15d91235c553d8fea28bf1 \
+    --hash=sha256:7126d1bcf9ea2f6d82356b70513760d21777f189aa7ad963fdb2016fdfe0cddd \
+    --hash=sha256:7c4f12d937f76bc7cc6e6cda3a545898d1b5d2d60fa14bda853bee5b035df037 \
+    --hash=sha256:d67a6b6b1227bd6b15ee25a6d20d6decd1f4ab532b11abd5a5321b0a70d61797
     # via bittensor
 cffi==2.1.1 \
     --hash=sha256:046bfc24911b37851ee1b51aab8bffe713d89c68c6a057b09484ce9fd5f69b4e \

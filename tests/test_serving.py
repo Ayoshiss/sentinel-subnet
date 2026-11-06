@@ -106,6 +106,22 @@ def test_tampered_body_is_rejected(handler, validator_wallet, miner_wallet):
     assert r.status == 401
 
 
+def test_the_signature_scheme_comes_from_the_miner_not_the_request(handler, validator_wallet, miner_wallet):
+    """bittensor 11.3.2 makes the receiver name each sender's scheme. A sender
+    the miner lists under another scheme is refused even with a valid sr25519
+    signature, which is the evidence the request does not get to choose."""
+    from sentinel.serving import handler as handler_module
+
+    if not handler_module._VERIFY_TAKES_SCHEME:
+        pytest.skip("this bittensor takes the scheme from the request")
+    from bittensor.sp_core import CRYPTO_ED25519
+
+    body = b'{"nonce":"' + new_nonce().encode() + b'"}'
+    headers = signed(validator_wallet, miner_wallet.ss58_address, "POST", "/challenge", body)
+    handler.sender_schemes = {validator_wallet.ss58_address: CRYPTO_ED25519}
+    assert handler.handle(Request("POST", "/challenge", headers, body)).status == 401
+
+
 def test_replayed_request_is_rejected(handler, validator_wallet, miner_wallet):
     """The nonce store must refuse a byte-identical second request."""
     body = b'{"nonce":"' + new_nonce().encode() + b'"}'

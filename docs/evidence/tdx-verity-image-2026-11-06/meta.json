@@ -1,4 +1,5 @@
 {
+ "built_from_commit": "7e5cdea (image/ and the code it installs as of that commit)",
  "captured": "2026-11-06",
  "provider": "GCP",
  "machine_type": "c3-standard-4",
@@ -30,5 +31,6 @@
  "known_issues": [
   "UKI is 203 MB because the default initrd carries every kernel module; trim with KernelModulesInitrdInclude",
   "systemd TPM2 and pcrlock units fail at boot (host vTPM, unused); mask them"
- ]
+ ],
+ "rebuild_note": "Any later change to the miner code or image/requirements.lock changes the root hash and so the UKI digest. To reproduce 60c5a2b9..., build from commit 7e5cdea."
 }
