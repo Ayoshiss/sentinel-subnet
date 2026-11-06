@@ -68,7 +68,8 @@ Netuid 554 on Bittensor **testnet**. There are no emissions; the reason to run
 one is to evaluate the design and report what breaks.
 
 - **[Run a miner](docs/mining.md)**. Needs an AMD SEV-SNP confidential VM,
-  roughly $30/month. Read the known limitation section before provisioning.
+  about $36 a month on GCP spot or $74 on demand (list prices, 2026-11-06). Read
+  the known limitation section before provisioning.
 - **[Run a validator](docs/validating.md)**. No special hardware; a validator
   checks attestations rather than producing them.
 - **[Subnet facts and the approved measurement](TESTNET.md)**

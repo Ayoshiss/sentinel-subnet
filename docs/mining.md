@@ -16,8 +16,12 @@ earns. The reason to run one is to evaluate the design and report what breaks.
 let you point hardware you already own at the problem. This one cannot: the
 whole design rests on an AMD SEV-SNP processor proving which code is running
 before a credential is released to it. That means a specific machine type, and
-it costs roughly $30 a month on GCP spot pricing. Testnet miners can be
-subsidised; get in touch before paying for one yourself.
+it costs about $36 a month on GCP spot and $74 on demand: `n2d-standard-2` with
+the Confidential Computing surcharge, a 20 GB disk and an external IP, from
+Google's list prices on 2026-11-06. The Intel TDX miner that closes the
+measurement gap needs a `c3-standard-4`, about $64 a month on spot and $168 on
+demand. Testnet miners can be subsidised; get in touch before paying for one
+yourself.
 
 **Every miner must run a byte-identical image.** The validator pins one approved
 launch measurement. A different image measures differently and scores zero. This
