@@ -99,6 +99,9 @@ class MinerEvaluator:
         timeout: float = 30.0,
         product: str = "Milan",
         sevsnp_min_tcb: Mapping[str, int] | None = None,
+        tdx_mrtd: Iterable[str] = (),
+        tdx_db_cert: bytes | None = None,
+        tdx_collateral: Any = None,
     ) -> None:
         self.wallet = wallet
         #: One value or many. The measurement covers host firmware as well as
@@ -115,6 +118,15 @@ class MinerEvaluator:
         #: for experiments; two validators on different floors would accept
         #: different miners and Yuma would penalise the one out of consensus.
         self.sevsnp_min_tcb = dict(sevsnp_min_tcb or {})
+        #: TDX needs two things SEV-SNP does not: the approved TD firmware and
+        #: the image's Secure Boot certificate. Approved images themselves come
+        #: from `approved_measurement`, the same registry, as UKI digests. Left
+        #: empty, every TDX miner is refused rather than half-checked.
+        self.tdx_mrtd = frozenset(tdx_mrtd)
+        self.tdx_db_cert = tdx_db_cert
+        #: Kept across rounds: Intel's collateral is per machine and changes
+        #: rarely, so fetching it every round would be wasted traffic.
+        self.tdx_collateral = tdx_collateral
         self.min_tcb = min_tcb
         self.latency_target_ms = latency_target_ms
         self.latency_ceiling_ms = latency_ceiling_ms
@@ -179,7 +191,7 @@ class MinerEvaluator:
 
         try:
             health = client.health()
-            if health.get("attestation") != "sev-snp":
+            if health.get("attestation") not in ("sev-snp", "tdx"):
                 public_key = health.get("public_key")
                 if not public_key:
                     outcome.error = "health did not advertise a public key"
@@ -220,6 +232,8 @@ class MinerEvaluator:
         try:
             if health.get("attestation") == "sev-snp":
                 self._verify_sevsnp(report, health, binding, expected_nonce=nonce)
+            elif health.get("attestation") == "tdx":
+                self._verify_tdx(report, health, binding, expected_nonce=nonce)
             else:
                 verify(
                     report,
@@ -293,7 +307,48 @@ class MinerEvaluator:
         # are checked separately below, because a genuine signature over the
         # wrong claims is still the wrong claims.
         verifier.verify_signed_message(report.canonical(), report.signature, vcek=vcek)
+        self._check_claims(report, binding, expected_nonce=expected_nonce)
 
+    def _verify_tdx(
+        self, report, health: dict[str, Any], binding: str, *, expected_nonce: str
+    ) -> None:
+        """Verify an Intel TDX quote and the firmware event log the miner sent.
+
+        The log comes from the miner, the party being judged, and that is safe
+        for the same reason the SEV-SNP certificates are: nothing in it is
+        believed until it replays to the registers Intel signed.
+        """
+        import base64
+
+        from ..tdx import CollateralCache, TdxPolicy, TdxVerifier, decode_event_log
+
+        if not self.tdx_mrtd or self.tdx_db_cert is None:
+            raise VerificationError("this validator is not configured to verify TDX")
+        try:
+            packed = base64.b64decode(health.get("event_log") or "", validate=True)
+        except Exception as exc:  # noqa: BLE001 - miner-supplied, treat as hostile
+            raise VerificationError(f"unreadable event log: {exc}") from exc
+        if not packed:
+            raise VerificationError("miner advertised TDX but sent no event log")
+
+        if self.tdx_collateral is None:
+            self.tdx_collateral = CollateralCache()
+        verifier = TdxVerifier(
+            TdxPolicy(
+                approved_uki=self.approved_measurement,
+                approved_mrtd=self.tdx_mrtd,
+                db_cert=self.tdx_db_cert,
+            ),
+            collateral=self.tdx_collateral,
+        )
+        verifier.verify_signed_message(
+            report.canonical(), report.signature, decode_event_log(packed)
+        )
+        self._check_claims(report, binding, expected_nonce=expected_nonce)
+
+    @staticmethod
+    def _check_claims(report, binding: str, *, expected_nonce: str) -> None:
+        """The report's own fields, once a chip has been shown to have signed them."""
         # The signature covers the nonce, but covering it and being the one we
         # asked for are different claims. Checked explicitly rather than left to
         # the binding: today request_id is derived from the nonce so a stale

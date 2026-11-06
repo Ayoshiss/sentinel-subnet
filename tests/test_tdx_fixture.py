@@ -12,9 +12,8 @@ the three SEV-SNP bugs found in August had unit tests that passed while being
 wrong, because the fixture was built from the same assumption as the code. This
 fixture was not built, it was captured.
 
-Nothing here verifies the signature. That needs Intel's PCK chain and is the
-next piece of work; these tests pin layout and binding only, and should keep
-passing unchanged once the verifier lands.
+Nothing here verifies the signature; `sentinel/tdx/verifier.py` does, tested in
+`test_tdx_verifier.py`. These tests pin layout and binding only.
 """
 
 import json

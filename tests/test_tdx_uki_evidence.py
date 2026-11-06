@@ -6,21 +6,15 @@ firmware event logs it was drawn from, so the write-up cannot drift from what
 the hardware signed. Nothing here needs TDX hardware.
 """
 
-import importlib.util
 import json
 import pathlib
 
-import sys
-
 import pytest
+
+from sentinel.tdx import eventlog as tdx
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 EVIDENCE = ROOT / "docs" / "evidence" / "tdx-uki-2026-11-06"
-
-_spec = importlib.util.spec_from_file_location("tdx_eventlog", ROOT / "scripts" / "tdx_eventlog.py")
-tdx = importlib.util.module_from_spec(_spec)
-sys.modules["tdx_eventlog"] = tdx
-_spec.loader.exec_module(tdx)
 
 META = json.loads((EVIDENCE / "meta.json").read_text())
 

@@ -121,6 +121,8 @@ async def main(args) -> int:
         source.fallback or {"0" * 96},
         latency_ceiling_ms=args.latency_ceiling_ms,
         product=args.product,
+        tdx_mrtd=args.tdx_mrtd,
+        tdx_db_cert=pathlib.Path(args.tdx_db_cert).read_bytes() if args.tdx_db_cert else None,
     )
     logger.info(
         "validator %s on netuid %d, every %ds",
@@ -174,6 +176,12 @@ if __name__ == "__main__":
                    help="last verified registry, so a restart during an outage "
                         "does not silently fall back to --measurement")
     p.add_argument("--product", default="Milan", help="EPYC product line")
+    # TDX miners are refused until both are given. Approved images still come
+    # from the registry; these say which firmware and which Secure Boot key.
+    p.add_argument("--tdx-mrtd", action="append", default=[],
+                   help="approved TD firmware measurement (MRTD); repeat for each")
+    p.add_argument("--tdx-db-cert",
+                   help="DER certificate in the approved image's Secure Boot db")
     p.add_argument("--interval", type=int, default=DEFAULT_INTERVAL_SECONDS)
     # Protocol, not preference. Two validators using different ceilings score the
     # same miner differently, and Yuma penalises whichever one disagrees with

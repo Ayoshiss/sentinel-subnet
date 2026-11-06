@@ -7,21 +7,16 @@ image carries our own Secure Boot keys. Every claim in docs/results.md is
 asserted against the quotes and event logs it came from.
 """
 
-import importlib.util
 import json
 import pathlib
-import sys
 
 import pytest
+
+from sentinel.tdx import eventlog as tdx
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 EVIDENCE = ROOT / "docs" / "evidence" / "tdx-uki-secureboot-2026-11-06"
 EARLIER = ROOT / "docs" / "evidence" / "tdx-uki-2026-11-06"
-
-_spec = importlib.util.spec_from_file_location("tdx_eventlog", ROOT / "scripts" / "tdx_eventlog.py")
-tdx = importlib.util.module_from_spec(_spec)
-sys.modules["tdx_eventlog"] = tdx
-_spec.loader.exec_module(tdx)
 
 META = json.loads((EVIDENCE / "meta.json").read_text())
 UKI = META["signed_uki"]["authenticode_sha384"]

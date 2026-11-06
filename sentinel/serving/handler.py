@@ -229,7 +229,18 @@ class MinerHandler:
         }
 
         certificates = getattr(self.enclave.silicon, "certificates", None)
-        if certificates:
+        event_log = getattr(self.enclave.silicon, "event_log", None)
+        if event_log:
+            # TDX has no certificates to hand out: the validator fetches Intel's
+            # collateral itself. What it cannot fetch is the firmware's event
+            # log, which is what explains the signed registers.
+            import base64
+
+            from ..tdx import encode_event_log
+
+            body["attestation"] = "tdx"
+            body["event_log"] = base64.b64encode(encode_event_log(event_log)).decode()
+        elif certificates:
             import base64
 
             body["attestation"] = "sev-snp"

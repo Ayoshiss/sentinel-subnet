@@ -7,6 +7,12 @@ cryptography>=42
 # mock-backed tests, CI and demos run without a database driver present.
 psycopg[binary]>=3.1
 
+# Intel TDX quote verification (Phala, MIT), with Intel's root CA pinned inside.
+# Imported lazily, so SEV-SNP and mock miners run without it. Versions before
+# 0.3 skipped the QE Identity check (CVE-2026-22696); the verifier also refuses
+# anything older than the 0.7.1 it was tested against.
+dcap-qvl>=0.7.1
+
 # Bittensor SDK for the miner/validator neurons. v11 has no axon/dendrite/synapse
 # networking stack: endpoints are published on-chain with the ServeAxon intent and
 # served over our own HTTP layer, authenticated via bittensor.http_auth.

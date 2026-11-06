@@ -336,6 +336,19 @@ def test_health_needs_no_signature(handler):
     assert r.payload["launch_measurement"] == APPROVED
 
 
+def test_a_tdx_miner_advertises_its_event_log(handler):
+    """TDX has no certificates to publish; the event log is what it sends instead."""
+    import base64
+
+    from sentinel.tdx import decode_event_log
+
+    handler.enclave.silicon.event_log = b"CCEL" + bytes(1000)
+    r = handler.handle(Request("GET", "/health"))
+    assert r.payload["attestation"] == "tdx"
+    assert decode_event_log(base64.b64decode(r.payload["event_log"])) == b"CCEL" + bytes(1000)
+    assert "public_key" not in r.payload
+
+
 def test_health_exposes_no_secrets(handler):
     r = handler.handle(Request("GET", "/health"))
     assert "secret" not in str(r.payload)
