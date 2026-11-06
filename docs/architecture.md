@@ -1,14 +1,20 @@
 # Sentinel · System Architecture
 
 **Version:** v0.4 (post-research synthesis)
-**Status:** Design reference for build phase
+**Status:** Target design, partly built. See the summary below for what exists
 **Audience:** Founding engineer, Lamida due diligence, technical partners
 
 ---
 
 ## 0. One-paragraph summary
 
-Sentinel is a Bittensor subnet where independently-operated miners run hardware-attested (AMD SEV-SNP) MCP servers that let AI agents securely access customer systems (databases, APIs, wallets). Miners never see the data they route because it's processed inside a CPU enclave that they physically cannot inspect. Every response includes a cryptographic attestation proving the query ran on genuine, unmodified hardware. Agents pay per query via x402 machine-native micropayments; enterprise customers pay via Stripe with DID-based identity. A gateway layer (evolution of Bhairab) fronts the subnet, handling authentication, routing, billing, and schema optimization. Validators continuously challenge miners with cryptographic nonces to verify attestation, scoring them on integrity + latency + correctness; failing miners get slashed via on-chain EVM collateral contracts.
+This document is the target design. Much of it is not built, so read it alongside the status table in the README.
+
+**Built:** miners run MCP servers in AMD SEV-SNP confidential VMs, starting with a read-only PostgreSQL tool. A key broker releases a scoped credential only to a VM that attests on a genuine chip, and every response is bound to a fresh chip-signed report. Validators challenge miners with fresh nonces and score attestation, latency, correctness, cache hygiene and nonce discipline; failing an integrity check zeroes a miner's weight.
+
+**Not built:** x402 and Stripe payment for Sentinel queries, DID identity, collateral and slashing, the gateway as a front for the subnet, connectors beyond PostgreSQL, and independently operated miners. All miners on testnet 554 are ours.
+
+**Not yet true:** that operators cannot inspect what they serve. On the GCP AMD platform the measurement covers the firmware only, so an operator can change the miner's code and still attest (threat register T20, T22, T23). The sections below describe the design that closes this, not the current deployment.
 
 ---
 
