@@ -88,6 +88,13 @@ def parse_args(argv=None):
         help="trust a MockSilicon chip. Development only: a mock chip proves "
              "the plumbing works, not that any hardware is involved.",
     )
+    p.add_argument(
+        "--tdx-mrtd", action="append", default=[], metavar="HEX",
+        help="approved TD firmware. With --tdx-db-cert, accept Intel TDX "
+             "enclaves; --measurement then also lists approved UKI digests.",
+    )
+    p.add_argument("--tdx-db-cert", metavar="DER",
+                   help="Secure Boot db certificate of the approved TDX image")
     p.add_argument("--bind", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8100)
     return p.parse_args(argv)
@@ -137,6 +144,17 @@ def build_broker(args) -> KeyBroker:
                 {"min_snp": args.min_tcb} if args.min_tcb is not None else None,
             ),
         )
+
+    if args.tdx_mrtd or args.tdx_db_cert:
+        if not (args.tdx_mrtd and args.tdx_db_cert):
+            raise SystemExit("TDX needs both --tdx-mrtd and --tdx-db-cert")
+        from sentinel.tdx import TdxPolicy, TdxVerifier
+
+        broker.tdx = TdxVerifier(TdxPolicy(
+            approved_uki=list(args.measurement),
+            approved_mrtd=list(args.tdx_mrtd),
+            db_cert=pathlib.Path(args.tdx_db_cert).read_bytes(),
+        ))
 
     for name, dsn in parse_scopes(args.scope).items():
         broker.store_secret(name, dsn)

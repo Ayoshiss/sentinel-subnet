@@ -6,7 +6,8 @@ that closes the gap SEV-SNP leaves: there the launch measurement covers the
 firmware and nothing above it, while TDX measures the boot chain into RTMRs and
 a unified kernel image under Secure Boot pins exactly which code booted.
 
-Verification only. Quote generation on a miner is not here yet.
+`verifier` is the validator and broker side; `guest` is the miner side, which
+asks the TDX module for quotes through configfs-tsm.
 """
 
 from .verifier import (

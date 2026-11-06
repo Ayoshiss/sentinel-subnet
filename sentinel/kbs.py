@@ -78,7 +78,17 @@ SEVSNP_SIGNATURE_HEX_LEN = 1184 * 2
 
 def looks_like_sevsnp(signature_hex: str) -> bool:
     """Whether this signature is a real SEV-SNP report rather than a mock one."""
-    return len(signature_hex) >= SEVSNP_SIGNATURE_HEX_LEN
+    return len(signature_hex) >= SEVSNP_SIGNATURE_HEX_LEN and not looks_like_tdx(signature_hex)
+
+
+def looks_like_tdx(signature_hex: str) -> bool:
+    """Whether this signature is an Intel TDX quote.
+
+    Length alone cannot tell, since a quote is longer than a SEV-SNP report.
+    The header can: version 4 and TEE type 0x81, little endian. A SEV-SNP
+    report opens with its own version, which is never 4 alongside that type.
+    """
+    return signature_hex[:4].lower() == "0400" and signature_hex[8:16].lower() == "81000000"
 
 
 @dataclass
@@ -114,6 +124,8 @@ class KeyBroker:
     #: verifier]`. Safe because the root stays pinned inside `CertChain`: an
     #: enclave that supplies its own invented chain fails rather than passing.
     sevsnp_factory: object | None = None
+    #: Verifier for Intel TDX, a `TdxVerifier`. `None` refuses TDX quotes.
+    tdx: object | None = None
     _secrets: dict[str, Credentials] = field(default_factory=dict, repr=False)
     _trusted_chips: dict[str, str] = field(default_factory=dict, repr=False)
     _issued_nonces: dict[str, float] = field(default_factory=dict, repr=False)
@@ -147,6 +159,7 @@ class KeyBroker:
         resource: str,
         report: AttestationReport,
         certificates: dict[str, bytes] | None = None,
+        event_log: bytes | None = None,
     ) -> Credentials:
         """Verify the report and release the credential, or raise.
 
@@ -163,7 +176,9 @@ class KeyBroker:
 
         # Real silicon and mock silicon prove themselves differently, so the
         # shape of the signature decides which check applies.
-        if looks_like_sevsnp(report.signature):
+        if looks_like_tdx(report.signature):
+            self._verify_tdx(report, resource, event_log)
+        elif looks_like_sevsnp(report.signature):
             self._verify_sevsnp(report, resource, certificates)
         else:
             self._verify_registered_key(report, resource)
@@ -252,6 +267,31 @@ class KeyBroker:
             raise CredentialReleaseError(
                 "attestation is bound to a different resource"
             )
+
+    def _verify_tdx(
+        self, report: AttestationReport, resource: str, event_log: bytes | None
+    ) -> None:
+        """The Intel path: Intel's chain, approved firmware, and the boot policy.
+
+        Like SEV-SNP, the chip registry is not consulted. Unlike SEV-SNP, the
+        evidence of what booted is a separate event log, which the enclave sends
+        and the verifier believes only once it replays to the signed registers.
+        """
+        if self.tdx is None:
+            raise CredentialReleaseError(
+                "a TDX quote was presented but this broker has no TDX verifier "
+                "configured; refusing to release against a proof it cannot check"
+            )
+        if not event_log:
+            raise CredentialReleaseError("TDX quote arrived without its event log")
+        try:
+            self.tdx.verify_signed_message(  # type: ignore[attr-defined]
+                report.canonical(), report.signature, event_log
+            )
+        except VerificationError as exc:
+            raise CredentialReleaseError(f"attestation rejected: {exc}") from exc
+        if report.report_data != release_binding(resource):
+            raise CredentialReleaseError("attestation is bound to a different resource")
 
     def _expire_nonces(self) -> None:
         now = time.monotonic()

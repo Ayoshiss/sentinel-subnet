@@ -1,0 +1,25 @@
+{
+ "captured": "2026-11-06",
+ "provider": "GCP",
+ "machine_type": "c3-standard-4",
+ "zone": "us-central1-a",
+ "confidential_compute_type": "TDX",
+ "kernel": "7.0.0-1017-gcp",
+ "base_image": "ubuntu-2404-lts-amd64, 2026-11-06",
+ "secure_boot_keys": "fresh throwaway TEST PK, KEK and db, generated for this run; test-db.der is the public db certificate. The private keys were shredded after signing.",
+ "uki": {
+  "authenticode_sha384": "c13d7aa6dfb10f771df39c27c4f5ca0cbb5684959504b57b82329c976764e39c3f5ca11c4d932f898af8ed7c39d93db3",
+  "cmdline": "root=LABEL=cloudimg-rootfs ro console=ttyS0,115200 panic=-1 sentinel.uki=A",
+  "note": "signed with sbsign and placed at \\EFI\\BOOT\\BOOTX64.EFI; signed and unsigned digests match"
+ },
+ "mrtd": "f21e6b48743fe14c2d090078ca1197f09ae4c99438677f2c79901ef80e2aeefe2f9a7eb6e3eb3b5047c4f1511731e5d3",
+ "miner": "scripts/run_miner.py --no-chain, self-brokered, sqlite seed data; the broker released the credential against a real quote",
+ "probe": "probe.json: the miner's /health and its reply to the validator's probe, with the nonce and request id the validator chose",
+ "rootfs": "NOT measured. The miner code lives on an unverified root filesystem; this run proves the TDX path end to end, not T23 closed",
+ "validator_round": {
+  "approved image, firmware and key": "verified, attestation 1.0, weight 1.0, latency 41 ms",
+  "validator not configured for TDX": "refused",
+  "image not approved": "refused",
+  "firmware not approved": "refused"
+ }
+}

@@ -164,9 +164,11 @@ def test_real_silicon_is_the_default_and_mock_must_be_asked_for(daemon, monkeypa
     guarantee it is not providing, which is worse than not running.
     """
     from sentinel.sevsnp import guest
+    from sentinel.tdx import guest as tdx_guest
 
     monkeypatch.setattr(guest, "available", lambda: False)
-    with pytest.raises(SystemExit, match="not a SEV-SNP guest"):
+    monkeypatch.setattr(tdx_guest, "available", lambda: False)
+    with pytest.raises(SystemExit, match="not a confidential VM"):
         daemon.open_silicon(allow_mock=False)
 
     silicon, real = daemon.open_silicon(allow_mock=True)

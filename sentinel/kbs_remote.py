@@ -136,8 +136,13 @@ class RemoteBroker:
         resource: str,
         report: AttestationReport,
         certificates: dict[str, bytes] | None = None,
+        event_log: bytes | None = None,
     ) -> Credentials:
         payload: dict = {"resource": resource, "attestation": asdict(report)}
+        if event_log:
+            from .tdx import encode_event_log
+
+            payload["event_log"] = base64.b64encode(encode_event_log(event_log)).decode()
         if certificates:
             # Same shape the miner's /health already uses, so there is one
             # encoding for certificates in the codebase rather than two.
@@ -253,8 +258,22 @@ class BrokerHandler:
                 certificates = _decode_certs(payload.get("certificates"))
             except ValueError as exc:
                 return Response(400, {"error": str(exc)})
+            event_log = None
+            if payload.get("event_log") is not None:
+                from .attestation import VerificationError
+                from .tdx import decode_event_log
+
+                try:
+                    event_log = decode_event_log(
+                        base64.b64decode(str(payload["event_log"]), validate=True)
+                    )
+                except (ValueError, VerificationError) as exc:
+                    return Response(400, {"error": f"unreadable event log: {exc}"})
             try:
-                credentials = self.broker.release(resource, report, certificates)
+                credentials = self.broker.release(
+                    resource, report, certificates,
+                    **({"event_log": event_log} if event_log else {}),
+                )
             except CredentialReleaseError as exc:
                 # 403, not 500: the request was well formed and the answer is no.
                 # The reason travels back because an operator debugging a refusal

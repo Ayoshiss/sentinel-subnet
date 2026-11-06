@@ -102,14 +102,20 @@ def _dcap_qvl():
     return dcap_qvl
 
 
-def _run(coro):
-    """Run a coroutine from sync code, even when called inside an event loop.
+def _run(fn, *args):
+    """Await `fn(*args)` from sync code, even when called inside an event loop.
 
     The validator scores miners synchronously from inside its asyncio loop, so
-    `asyncio.run` there would fail. A fresh thread gets its own loop.
+    `asyncio.run` there would fail. A fresh thread gets its own loop. `fn` is
+    called inside that loop rather than before it: dcap-qvl's Rust futures bind
+    to the running loop when created, and fail with "no running event loop"
+    otherwise, which is how this was found on hardware.
     """
+    async def call():
+        return await fn(*args)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
+        return pool.submit(asyncio.run, call()).result()
 
 
 # -- the wire format for the event log ----------------------------------------
@@ -163,7 +169,7 @@ class CollateralCache:
         self._by_machine: dict[str, Any] = {}
 
     def _from_pccs(self, quote: bytes) -> Any:
-        return _run(_dcap_qvl().get_collateral(self.pccs_url, quote))
+        return _run(_dcap_qvl().get_collateral, self.pccs_url, quote)
 
     def get(self, quote: bytes, *, refresh: bool = False) -> Any:
         key = chain_key(quote)

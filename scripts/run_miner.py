@@ -63,15 +63,22 @@ REPUBLISH_SECONDS = 3600
 def open_silicon(allow_mock: bool, mock_seed: str | None = None):
     """The real chip if there is one, a mock only when explicitly permitted."""
     from sentinel.sevsnp import guest
+    from sentinel.tdx import guest as tdx_guest
 
     if guest.available():
         silicon = guest.SevSnpSilicon()
         logger.info("SEV-SNP guest detected, chip %s", silicon.chip_id)
         return silicon, True
 
+    if tdx_guest.available():
+        silicon = tdx_guest.TdxSilicon()
+        logger.info("Intel TDX guest detected, platform %s", silicon.chip_id)
+        return silicon, True
+
     if not allow_mock:
         raise SystemExit(
-            "no /dev/sev-guest: this host is not a SEV-SNP guest.\n"
+            "no /dev/sev-guest or TDX quote interface: this host is not a "
+            "confidential VM.\n"
             "Run on a confidential VM, or pass --allow-mock to exercise the "
             "wiring without the hardware guarantee."
         )
@@ -97,6 +104,26 @@ def open_silicon(allow_mock: bool, mock_seed: str | None = None):
         logger.warning("mock chip identity is derived from a seed and is not secret")
         return silicon, False
     return MockSilicon(), False
+
+
+def build_tdx_verifier(measurement_hex: str, mrtd: list[str], db_cert: str | None):
+    """A TDX verifier for a miner that brokers to itself. Development only.
+
+    Needs the same two values a validator does, because the miner checking its
+    own quote should refuse exactly what a validator would.
+    """
+    from sentinel.tdx import TdxPolicy, TdxVerifier
+
+    if not mrtd or not db_cert:
+        raise SystemExit(
+            "a TDX miner brokering to itself needs --tdx-mrtd and --tdx-db-cert, "
+            "the same values validators use"
+        )
+    return TdxVerifier(TdxPolicy(
+        approved_uki=[measurement_hex],
+        approved_mrtd=mrtd,
+        db_cert=pathlib.Path(db_cert).read_bytes(),
+    ))
 
 
 def build_verifier(silicon, product: str, measurement_hex: str):
@@ -295,7 +322,15 @@ def build_miner(args, hotkey_ss58: str):
                 silicon.chip_id, silicon.public_verifier().public_key_hex,
             )
     else:
-        if real:
+        if real and hasattr(silicon, "event_log"):
+            broker = KeyBroker(
+                policy=ReleasePolicy(approved_measurement=args.measurement),
+                tdx=build_tdx_verifier(
+                    args.measurement, getattr(args, "tdx_mrtd", []),
+                    getattr(args, "tdx_db_cert", None),
+                ),
+            )
+        elif real:
             verifier, certs = build_verifier(silicon, args.product, args.measurement)
             broker = KeyBroker(
                 policy=ReleasePolicy(approved_measurement=args.measurement),
@@ -427,7 +462,12 @@ def main() -> int:
     p.add_argument("--bind", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8091)
     p.add_argument("--product", default="Milan", help="EPYC product line")
-    p.add_argument("--measurement", help="the approved launch measurement, hex")
+    p.add_argument("--measurement", help="the approved launch measurement, hex; "
+                   "on TDX, the UKI's Authenticode SHA-384")
+    p.add_argument("--tdx-mrtd", action="append", default=[],
+                   help="approved TD firmware, for a TDX miner brokering to itself")
+    p.add_argument("--tdx-db-cert",
+                   help="Secure Boot db certificate, for a TDX miner brokering to itself")
     p.add_argument("--dsn", default="sqlite:///",
                    help="one database, released as the 'customer-db' scope")
     # Scopes are the answer to "how does the AI know which data is sensitive".
@@ -486,12 +526,20 @@ def main() -> int:
 
     if args.print_measurement:
         from sentinel.sevsnp import guest
+        from sentinel.tdx import guest as tdx_guest
 
-        if not guest.available():
-            print("not a SEV-SNP guest: there is no launch measurement to read.")
-            return 1
-        print(guest.SevSnpSilicon().measurement)
-        return 0
+        if guest.available():
+            print(guest.SevSnpSilicon().measurement)
+            return 0
+        if tdx_guest.available():
+            # Two values on TDX: the image, which the registry approves, and
+            # the TD firmware, which validators pass as --tdx-mrtd.
+            silicon = tdx_guest.TdxSilicon()
+            print(f"image {silicon.measurement}")
+            print(f"mrtd  {silicon.mrtd}")
+            return 0
+        print("not a confidential VM: there is no launch measurement to read.")
+        return 1
 
     if not args.measurement:
         p.error("--measurement is required (or --print-measurement to read it)")

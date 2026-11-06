@@ -675,3 +675,44 @@ root filesystem. The keys were test keys handled on a laptop; production keys ne
 a real custody plan, because whoever holds the db key decides what miners can boot.
 That is a governance point for the registry as much as a technical one. The VMs and
 the image were deleted after capture.
+
+## A TDX miner scored end to end by the validator, 2026-11-06
+
+Same day, after the two experiments above: the miner side of TDX was written
+(`sentinel/tdx/guest.py`, quotes through configfs-tsm) and the validator side
+(`sentinel/tdx/verifier.py`), then run together on hardware.
+
+**Setup.** Fresh throwaway TEST Secure Boot keys. A builder TDX VM built and signed
+a UKI (`c13d7aa6…`, same command line as UKI A, newer kernel), installed the miner
+code on the root filesystem, and was imaged with the keys. A TDX VM booted from that
+image under Secure Boot and ran `scripts/run_miner.py` brokering to itself. A
+validator round ran against it. The miner's `/health` and its reply to the probe are
+in `docs/evidence/tdx-miner-2026-11-06/`, asserted offline in
+`tests/test_tdx_miner_evidence.py`.
+
+**What the validator checks.** Intel's signature and TCB status through dcap-qvl
+(UpToDate only), no debug TD, MRTD approved, the miner's event log replayed to the
+signed RTMR0-2, the boot policy above, then the quote bound to these exact rows.
+
+| Case | Result |
+|---|---|
+| Miner's own broker, before serving | Verified the quote and released the credential |
+| Validator with the image, firmware and key approved | **Verified, attestation 1.0, weight 1.0, 41 ms** |
+| Validator not configured for TDX | Refused |
+| Image not approved | Refused |
+| Firmware (MRTD) not approved | Refused |
+
+MRTD was `f21e6b48…` again, the same value as every earlier quote on this cloud.
+
+**One bug found only on hardware.** dcap-qvl's collateral fetch has to be created
+inside a running event loop. Unit tests used committed collateral and never fetched,
+so the first live run refused its own credential. Fixed, with a regression test.
+
+### Honest limits
+
+The root filesystem is still not measured, so the code that answered is not yet
+covered by the quote: this proves the TDX path works end to end, not that T23 is
+closed. That needs the dm-verity image. MRTD and the db certificate are validator
+flags, not yet in the on-chain registry, and every validator must pass the same
+values. The firmware is Google's: on this cloud the trust is Intel and Google, not
+the miner operator. The VMs and the image were deleted after capture.

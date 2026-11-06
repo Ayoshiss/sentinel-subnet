@@ -295,3 +295,36 @@ def test_the_registry_decides_which_images_a_validator_accepts(monkeypatch):
     ev.approved_measurement = frozenset({"00" * 48})
     with pytest.raises(VerificationError, match="booted image is not approved"):
         ev._verify_tdx(_Report("sb-A"), _health("sb-A"), "b", expected_nonce="n")
+
+
+def test_the_pccs_fetch_is_awaited_inside_a_loop_even_from_one(monkeypatch):
+    """dcap-qvl's futures need a running loop when created, and the validator
+    calls this from inside its own loop. Found on hardware, not in a unit test."""
+    import asyncio
+
+    calls = []
+
+    def get_collateral(url, q):
+        asyncio.get_running_loop()  # what pyo3 does on creation
+        calls.append(url)
+
+        async def done():
+            return "collateral"
+
+        return done()
+
+    class Fake:
+        pass
+
+    fake = Fake()
+    fake.get_collateral = get_collateral
+    monkeypatch.setattr(tdx_verifier, "_dcap_qvl", lambda: fake)
+    cache = CollateralCache("https://pccs.example")
+
+    async def inside_a_loop():
+        return cache._from_pccs(b"quote")
+
+    # The miner's broker calls with no loop; the validator from inside one.
+    assert cache._from_pccs(b"quote") == "collateral"
+    assert asyncio.run(inside_a_loop()) == "collateral"
+    assert calls == ["https://pccs.example"] * 2

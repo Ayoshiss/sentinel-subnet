@@ -97,8 +97,11 @@ class Enclave:
         # AMD's root is pinned on the broker side, so supplying the chain lets
         # an honest enclave be verified offline without letting a dishonest one
         # mint its own.
+        # TDX sends its firmware event log the same way, for the same reason.
+        event_log = getattr(self.silicon, "event_log", None)
+        extra = {"event_log": event_log} if event_log else {}
         credentials = broker.release(
-            resource, report, getattr(self.silicon, "certificates", None),
+            resource, report, getattr(self.silicon, "certificates", None), **extra,
         )
         self._credentials[resource] = credentials
         return credentials

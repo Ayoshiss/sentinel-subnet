@@ -12,7 +12,7 @@ Sentinel is a Bittensor subnet where AI agents reach real systems through **hard
 
 **Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
 silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 333 tests, CI green on every push.
+independent verification, runs today under 354 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
@@ -30,7 +30,7 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 | MCP `postgres.query` tool | **Working** (`sentinel/mcp/`), read-only by default |
 | Attested query, end to end | **Working** (`scripts/demo_mcp.py`), CI on every push |
 | **SEV-SNP hardware** | **Verified on real silicon**, AMD EPYC 7B13, VCEK → ASK → ARK → report signature, offline, against a pinned AMD root |
-| Intel TDX verification | **Built in the validator; no TDX miner yet.** `sentinel/tdx/`: Intel's signature and TCB status via dcap-qvl, approved TD firmware, the firmware event log replayed to the signed registers, Secure Boot under our key, only the approved image loaded. Tested offline in CI against real GCP TDX quotes. The miner side and the measured image are not built |
+| Intel TDX | **Miner and validator built, run once on hardware 2026-11-06.** `sentinel/tdx/`: Intel's signature and TCB status via dcap-qvl, approved TD firmware, the firmware event log replayed to the signed registers, Secure Boot under our key, only the approved image loaded, quote bound to the rows. A real TDX miner scored 1.0; checked offline in CI. The root filesystem is not yet measured, so T23 stays open |
 | Miner / validator neurons | **Working**, bittensor v11, weights land via timelock commit |
 | Testnet | **Live**, netuid 554 since 2026-08-29 |
 | Payments, slashing | **Not built.** No Sentinel query is paid for, and no miner posts collateral |
@@ -52,8 +52,8 @@ follow. The guarantee holds against the host and the infrastructure, not against
 operator. And a credential released to that VM, by our broker or a customer's, is
 reachable by the operator, since the guest trust store is theirs to change
 (threat register T20, T22, T23). The path we are evaluating is Intel TDX, where the
-same experiment moves signed registers. The validator can verify a TDX miner; the
-miner image is not built.
+same experiment moves signed registers. A TDX miner has been scored end to end on
+hardware; the measured root filesystem it needs is not built.
 
 **No design partners and no independent miners yet.** Every miner on 554 is ours.
 
