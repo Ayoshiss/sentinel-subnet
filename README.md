@@ -2,7 +2,7 @@
 
 **The trust layer for the AI agent economy.**
 
-Sentinel is a Bittensor subnet where AI agents act on real systems (databases, wallets, APIs) through **hardware-attested confidential compute**. Miners run [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers inside AMD SEV-SNP enclaves. Customer credentials are released only to code that has proved what it booted, and are never handed to a person. Every response ships with a cryptographic attestation, signed by the chip itself, checkable against AMD's root without contacting AMD or us. Agents pay per query via [x402](https://www.x402.org) micropayments. Miners post slashable TAO collateral and are continuously re-attested by validators under Yuma Consensus.
+Sentinel is a Bittensor subnet where AI agents reach real systems through **hardware-attested confidential compute**, starting with read-only PostgreSQL. Miners run [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers inside AMD SEV-SNP confidential VMs. A credential is released only to a VM that attests on a genuine chip, and every response is bound to a fresh report signed by the chip itself, checkable against AMD's root without contacting AMD or us. Validators re-attest every miner continuously under Yuma Consensus. What that attestation covers today, and what it does not, is stated below.
 
 > Trust the silicon, not the vendor.
 
@@ -12,13 +12,13 @@ Sentinel is a Bittensor subnet where AI agents act on real systems (databases, w
 
 **Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
 silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 188 tests, CI green on every push.
+independent verification, runs today under 275 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
 ```bash
 btcli subnets metagraph 554 --network test   # the subnet exists (bittensor >= 11)
-python scripts/benchmark.py --rounds 100     # 100% detection, 0 false rejections
+python scripts/benchmark.py --rounds 100     # designed attacks zeroed, 0 false rejections
 python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verified offline
 ```
 
@@ -32,23 +32,28 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 | **SEV-SNP hardware** | **Verified on real silicon**, AMD EPYC 7B13, VCEK → ASK → ARK → report signature, offline, against a pinned AMD root |
 | Miner / validator neurons | **Working**, bittensor v11, weights land via timelock commit |
 | Testnet | **Live**, netuid 554 since 2026-08-29 |
+| Payments, slashing | **Not built.** No Sentinel query is paid for, and no miner posts collateral |
 | What the measurement covers | **Measured, not assumed.** AMD SEV-SNP on GCP covers firmware only; the same change moves two Intel TDX registers on the same cloud. `scripts/probe_measurement_scope.sh`, results in `docs/results.md` |
-| Consensus catching a tampered miner | **Demonstrated on hardware 2026-10-04.** Three enclaves on 554; a miner with edited code passed attestation (`attest=1.00`) and was zeroed by consensus (`correct=0.00`). See `docs/results.md` |
-| Published results | `docs/results.md`: 100 rounds, 900 challenges |
-| Gateway stack | **Live** (`gateway/`, `sidecar/`), routes paid inference to SN64, API only |
+| Consensus catching a tampered miner | **Demonstrated on hardware 2026-10-04.** Three miner processes on one VM, all operated by us; one with edited code passed attestation (`attest=1.00`) and was zeroed by consensus (`correct=0.00`). Three processes we run are not three independent operators. See `docs/results.md` |
+| Published results | `docs/results.md`: 100 rounds, 1,000 challenges, simulated silicon. Every designed-detectable attack zeroed. The exfiltrator, which answers correctly while copying data, scores 1.0: no scoring rule can see it |
+| Gateway stack | **Live, but separate** (`gateway/`, `sidecar/`), inherited from TAO Gateway, routes paid inference to SN64. Its x402 support covers the gateway's own scan endpoint and is not wired to Sentinel queries |
 | Architecture, threat register, Yuma mechanics, whitepaper | Complete (`docs/`) |
 
 Run `python scripts/demo_mcp.py` to watch a miner running modified code be refused
 a customer credential.
 
-**The honest gap.** The launch measurement covers the image that *booted*, not the
-application running on top of it. An operator with root in their own VM can change
-the miner's code after boot and still produce a valid attestation: tested on our own
-live miner, which scored full marks while serving fabricated data. So the guarantee
-currently holds against the host and the infrastructure, not against the operator.
-Closing it means binding the filesystem into the measurement, which is open work.
+**The honest gap.** On the GCP AMD platform the launch measurement covers the
+firmware and nothing above it: kernel, command line and root filesystem are all
+unmeasured, established by experiment in `docs/results.md`. An operator with root
+can change the miner's code and still produce a valid attestation: tested on our own
+live miner, which scored full marks while serving fabricated data. Two consequences
+follow. The guarantee holds against the host and the infrastructure, not against the
+operator. And a credential released to that VM, by our broker or a customer's, is
+reachable by the operator, since the guest trust store is theirs to change
+(threat register T20, T22, T23). The path we are evaluating is Intel TDX, where the
+same experiment moves signed registers; it is not built.
 
-**And no design partners yet.** The product works; nobody has signed up to use it.
+**No design partners and no independent miners yet.** Every miner on 554 is ours.
 
 ---
 
@@ -89,7 +94,7 @@ Five layers, with the customer at the top and AMD silicon at the bottom as the o
 
 ```
 Customer AI Agent            (trusted)
-      │  MCP + x402
+      │  MCP
 Sentinel Gateway             (untrusted, optional, verify independently)
       │
 Bittensor Subnet             (untrusted, decentralised)
@@ -115,7 +120,7 @@ Full component inventory, request/payment/attestation flows, failure modes, and 
 Three layers at different maturities. Being precise about which is which matters
 more than making the tree look finished.
 
-**Sentinel core: working, tested (264 tests, CI on every push)**
+**Sentinel core: working, tested (CI on every push)**
 ```
 sentinel/
 ├── attestation.py            # reports, response binding, verification
@@ -135,7 +140,7 @@ sentinel/
     ├── certtable.py          # host certificates from the extended report
     ├── verifier.py           # the five checks a report must pass
     └── guest.py              # /dev/sev-guest ioctls, standard and extended
-tests/                        # 188 tests, weighted toward the refusal paths
+tests/                        # weighted toward the refusal paths
 └── fixtures/                 # a genuine AMD-signed report and AMD's real chain
 scripts/
 ├── demo.py                   # attestation, verification, tamper detection
@@ -166,7 +171,7 @@ Dockerfile.fly · docker-compose.yml · fly.toml · supervisord.conf
 docs/
 ├── architecture.md           # full engineering spec
 ├── whitepaper.md             # what the system is, and what is not built
-├── threat-register.md        # 19 threats, scored impact × likelihood
+├── threat-register.md        # 23 threats, scored impact × likelihood
 ├── bittensor-mechanics.md    # Yuma, commit-reveal, emissions, Taoflow
 └── development.md            # setup, tests, demos, how the pieces fit
 ROADMAP.md                    # milestone plan and what is still open
@@ -196,20 +201,23 @@ itself, so it only gates when there are enough participants for a vote to mean
 something. Full numbers and the before/after are in
 [`docs/results.md`](docs/results.md).
 
-Weights are aggregated by Yuma Consensus with stake-weighted median clipping. Commit-reveal (v3) prevents weight-copying. Only attestation-verified miners are discoverable, defeating Sybil tool-servers. Failing attestation triggers on-chain slashing. See [`docs/bittensor-mechanics.md`](docs/bittensor-mechanics.md).
+Weights are aggregated by Yuma Consensus with stake-weighted median clipping. Commit-reveal (v3) prevents weight-copying. Only attestation-verified miners are discoverable, so every miner must run on a genuine confidential VM. That does not prove miners belong to different people: one operator can run several. Failing attestation zeroes a miner's weight; there is no slashing. See [`docs/bittensor-mechanics.md`](docs/bittensor-mechanics.md).
 
 ---
 
 ## Roadmap
 
-| Phase | Ships | Gate |
-|---|---|---|
-| M 0–2 | SEV-SNP miner image; Postgres + Solana tools; x402 on testnet | 3 design partners signed |
-| M 3–4 | Mainnet subnet; KBS credential release; validator scoring + slashing | First paid queries |
-| M 5–6 | Enterprise connectors; premium tier; security audit | $2K+ MRR sustained |
-| M 7–9 | Enterprise gateway (DID + Stripe + audit trails) | Top-10 by inflow |
-| M 10–12 | EU region; community validator opening | $20K+ MRR → Series A |
+Ordered by what blocks what. Nothing below is promised by a date.
 
+| Step | What | Unblocks |
+|---|---|---|
+| 1 | Measured application on Intel TDX: kernel, command line and read-only root filesystem in the signed measurement, image built reproducibly from this repository | Closes T23; makes a signed response proof that the approved code produced it |
+| 2 | Credential release bound to an attested key, broker certificate pinned in measured state | Closes T20 and T22 |
+| 3 | Miners run by independent operators | Correctness by vote means something |
+| 4 | External security review | Real credentials on third-party hardware |
+| 5 | Payments | Only once someone is using it |
+
+The earlier milestone plan is kept in [`ROADMAP.md`](ROADMAP.md) for history.
 ---
 
 ## License
