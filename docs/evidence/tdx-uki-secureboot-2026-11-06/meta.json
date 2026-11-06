@@ -1,0 +1,27 @@
+{
+  "captured": "2026-11-06",
+  "provider": "GCP",
+  "machine_type": "c3-standard-4",
+  "zone": "us-central1-a",
+  "confidential_compute_type": "TDX",
+  "base_image": "ubuntu-2404-noble-amd64-v20261104a",
+  "boot_disk_gb": 20,
+  "secure_boot_keys": "test-PK.der, test-KEK.der, test-db.der: throwaway self-signed TEST certificates, set on a custom image with --platform-key-file, --key-exchange-key-file and --signature-database-file. Private keys were never committed and the db key was shredded on the builder before imaging.",
+  "signed_uki": {
+    "file": "\\EFI\\BOOT\\BOOTX64.EFI",
+    "sha256": "e2eeef43a0c784bdf5f6cb2f34d526282648891fef63c4f9abce608ecd5014b6",
+    "authenticode_sha384": "8d17fbb286e8296ec0bc67b93ca34f3672ec5834b09209bc155991427a2a9b2adbdb5e05884bd854cc0c7fe9981313f0",
+    "cmdline": "root=LABEL=cloudimg-rootfs ro console=ttyS0,115200 panic=-1 sentinel.uki=A",
+    "note": "UKI A from the earlier experiment, signed with sbsign; its unsigned build was byte-identical to the one built on a different VM earlier the same day"
+  },
+  "captures": {
+    "sb-A": "Secure Boot on, booted from the firmware's auto-created entry",
+    "sb-evil": "Secure Boot on, booted from entry Boot0043 whose load options say sentinel.uki=EVIL; the kernel ran with the embedded command line",
+    "sb-after-tests": "Secure Boot on, after the firmware refused an unsigned binary and Microsoft's signed shim (Security Violation) and fell through to Boot0043",
+    "sb-off-evil": "same VM after the operator turned Secure Boot off in the VM settings; the override took effect"
+  },
+  "refused": {
+    "\\EFI\\sentinel\\unsigned.efi": "unsigned systemd-boot, Security Violation",
+    "\\EFI\\ubuntu\\shimx64.efi": "Microsoft-signed shim, Security Violation, because db holds only our key"
+  }
+}

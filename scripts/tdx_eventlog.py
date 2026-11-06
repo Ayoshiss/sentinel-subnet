@@ -10,6 +10,7 @@ measurement checkable from source rather than taken on trust.
 
     python scripts/tdx_eventlog.py replay QUOTE CCEL
     python scripts/tdx_eventlog.py image UKI.efi
+    python scripts/tdx_eventlog.py policy QUOTE CCEL UKI_AUTHENTICODE DB.der
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ EV_EFI_VARIABLE_BOOT = 0x80000002
 EV_EFI_BOOT_SERVICES_APPLICATION = 0x80000003
 EV_EFI_GPT_EVENT = 0x80000006
 EV_EFI_ACTION = 0x80000007
+EV_SEPARATOR = 0x4
+EV_EFI_VARIABLE_AUTHORITY = 0x800000E0
 
 _DIGEST_SIZES = {0x4: 20, 0xB: 32, 0xC: 48, 0xD: 64}
 _SHA384 = 0xC
@@ -86,6 +89,34 @@ def replay(evs: list[Event]) -> dict[str, str]:
         if e.type != EV_NO_ACTION and e.mr in mrs:
             mrs[e.mr] = hashlib.sha384(mrs[e.mr] + e.digest).digest()
     return {f"RTMR{i - 1}": v.hex() for i, v in mrs.items()}
+
+
+def boot_policy(evs: list[Event], *, uki: str, db_cert: bytes) -> list[str]:
+    """Reasons to refuse this boot; empty means it passes.
+
+    Checked over the replayed log rather than by pinning register values,
+    because the registers also absorb things that do not matter: boot entries
+    an operator is free to have, and the fixed action strings the firmware logs
+    for each refused boot attempt. Call only after `replay` has matched the
+    quote, otherwise the log proves nothing.
+    """
+    failures = []
+    config = {e.variable()[0]: e.variable()[1] for e in evs if e.type == EV_EFI_VARIABLE_DRIVER_CONFIG}
+    if config.get("SecureBoot") != b"\x01":
+        failures.append("Secure Boot is off, so a boot entry can replace the embedded command line")
+    authorities = [e for e in evs if e.type == EV_EFI_VARIABLE_AUTHORITY]
+    if not authorities:
+        failures.append("no image was verified by our key")
+    elif any(db_cert not in e.data for e in authorities):
+        failures.append("an image was verified by a key other than ours")
+    images = [e.digest.hex() for e in evs if e.type == EV_EFI_BOOT_SERVICES_APPLICATION]
+    if images != [uki]:
+        failures.append(f"loaded images {[i[:16] for i in images]} are not exactly the approved image")
+    allowed = {EV_EFI_ACTION, EV_SEPARATOR, EV_EFI_GPT_EVENT, EV_EFI_BOOT_SERVICES_APPLICATION}
+    unexpected = {hex(e.type) for e in evs if e.rtmr == 1 and e.type not in allowed}
+    if unexpected:
+        failures.append(f"unexpected RTMR1 events {sorted(unexpected)}")
+    return failures
 
 
 def gpt(e: Event) -> dict:
@@ -172,6 +203,14 @@ def _main(argv: list[str]) -> None:
         for k in ("RTMR0", "RTMR1", "RTMR2"):
             ok = "matches quote" if signed[k] == replayed[k] else "MISMATCH"
             print(f"{k} {replayed[k][:32]}  {ok}")
+    elif argv[:1] == ["policy"]:
+        quote, log = open(argv[1], "rb").read(), open(argv[2], "rb").read()
+        evs = events(log)
+        signed, replayed = registers(quote), replay(evs)
+        if any(signed[k] != replayed[k] for k in ("RTMR0", "RTMR1", "RTMR2")):
+            sys.exit("event log does not replay to the quote")
+        failures = boot_policy(evs, uki=argv[3], db_cert=open(argv[4], "rb").read())
+        print("\n".join(failures) or "pass")
     elif argv[:1] == ["image"]:
         for k, v in image(open(argv[1], "rb").read()).items():
             print(f"{k:8} {v}")

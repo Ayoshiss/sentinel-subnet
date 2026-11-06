@@ -607,3 +607,71 @@ embedded command line, built reproducibly, with an approved value that anyone ca
 recompute. It needs two things the plan did not have: closing or pinning the
 command line override (T24), and a recipe that fixes the boot disk size. The two
 VMs were deleted after capture.
+
+---
+
+## Secure Boot under our own key closes T24, 2026-11-06
+
+The UKI experiment above left one hole: with Secure Boot off, a boot entry could
+replace the image's embedded command line and RTMR1 did not move (T24). The fix
+proposed there was Secure Boot under our own key, since the stub is documented to
+ignore a boot entry's command line when Secure Boot is on. Tested the same day.
+
+**Setup.** Three throwaway self-signed TEST certificates (PK, KEK, db). On a TDX
+builder VM, UKI A from the experiment above was rebuilt (byte-identical to the
+earlier build, on a different VM), signed with the db key using `sbsign`, and
+placed at `\EFI\BOOT\BOOTX64.EFI`. The db private key was shredded on the builder,
+then a custom image was made from its disk with `--platform-key-file`,
+`--key-exchange-key-file` and `--signature-database-file`. A TDX VM was created
+from that image with `--shielded-secure-boot`. Raw quotes, nonces, event logs and
+the public test certificates are in `docs/evidence/tdx-uki-secureboot-2026-11-06/`,
+and every claim below is asserted in `tests/test_tdx_secureboot_evidence.py`.
+
+| Test | Result |
+|---|---|
+| Signed UKI boots under Secure Boot on TDX | Booted. Kernel: `Secure boot enabled`, lockdown active |
+| Boot entry with `sentinel.uki=EVIL` as load options | Firmware booted that entry; the kernel ran with the embedded `sentinel.uki=A`. **Override ignored** |
+| Unsigned EFI binary | `Security Violation`, refused, firmware fell through |
+| Microsoft-signed shim (stock Ubuntu boot) | `Security Violation`, refused, because db holds only our key |
+| Operator turns Secure Boot off in the VM settings | Override takes effect again, and the log records `SecureBoot=00` with no verifying key, so the policy below refuses it |
+
+### RTMR1 cannot be pinned as a value; the log has to be read
+
+Two Secure Boot boots of the same image gave different RTMR1 values (`f80b12e7…`
+and `b868c611…`). The second came after the refused attempts, and the firmware logs
+a fixed "Returning from EFI Application" and "Calling EFI Application" pair into
+RTMR1 for each one. An honest miner whose first boot attempt failed would fail a
+pinned value. RTMR0 has the same problem with boot entries, which operators are
+free to have.
+
+So the check is a policy over the event log, after replaying it to the signed
+registers (`boot_policy` in `scripts/tdx_eventlog.py`):
+
+- `SecureBoot` is 1;
+- every image was verified by our db certificate (the firmware logs the verifying
+  certificate as an authority event);
+- exactly one image was loaded, and its Authenticode digest is the approved UKI;
+- RTMR1 holds nothing but fixed actions, separators, the partition table and that
+  image.
+
+Boot entries and retry actions are ignored. Run against this experiment's logs, the
+three Secure Boot boots pass, including the one from the override entry, and the
+Secure-Boot-off boot is refused for all three reasons. Every boot from the earlier
+experiment is refused too.
+
+### Details
+
+- **Under Secure Boot only the UKI is logged as an image.** The kernel inside it is
+  not loaded as a separate image, unlike with Secure Boot off.
+- **Signing does not change the measured digest.** Authenticode excludes the
+  signature, so signed UKI A measures the same as unsigned UKI A.
+- **The ESP is about 100 MB** on this image, so one 67 MB UKI fits. Our own image
+  build will size it.
+
+### Honest limits
+
+Still no quote signature verification against Intel's chain, and still no dm-verity
+root filesystem. The keys were test keys handled on a laptop; production keys need
+a real custody plan, because whoever holds the db key decides what miners can boot.
+That is a governance point for the registry as much as a technical one. The VMs and
+the image were deleted after capture.
