@@ -1,0 +1,34 @@
+{
+ "captured": "2026-11-06",
+ "provider": "GCP",
+ "machine_type": "c3-standard-4",
+ "zone": "us-central1-a",
+ "confidential_compute_type": "TDX",
+ "built_from": "image/ (mkosi 25.3), Ubuntu noble snapshot 20261106T000000Z, image/requirements.lock",
+ "uki": {
+  "authenticode_sha384": "60c5a2b905ea77722c99a84d86633dad7f12cb250a5dc2bb67ac1089df70f8bfef3f44151513d6c41ef38a49b30c5bce",
+  "kernel_authenticode_sha384": "aa5275d9ccb1cb3aae2bd3673ad2dbac2fb2fa1ec4683355fbe0e524773ca829cd9c88a6395724c9fc2483dbbfaef455",
+  "roothash": "8d380973780a1e7c153f89944291c04a37f05a24483121ffd0231acd674e5352",
+  "cmdline": "roothash=8d380973780a1e7c153f89944291c04a37f05a24483121ffd0231acd674e5352 console=ttyS0,115200 panic=-1 systemd.volatile=state rd.emergency=reboot systemd.crash_reboot=1 sentinel.image=1"
+ },
+ "mrtd": "f21e6b48743fe14c2d090078ca1197f09ae4c99438677f2c79901ef80e2aeefe2f9a7eb6e3eb3b5047c4f1511731e5d3",
+ "secure_boot_keys": "throwaway TEST PK, KEK and db generated for this run; test-db.der is the public db certificate; private keys shredded",
+ "miner_config": "instance metadata attribute sentinel-miner, read by scripts/miner_from_metadata.py; self-brokered against sqlite seed data",
+ "validator": "scripts in this session, run from a laptop over the internet against the VM's public address",
+ "validator_round": {
+  "approved image, firmware and key": "verified, attestation 1.0, weight 0.96 (870 ms, laptop to us-central1)",
+  "image not approved": "refused",
+  "someone else's Secure Boot key": "refused: an image was verified by a key other than ours"
+ },
+ "tamper_test": "tampered-boot.log: same keys and UKI, every copy of the string 'launch measurement mismatch' on the root partition changed by one byte; dm-verity reported corrupted blocks, imports failed with I/O errors, the miner crash-looped and never served",
+ "reproducibility": {
+  "builder_a": "us-central1-a, n2-standard-8, built three times (incremental cache after the first)",
+  "builder_b": "us-central1-b, fresh VM, no cache, same commit",
+  "result": "identical UKI Authenticode digest, kernel digest and roothash on both",
+  "not_identical": "the raw disk file: the ESP's vfat metadata and the signed UKI copy differ, neither of which is measured"
+ },
+ "known_issues": [
+  "UKI is 203 MB because the default initrd carries every kernel module; trim with KernelModulesInitrdInclude",
+  "systemd TPM2 and pcrlock units fail at boot (host vTPM, unused); mask them"
+ ]
+}

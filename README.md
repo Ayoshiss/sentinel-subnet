@@ -12,7 +12,7 @@ Sentinel is a Bittensor subnet where AI agents reach real systems through **hard
 
 **Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
 silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 354 tests, CI green on every push.
+independent verification, runs today under 378 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
@@ -30,7 +30,7 @@ python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verifie
 | MCP `postgres.query` tool | **Working** (`sentinel/mcp/`), read-only by default |
 | Attested query, end to end | **Working** (`scripts/demo_mcp.py`), CI on every push |
 | **SEV-SNP hardware** | **Verified on real silicon**, AMD EPYC 7B13, VCEK → ASK → ARK → report signature, offline, against a pinned AMD root |
-| Intel TDX | **Miner and validator built, run once on hardware 2026-11-06.** `sentinel/tdx/`: Intel's signature and TCB status via dcap-qvl, approved TD firmware, the firmware event log replayed to the signed registers, Secure Boot under our key, only the approved image loaded, quote bound to the rows. A real TDX miner scored 1.0; checked offline in CI. The root filesystem is not yet measured, so T23 stays open |
+| Intel TDX | **Miner, validator and measured image built, run on hardware 2026-11-06, not deployed.** `sentinel/tdx/`: Intel's signature and TCB status via dcap-qvl, approved TD firmware, the firmware event log replayed to the signed registers, Secure Boot under our key, only the approved image loaded, quote bound to the rows. A real TDX miner scored 1.0; checked offline in CI. `image/` builds a reproducible image with a dm-verity root on the measured command line; two independent builds matched, and tampered code was refused by the kernel. Test keys only |
 | Miner / validator neurons | **Working**, bittensor v11, weights land via timelock commit |
 | Testnet | **Live**, netuid 554 since 2026-08-29 |
 | Payments, slashing | **Not built.** No Sentinel query is paid for, and no miner posts collateral |
@@ -51,9 +51,12 @@ live miner, which scored full marks while serving fabricated data. Two consequen
 follow. The guarantee holds against the host and the infrastructure, not against the
 operator. And a credential released to that VM, by our broker or a customer's, is
 reachable by the operator, since the guest trust store is theirs to change
-(threat register T20, T22, T23). The path we are evaluating is Intel TDX, where the
-same experiment moves signed registers. A TDX miner has been scored end to end on
-hardware; the measured root filesystem it needs is not built.
+(threat register T20, T22, T23). That is still true of every live miner on 554,
+which run on AMD. **The fix exists on Intel TDX and has been run once on
+hardware:** `image/` builds a reproducible miner image whose read-only root is
+covered by the measured boot, and a copy with changed code was refused by the kernel
+and never served. It is not deployed, its Secure Boot keys were test keys, and
+credential release to a customer's broker (T20, T22) is the next step.
 
 **No design partners and no independent miners yet.** Every miner on 554 is ours.
 
@@ -213,7 +216,7 @@ Ordered by what blocks what. Nothing below is promised by a date.
 
 | Step | What | Unblocks |
 |---|---|---|
-| 1 | Measured application on Intel TDX: kernel, command line and read-only root filesystem in the signed measurement, image built reproducibly from this repository | Closes T23; makes a signed response proof that the approved code produced it |
+| 1 | Measured application on Intel TDX: kernel, command line and read-only root filesystem in the signed measurement, image built reproducibly from this repository. **Built and run on hardware 2026-11-06 (`image/`); production keys, registry entries and deployment remain** | Closes T23; makes a signed response proof that the approved code produced it |
 | 2 | Credential release bound to an attested key, broker certificate pinned in measured state | Closes T20 and T22 |
 | 3 | Miners run by independent operators | Correctness by vote means something |
 | 4 | External security review | Real credentials on third-party hardware |

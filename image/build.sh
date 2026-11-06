@@ -14,6 +14,7 @@
 # does not change the Authenticode digest a validator approves.
 set -euo pipefail
 cd "$(dirname "$0")"
+mkdir -p mkosi.cache mkosi.output
 "${MKOSI:-mkosi}" --force build
 ls -l mkosi.output/
 python3 ../scripts/tdx_eventlog.py image mkosi.output/sentinel-miner.efi

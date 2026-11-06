@@ -1,0 +1,1612 @@
+BdsDxe: loading Boot0001 "UEFI nvme_card-pd" from PciRoot(0x0)/Pci(0x4,0x0)/NVMe(0x1,00-00-00-00-00-00-00-00)
+BdsDxe: starting Boot0001 "UEFI nvme_card-pd" from PciRoot(0x0)/Pci(0x4,0x0)/NVMe(0x1,00-00-00-00-00-00-00-00)
+
+UEFI: Attempting to start image.
+Description: UEFI nvme_card-pd
+FilePath: PciRoot(0x0)/Pci(0x4,0x0)/NVMe(0x1,00-00-00-00-00-00-00-00)
+OptionNumber: 1.
+
+[    0.000000] tdx: Guest detected
+[    0.000000] tdx: Attributes: SEPT_VE_DISABLE
+[    0.000000] tdx: TD_CTLS: PENDING_VE_DISABLE ENUM_TOPOLOGY VIRT_CPUID2 REDUCE_VE
+[    0.000000] Linux version 7.0.0-1014-gcp (buildd@lcy02-amd64-091) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #14~24.04.1-Ubuntu SMP PREEMPT Thu Sep 17 19:52:35 UTC 2026 (Ubuntu 7.0.0-1014.14~24.04.1-gcp 7.0.14)
+[    0.000000] Command line: roothash=8d380973780a1e7c153f89944291c04a37f05a24483121ffd0231acd674e5352 console=ttyS0,115200 panic=-1 systemd.volatile=state rd.emergency=reboot systemd.crash_reboot=1 sentinel.image=1
+[    0.000000] KERNEL supported cpus:
+[    0.000000]   Intel GenuineIntel
+[    0.000000]   AMD AuthenticAMD
+[    0.000000]   Hygon HygonGenuine
+[    0.000000]   Centaur CentaurHauls
+[    0.000000]   zhaoxin   Shanghai  
+[    0.000000] x86/split lock detection: #DB: warning on user-space bus_locks
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000080bfff]  System RAM
+[    0.000000] BIOS-e820: [mem 0x000000000080c000-0x000000000080cfff]  ACPI NVS
+[    0.000000] BIOS-e820: [mem 0x000000000080d000-0x00000000015fffff]  System RAM
+[    0.000000] BIOS-e820: [mem 0x0000000001600000-0x000000000161ffff]  device reserved
+[    0.000000] BIOS-e820: [mem 0x0000000001620000-0x00000000bd455fff]  System RAM
+[    0.000000] BIOS-e820: [mem 0x00000000bd456000-0x00000000bd45bfff]  ACPI data
+[    0.000000] BIOS-e820: [mem 0x00000000bd45c000-0x00000000bf2ecfff]  System RAM
+[    0.000000] BIOS-e820: [mem 0x00000000bf2ed000-0x00000000bf4ecfff]  device reserved
+[    0.000000] BIOS-e820: [mem 0x00000000bf4ed000-0x00000000bf56ffff]  System RAM
+[    0.000000] BIOS-e820: [mem 0x00000000bf570000-0x00000000bf57efff]  ACPI data
+[    0.000000] BIOS-e820: [mem 0x00000000bf57f000-0x00000000bf5fefff]  ACPI NVS
+[    0.000000] BIOS-e820: [mem 0x00000000bf5ff000-0x00000000bffdffff]  System RAM
+[    0.000000] BIOS-e820: [mem 0x00000000bffe0000-0x00000000bfffffff]  device reserved
+[    0.000000] BIOS-e820: [gap 0x00000000c0000000-0x00000000ffdfffff]
+[    0.000000] BIOS-e820: [mem 0x00000000ffe00000-0x000000043fffffff]  System RAM
+[    0.000000] NX (Execute Disable) protection: active
+[    0.000000] APIC: Static calls initialized
+[    0.000000] efi: EFI v2.7 by EDK II
+[    0.000000] efi: CCFinalLog=0xbf5b7000 ACPI=0xbf57e000 ACPI 2.0=0xbf57e014 TPMFinalLog=0xbf5af000 SMBIOS=0xbf3ca000 MEMATTR=0xbd45f018 INITRD=0xbd465a98 TPMEventLog=0xbd456018 
+[    0.000000] SMBIOS 2.4 present.
+[    0.000000] DMI: Google Google Compute Engine/Google Compute Engine, BIOS Google 10/19/2026
+[    0.000000] DMI: Memory slots populated: 1/1
+[    0.000000] secureboot: Secure boot enabled
+[    0.000000] Kernel is locked down from EFI Secure Boot mode; see man kernel_lockdown.7
+[    0.000000] Hypervisor detected: KVM
+[    0.000000] last_pfn = 0x100000 max_arch_pfn = 0x10000000000
+[    0.000000] tsc: Detected 2700.000 MHz processor
+[    0.000022] last_pfn = 0x440000 max_arch_pfn = 0x10000000000
+[    0.000025] MTRR map: 1 entries (0 fixed + 1 variable; max 2), built from 1 variable MTRRs
+[    0.000027] MTRRs set to read-only
+[    0.000029] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+[    0.000048] x2apic: enabled by BIOS, switching to x2apic ops
+[    0.000067] last_pfn = 0x100000 max_arch_pfn = 0x10000000000
+[    0.009352] software IO TLB: SWIOTLB bounce buffer size adjusted to 982MB
+[    0.009370] Using GB pages for direct mapping
+[    0.009883] secureboot: Secure boot enabled
+[    0.009883] RAMDISK: [mem 0xb0cde000-0xbbdfefff]
+[    0.009887] ACPI: Early table checksum verification disabled
+[    0.009892] ACPI: RSDP 0x00000000BF57E014 000024 (v02 Google)
+[    0.009897] ACPI: XSDT 0x00000000BF57D0E8 000064 (v01 Google GOOGFACP 00000001      01000013)
+[    0.009904] ACPI: FACP 0x00000000BF577000 000114 (v06 Google GOOGFACP 00000001 GOOG 00000001)
+[    0.009912] ACPI: DSDT 0x00000000BF578000 001DED (v02 Google GOOGDSDT 00000001 GOOG 00000001)
+[    0.009916] ACPI: FACS 0x00000000BF5AA000 000040
+[    0.009920] ACPI: CCEL 0x00000000BF57C000 000038 (v01 INTEL  EDK2     00000002      01000013)
+[    0.009924] ACPI: SSDT 0x00000000BF57B000 000316 (v02 GOOGLE Tpm2Tabl 00001000 INTL 20250807)
+[    0.009928] ACPI: TPM2 0x00000000BF57A000 000034 (v04 GOOGLE          00000001 GOOG 00000001)
+[    0.009932] ACPI: SRAT 0x00000000BF576000 0000E8 (v03 Google GOOGSRAT 00000001 GOOG 00000001)
+[    0.009936] ACPI: SSDT 0x00000000BF574000 0009DD (v02 Google GOOGSSDT 00000001 GOOG 00000001)
+[    0.009939] ACPI: WAET 0x00000000BF573000 000028 (v01 Google GOOGWAET 00000001 GOOG 00000001)
+[    0.009943] ACPI: APIC 0x00000000BF572000 000096 (v05 Google GOOGAPIC 00000001 GOOG 00000001)
+[    0.009946] ACPI: Reserving FACP table memory at [mem 0xbf577000-0xbf577113]
+[    0.009948] ACPI: Reserving DSDT table memory at [mem 0xbf578000-0xbf579dec]
+[    0.009949] ACPI: Reserving FACS table memory at [mem 0xbf5aa000-0xbf5aa03f]
+[    0.009950] ACPI: Reserving CCEL table memory at [mem 0xbf57c000-0xbf57c037]
+[    0.009951] ACPI: Reserving SSDT table memory at [mem 0xbf57b000-0xbf57b315]
+[    0.009951] ACPI: Reserving TPM2 table memory at [mem 0xbf57a000-0xbf57a033]
+[    0.009952] ACPI: Reserving SRAT table memory at [mem 0xbf576000-0xbf5760e7]
+[    0.009953] ACPI: Reserving SSDT table memory at [mem 0xbf574000-0xbf5749dc]
+[    0.009954] ACPI: Reserving WAET table memory at [mem 0xbf573000-0xbf573027]
+[    0.009955] ACPI: Reserving APIC table memory at [mem 0xbf572000-0xbf572095]
+[    0.010074] APIC: Switched APIC routing to: cluster x2apic
+[    0.010134] ACPI: SRAT: Node 0 PXM 0 [mem 0x00000000-0x0009ffff]
+[    0.010136] ACPI: SRAT: Node 0 PXM 0 [mem 0x00100000-0xbfffffff]
+[    0.010137] ACPI: SRAT: Node 0 PXM 0 [mem 0x100000000-0x43fffffff]
+[    0.010142] NUMA: Node 0 [mem 0x00001000-0x0009ffff] + [mem 0x00100000-0xbfffffff] -> [mem 0x00001000-0xbfffffff]
+[    0.010145] NUMA: Node 0 [mem 0x00001000-0xbfffffff] + [mem 0x100000000-0x43fffffff] -> [mem 0x00001000-0x43fffffff]
+[    0.010157] NODE_DATA(0) allocated [mem 0x43ffd4280-0x43fffefff]
+[    0.011692] ACPI: PM-Timer IO Port: 0xb008
+[    0.011755] ACPI: LAPIC_NMI (acpi_id[0xff] dfl dfl lint[0x1])
+[    0.011905] IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23
+[    0.011909] ACPI: INT_SRC_OVR (bus 0 bus_irq 5 global_irq 5 high level)
+[    0.011912] ACPI: INT_SRC_OVR (bus 0 bus_irq 9 global_irq 9 high level)
+[    0.011914] ACPI: INT_SRC_OVR (bus 0 bus_irq 10 global_irq 10 high level)
+[    0.011915] ACPI: INT_SRC_OVR (bus 0 bus_irq 11 global_irq 11 high level)
+[    0.011921] APIC: wakeup_secondary_cpu_64() replaced with acpi_wakeup_cpu()
+[    0.011928] ACPI: Using ACPI (MADT) for SMP configuration information
+[    0.011932] CPU topo: Max. logical packages:   1
+[    0.011933] CPU topo: Max. logical nodes:      1
+[    0.011934] CPU topo: Num. nodes per package:  1
+[    0.011937] CPU topo: Max. logical dies:       1
+[    0.011937] CPU topo: Max. dies per package:   1
+[    0.011943] CPU topo: Max. threads per core:   2
+[    0.011943] CPU topo: Num. cores per package:     2
+[    0.011944] CPU topo: Num. threads per package:   4
+[    0.011945] CPU topo: Allowing 4 present CPUs plus 0 hotplug CPUs
+[    0.012025] PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+[    0.012027] PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000fffff]
+[    0.012029] PM: hibernation: Registered nosave memory: [mem 0x0080c000-0x0080cfff]
+[    0.012031] PM: hibernation: Registered nosave memory: [mem 0x01600000-0x0161ffff]
+[    0.012032] PM: hibernation: Registered nosave memory: [mem 0xbd456000-0xbd45bfff]
+[    0.012034] PM: hibernation: Registered nosave memory: [mem 0xbf2ed000-0xbf4ecfff]
+[    0.012036] PM: hibernation: Registered nosave memory: [mem 0xbf570000-0xbf5fefff]
+[    0.012037] PM: hibernation: Registered nosave memory: [mem 0xbffe0000-0xffdfffff]
+[    0.012039] [gap 0xc0000000-0xffdfffff] available for PCI devices
+[    0.012040] Booting paravirtualized kernel on KVM
+[    0.012043] clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1910969940391419 ns
+[    0.012214] Zone ranges:
+[    0.012215]   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+[    0.012218]   DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+[    0.012219]   Normal   [mem 0x0000000100000000-0x000000043fffffff]
+[    0.012221]   Device   empty
+[    0.012222] Movable zone start for each node
+[    0.012224] Early memory node ranges
+[    0.012224]   node   0: [mem 0x0000000000001000-0x000000000009ffff]
+[    0.012226]   node   0: [mem 0x0000000000100000-0x000000000080bfff]
+[    0.012227]   node   0: [mem 0x000000000080d000-0x00000000015fffff]
+[    0.012228]   node   0: [mem 0x0000000001620000-0x00000000bd455fff]
+[    0.012230]   node   0: [mem 0x00000000bd45c000-0x00000000bf2ecfff]
+[    0.012231]   node   0: [mem 0x00000000bf4ed000-0x00000000bf56ffff]
+[    0.012231]   node   0: [mem 0x00000000bf5ff000-0x00000000bffdffff]
+[    0.012232]   node   0: [mem 0x00000000ffe00000-0x000000043fffffff]
+[    0.012235] Initmem setup node 0 [mem 0x0000000000001000-0x000000043fffffff]
+[    0.012244] On node 0, zone DMA: 1 pages in unavailable ranges
+[    0.012261] On node 0, zone DMA: 96 pages in unavailable ranges
+[    0.012278] On node 0, zone DMA: 1 pages in unavailable ranges
+[    0.018660] On node 0, zone DMA32: 32 pages in unavailable ranges
+[    0.018730] On node 0, zone DMA32: 6 pages in unavailable ranges
+[    0.018750] On node 0, zone DMA32: 512 pages in unavailable ranges
+[    0.018776] On node 0, zone DMA32: 143 pages in unavailable ranges
+[    0.019053] On node 0, zone DMA32: 32288 pages in unavailable ranges
+[    0.047297] setup_percpu: NR_CPUS:8192 nr_cpumask_bits:4 nr_cpu_ids:4 nr_node_ids:1
+[    0.047641] percpu: Embedded 85 pages/cpu s225280 r8192 d114688 u524288
+[    0.047723] kvm-guest: PV spinlocks enabled
+[    0.047726] PV qspinlock hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.047730] Kernel command line: roothash=8d380973780a1e7c153f89944291c04a37f05a24483121ffd0231acd674e5352 console=ttyS0,115200 panic=-1 systemd.volatile=state rd.emergency=reboot systemd.crash_reboot=1 sentinel.image=1
+[    0.047882] Unknown kernel command line parameters "roothash=8d380973780a1e7c153f89944291c04a37f05a24483121ffd0231acd674e5352", will be passed to user space.
+[    0.047895] random: crng init done
+[    0.047896] printk: log buffer data + meta data: 262144 + 1114112 = 1376256 bytes
+[    0.050020] Dentry cache hash table entries: 2097152 (order: 12, 16777216 bytes, linear)
+[    0.051090] Inode-cache hash table entries: 1048576 (order: 11, 8388608 bytes, linear)
+[    0.051186] software IO TLB: area num 4.
+[    0.051187] software IO TLB: SWIOTLB bounce buffer size roundup to 1024MB
+[    0.322406] Fallback order for Node 0: 0 
+[    0.322411] Built 1 zonelists, mobility grouping on.  Total pages: 4193993
+[    0.322412] Policy zone: Normal
+[    0.322422] mem auto-init: stack:all(zero), heap alloc:on, heap free:off
+[    0.322428] KHO: Failed to reserve lowmem scratch buffer
+[    0.322429] KHO: Failed to reserve scratch area, disabling kexec handover
+[    0.365415] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=4, Nodes=1
+[    0.381156] ftrace: allocating 64661 entries in 256 pages
+[    0.381158] ftrace: allocated 256 pages with 1 groups
+[    0.381399] rcu: Hierarchical RCU implementation.
+[    0.381400] rcu: 	RCU restricting CPUs from NR_CPUS=8192 to nr_cpu_ids=4.
+[    0.381402] 	Trampoline variant of Tasks RCU enabled.
+[    0.381403] 	Rude variant of Tasks RCU enabled.
+[    0.381403] 	Tracing variant of Tasks RCU enabled.
+[    0.381404] rcu: RCU calculated value of scheduler-enlistment delay is 100 jiffies.
+[    0.381405] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=4
+[    0.381419] RCU Tasks: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+[    0.381421] RCU Tasks Rude: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+[    0.385951] NR_IRQS: 524544, nr_irqs: 456, preallocated irqs: 16
+[    0.386356] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.386659] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1911260446275000 ns
+[    0.386782] Console: colour dummy device 80x25
+[    0.386921] printk: console [ttyS0] enabled
+[    1.512397] ACPI: Core revision 20251212
+[    1.516518] ACPI BIOS Warning (bug): Incorrect checksum in table [APIC] - 0xDC, should be 0x17 (20251212/utcksum-58)
+[    1.527290] APIC: Switch to symmetric I/O mode setup
+[    1.537862] APIC: Switched APIC routing to: physical x2apic
+[    1.552096] clocksource: tsc-early: mask: 0xffffffffffffffff max_cycles: 0x26eb3e3cc63, max_idle_ns: 440795236593 ns
+[    1.562773] Calibrating delay loop (skipped), value calculated using timer frequency.. 5400.00 BogoMIPS (lpj=2700000)
+[    1.563771] x86/cpu: User Mode Instruction Prevention (UMIP) activated
+[    1.563771] Last level iTLB entries: 4KB 0, 2MB 0, 4MB 0
+[    1.563771] Last level dTLB entries: 4KB 0, 2MB 0, 4MB 0, 1GB 0
+[    1.563771] process: using TDX aware idle routine
+[    1.563771] mitigations: Enabled attack vectors: user_kernel, user_user, guest_host, guest_guest, SMT mitigations: auto
+[    1.563771] Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+[    1.563771] Spectre V2 : Mitigation: Enhanced / Automatic IBRS
+[    1.563771] Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+[    1.563771] Spectre V2 : Spectre v2 / PBRSB-eIBRS: Retire a single CALL on VMEXIT
+[    1.563771] Spectre V2 : Enabling IBPB for BPF
+[    1.563771] Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x020: 'AVX-512 opmask'
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x040: 'AVX-512 Hi256'
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x080: 'AVX-512 ZMM_Hi256'
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x200: 'Protection Keys User registers'
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x20000: 'AMX Tile config'
+[    1.563771] x86/fpu: Supporting XSAVE feature 0x40000: 'AMX Tile data'
+[    1.563771] x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+[    1.563771] x86/fpu: xstate_offset[5]:  832, xstate_sizes[5]:   64
+[    1.563771] x86/fpu: xstate_offset[6]:  896, xstate_sizes[6]:  512
+[    1.563771] x86/fpu: xstate_offset[7]: 1408, xstate_sizes[7]: 1024
+[    1.563771] x86/fpu: xstate_offset[9]: 2432, xstate_sizes[9]:    8
+[    1.563771] x86/fpu: xstate_offset[17]: 2496, xstate_sizes[17]:   64
+[    1.563771] x86/fpu: xstate_offset[18]: 2560, xstate_sizes[18]: 8192
+[    1.563771] x86/fpu: Enabled xstate features 0x602e7, context size is 10752 bytes, using 'compacted' format.
+[    1.563771] Freeing SMP alternatives memory: 56K
+[    1.563771] Memory Encryption Features active: Intel TDX
+[    1.563771] pid_max: default: 32768 minimum: 301
+[    1.563771] landlock: Up and running.
+[    1.563771] Yama: becoming mindful.
+[    1.563771] AppArmor: AppArmor initialized
+[    1.563771] AppArmor: AppArmor secmark mediation reserved: ready to be enabled
+[    1.563771] Mount-cache hash table entries: 32768 (order: 6, 262144 bytes, linear)
+[    1.563771] Mountpoint-cache hash table entries: 32768 (order: 6, 262144 bytes, linear)
+[    1.563771] VFS: Finished mounting rootfs on nullfs
+[    1.563771] smpboot: CPU0: Intel TDX (family: 0x6, model: 0x8f, stepping: 0x8)
+[    1.564019] Performance Events: unsupported CPU family 6 model 143 no PMU driver, software events only.
+[    1.564803] signal: max sigframe size: 11952
+[    1.565818] rcu: Hierarchical SRCU implementation.
+[    1.565819] rcu: 	Max phase no-delay instances is 400.
+[    1.567832] Timer migration: 1 hierarchy levels; 8 children per group; 1 crossnode level
+[    1.570099] NMI watchdog: Perf NMI watchdog permanently disabled
+[    1.570873] smp: Bringing up secondary CPUs ...
+[    1.570876] smpboot: Parallel CPU startup disabled by the platform
+[    1.573794] smpboot: x86: Booting SMP configuration:
+[    1.573797] .... node  #0, CPUs:      #1 #2 #3
+[    1.575963] smp: Brought up 1 node, 4 CPUs
+[    1.575963] smpboot: Total of 4 processors activated (21600.00 BogoMIPS)
+[    1.579845] Memory: 15118140K/16775972K available (23430K kernel code, 4965K rwdata, 16604K rodata, 5456K init, 5680K bss, 1648520K reserved, 0K cma-reserved)
+[    1.584868] devtmpfs: initialized
+[    1.584868] x86/mm: Memory block size: 128MB
+[    1.585827] ACPI: PM: Registering ACPI NVS region [mem 0x0080c000-0x0080cfff] (4096 bytes)
+[    1.585831] ACPI: PM: Registering ACPI NVS region [mem 0xbf57f000-0xbf5fefff] (524288 bytes)
+[    1.585937] posixtimers hash table entries: 2048 (order: 3, 32768 bytes, linear)
+[    1.585937] futex hash table entries: 1024 (65536 bytes on 1 NUMA nodes, total 64 KiB, linear).
+[    1.586357] PM: RTC time: 16:51:22, date: 2026-11-06
+[    1.610498] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    1.640778] DMA: preallocated 2048 KiB GFP_KERNEL pool for atomic allocations
+[    1.660779] DMA: preallocated 2048 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+[    1.679788] DMA: preallocated 2048 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+[    1.679816] audit: initializing netlink subsys (disabled)
+[    1.679846] audit: type=2000 audit(1793983876.117:1): state=initialized audit_enabled=0 res=1
+[    1.679934] thermal_sys: Registered thermal governor 'fair_share'
+[    1.679936] thermal_sys: Registered thermal governor 'bang_bang'
+[    1.679937] thermal_sys: Registered thermal governor 'step_wise'
+[    1.679938] thermal_sys: Registered thermal governor 'user_space'
+[    1.679938] thermal_sys: Registered thermal governor 'power_allocator'
+[    1.687787] cpuidle: using governor ladder
+[    1.693783] cpuidle: using governor menu
+[    1.716393] efi: Freeing EFI boot services memory: 54820K
+[    1.716396] acpiphp: ACPI Hot Plug PCI Controller Driver version: 0.5
+[    1.716717] PCI: Using configuration type 1 for base access
+[    1.720815] kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+[    1.726838] HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+[    1.726840] HugeTLB: 16380 KiB vmemmap can be freed for a 1.00 GiB page
+[    1.726842] HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+[    1.726843] HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+[    1.798176] ACPI: Added _OSI(Module Device)
+[    1.798771] ACPI: Added _OSI(Processor Device)
+[    1.798771] ACPI: Added _OSI(Processor Aggregator Device)
+[    1.799366] ACPI: 3 ACPI AML tables successfully acquired and loaded
+[    1.801825] ACPI: \_SB_: platform _OSC: OS support mask [006e7eff]
+[    1.802381] ACPI: Interpreter enabled
+[    1.802394] ACPI: PM: (supports S0 S3 S4 S5)
+[    1.802396] ACPI: Using IOAPIC for interrupt routing
+[    1.802558] PCI: Using host bridge windows from ACPI; if necessary, use "pci=nocrs" and report a bug
+[    1.802559] PCI: Ignoring E820 reservations for host bridge windows
+[    1.803301] ACPI: Enabled 16 GPEs in block 00 to 0F
+[    1.808103] ACPI: PCI Root Bridge [PCI0] (domain 0000 [bus 00-ff])
+[    1.808109] acpi PNP0A03:00: _OSC: OS supports [ASPM ClockPM Segments MSI EDR HPX-Type3]
+[    1.808112] acpi PNP0A03:00: _OSC: not requesting OS control; OS requires [ExtendedConfig ASPM ClockPM MSI]
+[    1.808116] acpi PNP0A03:00: _OSC: platform retains control of PCIe features (AE_ERROR)
+[    1.808123] acpi PNP0A03:00: fail to add MMCONFIG information, can't access extended configuration space under this bridge
+[    1.809805] PCI host bridge to bus 0000:00
+[    1.809808] pci_bus 0000:00: root bus resource [io  0x0000-0x0cf7 window]
+[    1.809810] pci_bus 0000:00: root bus resource [io  0x0d00-0x0fff window]
+[    1.809812] pci_bus 0000:00: root bus resource [io  0xa000-0xbfff window]
+[    1.809813] pci_bus 0000:00: root bus resource [mem 0x000a0000-0x000bffff window]
+[    1.809815] pci_bus 0000:00: root bus resource [mem 0xc0100000-0xfebfefff window]
+[    1.809816] pci_bus 0000:00: root bus resource [mem 0xc0000000-0xc00fffff window]
+[    1.809818] pci_bus 0000:00: root bus resource [bus 00-ff]
+[    1.809943] pci 0000:00:00.0: [8086:1237] type 00 class 0x060000 conventional PCI endpoint
+[    1.811589] pci 0000:00:01.0: [8086:7110] type 00 class 0x060100 conventional PCI endpoint
+[    1.813358] pci 0000:00:01.3: [8086:7113] type 00 class 0x068000 conventional PCI endpoint
+[    1.814952] pci 0000:00:01.3: quirk: [io  0xb000-0xb03f] claimed by PIIX4 ACPI
+[    1.818192] pci 0000:00:03.0: [1ae0:0042] type 00 class 0x020000 conventional PCI endpoint
+[    1.819800] pci 0000:00:03.0: BAR 0 [mem 0xc0202000-0xc0202fff]
+[    1.819830] pci 0000:00:03.0: BAR 1 [mem 0xc0200000-0xc02000ff]
+[    1.819859] pci 0000:00:03.0: BAR 2 [mem 0xc0100000-0xc01fffff]
+[    1.821995] pci 0000:00:04.0: [1ae0:001f] type 00 class 0x010802 conventional PCI endpoint
+[    1.823826] pci 0000:00:04.0: BAR 0 [mem 0xc0000000-0xc0003fff 64bit]
+[    1.823896] pci 0000:00:04.0: BAR 4 [mem 0xc0201000-0xc020103f]
+[    1.894614] ACPI: PCI: Interrupt link LNKA configured for IRQ 10
+[    1.894860] ACPI: PCI: Interrupt link LNKB configured for IRQ 10
+[    1.895862] ACPI: PCI: Interrupt link LNKC configured for IRQ 11
+[    1.896873] ACPI: PCI: Interrupt link LNKD configured for IRQ 11
+[    1.897546] ACPI: PCI: Interrupt link LNKS configured for IRQ 9
+[    1.898832] iommu: Default domain type: Translated
+[    1.898834] iommu: DMA domain TLB invalidation policy: lazy mode
+[    1.909935] SCSI subsystem initialized
+[    1.909954] ACPI: bus type USB registered
+[    1.909954] usbcore: registered new interface driver usbfs
+[    1.909954] usbcore: registered new interface driver hub
+[    1.909954] usbcore: registered new device driver usb
+[    1.909954] pps_core: LinuxPPS API ver. 1 registered
+[    1.909954] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    1.909954] PTP clock support registered
+[    1.909954] EDAC MC: Ver: 3.0.0
+[    1.911085] efivars: Registered efivars operations
+[    1.913028] NetLabel: Initializing
+[    1.913029] NetLabel:  domain hash size = 128
+[    1.913030] NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+[    1.913045] NetLabel:  unlabeled traffic allowed by default
+[    1.913794] mctp: management component transport protocol core
+[    1.913794] NET: Registered PF_MCTP protocol family
+[    1.913794] PCI: Using ACPI for IRQ routing
+[    1.914035] e820: register RAM buffer resource [mem 0x0080c000-0x008fffff]
+[    1.914036] e820: register RAM buffer resource [mem 0x01600000-0x03ffffff]
+[    1.914037] e820: register RAM buffer resource [mem 0xbd456000-0xbfffffff]
+[    1.914038] e820: register RAM buffer resource [mem 0xbf2ed000-0xbfffffff]
+[    1.914039] e820: register RAM buffer resource [mem 0xbf570000-0xbfffffff]
+[    1.914040] e820: register RAM buffer resource [mem 0xbffe0000-0xbfffffff]
+[    1.914074] vgaarb: loaded
+[    1.914556] clocksource: Switched to clocksource tsc-early
+[    1.915182] VFS: Disk quotas dquot_6.6.0
+[    1.915192] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    1.922672] AppArmor: AppArmor Filesystem Enabled
+[    1.922690] pnp: PnP ACPI init
+[    1.923550] pnp: PnP ACPI: found 7 devices
+[    1.929357] clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+[    1.929426] NET: Registered PF_INET protocol family
+[    1.929776] IP idents hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+[    1.945995] tcp_listen_portaddr_hash hash table entries: 8192 (order: 5, 131072 bytes, linear)
+[    1.946030] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    1.946193] TCP established hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+[    1.946374] TCP bind hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+[    1.946499] TCP: Hash tables configured (established 131072 bind 65536)
+[    1.946605] MPTCP token hash table entries: 16384 (order: 7, 393216 bytes, linear)
+[    1.946687] UDP hash table entries: 8192 (order: 7, 524288 bytes, linear)
+[    1.946780] UDP-Lite hash table entries: 8192 (order: 7, 524288 bytes, linear)
+[    1.946857] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    1.946871] NET: Registered PF_XDP protocol family
+[    1.946878] pci_bus 0000:00: resource 4 [io  0x0000-0x0cf7 window]
+[    1.946881] pci_bus 0000:00: resource 5 [io  0x0d00-0x0fff window]
+[    1.946882] pci_bus 0000:00: resource 6 [io  0xa000-0xbfff window]
+[    1.946883] pci_bus 0000:00: resource 7 [mem 0x000a0000-0x000bffff window]
+[    1.946884] pci_bus 0000:00: resource 8 [mem 0xc0100000-0xfebfefff window]
+[    1.946885] pci_bus 0000:00: resource 9 [mem 0xc0000000-0xc00fffff window]
+[    1.946909] pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+[    1.947043] PCI: CLS 0 bytes, default 64
+[    1.947235] PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+[    1.947235] software IO TLB: mapped [mem 0x0000000070cde000-0x00000000b0cde000] (1024MB)
+[    1.947277] clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x26eb3e3cc63, max_idle_ns: 440795236593 ns
+[    1.952679] clocksource: Switched to clocksource tsc
+[    1.952697] Trying to unpack rootfs image as initramfs...
+[    1.953114] Initialise system trusted keyrings
+[    1.953148] Key type blacklist registered
+[    1.953202] workingset: timestamp_bits=36 max_order=22 bucket_order=0
+[    1.953475] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    1.953652] fuse: init (API version 7.45)
+[    1.995305] integrity: Platform Keyring initialized
+[    1.995308] integrity: Machine keyring initialized
+[    2.003490] Key type asymmetric registered
+[    2.003491] Asymmetric key parser 'x509' registered
+[    2.003511] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 242)
+[    2.003604] io scheduler mq-deadline registered
+[    2.017227] ledtrig-cpu: registered to indicate activity on CPUs
+[    2.017433] ACPI: AC: AC Adapter [ACAD] (on-line)
+[    2.017479] input: Power Button as /devices/platform/LNXPWRBN:00/input/input0
+[    2.017545] ACPI: button: Power Button [PWRF]
+[    2.017565] input: Sleep Button as /devices/platform/LNXSLPBN:00/input/input1
+[    2.017621] ACPI: button: Sleep Button [SLPF]
+[    2.047864] Serial: 8250/16550 driver, 32 ports, IRQ sharing enabled
+[    2.086526] 00:03: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+[    2.117730] 00:04: ttyS1 at I/O 0x2f8 (irq = 3, base_baud = 115200) is a 16550A
+[    2.144418] 00:05: ttyS2 at I/O 0x3e8 (irq = 6, base_baud = 115200) is a 16550A
+[    2.171214] 00:06: ttyS3 at I/O 0x2e8 (irq = 7, base_baud = 115200) is a 16550A
+[    2.174945] Linux agpgart interface v0.103
+[    2.182110] tpm_tis MSFT0101:00: 2.0 TPM (device-id 0x9009, rev-id 0)
+[    2.196031] loop: module loaded
+[    2.196208] Key type psk registered
+[    2.196604] ACPI: bus type drm_connector registered
+[    2.196758] tun: Universal TUN/TAP device driver, 1.6
+[    2.198226] nvme nvme0: pci function 0000:00:04.0
+[    2.199543] ACPI: \_SB_.LNKD: Enabled at IRQ 11
+[    2.224723] software IO TLB: Memory encryption is active and system is using DMA bounce buffers
+[    2.231443] PPP generic driver version 2.4.2
+[    2.231637] i8042: PNP: PS/2 Controller [PNP0303:KBD,PNP0f13:MOU] at 0x60,0x64 irq 1,12
+[    2.231857] i8042: Warning: Keylock active
+[    2.234525] serio: i8042 KBD port at 0x60,0x64 irq 1
+[    2.234533] serio: i8042 AUX port at 0x60,0x64 irq 12
+[    2.234644] mousedev: PS/2 mouse device common for all mice
+[    2.234778] rtc_cmos 00:00: RTC can wake from S4
+[    2.236711] rtc_cmos 00:00: registered as rtc0
+[    2.236991] rtc_cmos 00:00: setting system clock to 2026-11-06T16:51:23 UTC (1793983883)
+[    2.237140] rtc_cmos 00:00: alarms up to one day, 114 bytes nvram
+[    2.237148] i2c_dev: i2c /dev entries driver
+[    2.237179] device-mapper: core: CONFIG_IMA_DISABLE_HTABLE is disabled. Duplicate IMA measurements will not be recorded in the IMA log.
+[    2.237198] device-mapper: uevent: version 1.0.3
+[    2.237251] device-mapper: ioctl: 4.50.0-ioctl (2025-04-28) initialised: dm-devel@lists.linux.dev
+[    2.237256] intel_pstate: CPU model not supported
+[    2.237334] drop_monitor: Initializing network drop monitor service
+[    2.238011] NET: Registered PF_INET6 protocol family
+[    2.241239] Segment Routing with IPv6
+[    2.241247] In-situ OAM (IOAM) with IPv6
+[    2.241288] NET: Registered PF_PACKET protocol family
+[    2.244195] Key type dns_resolver registered
+[    2.244220] mce: Unable to init MCE device (rc: -5)
+[    2.244304] IPI shorthand broadcast: enabled
+[    2.245737] sched_clock: Marking stable (1069018896, 1176112572)->(7487204476, -5242073008)
+[    2.251343] registered taskstats version 1
+[    2.272437] Loading compiled-in X.509 certificates
+[    2.275117] Loaded X.509 cert 'Build time autogenerated kernel key: e83933aebc29a69bbcc06aea6e3aaf995c87d248'
+[    2.275503] Loaded X.509 cert 'Canonical Ltd. Live Patch Signing 2025 Kmod: d541cef61dc7e793b7eb7e899970a2eef0b5dc8c'
+[    2.275853] Loaded X.509 cert 'Canonical Ltd. Live Patch Signing: 14df34d1a87cf37625abec039ef2bf521249b969'
+[    2.276236] Loaded X.509 cert 'Canonical Ltd. Kernel Module Signing 2025 Kmod: 4627603d2357a2a3f81006370894c221175893e9'
+[    2.276580] Loaded X.509 cert 'Canonical Ltd. Kernel Module Signing: 88f752e560a1e0737e31163a466ad7b70a850c19'
+[    2.276581] blacklist: Loading compiled-in revocation X.509 certificates
+[    2.276599] Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing: 61482aa2830d0ab2ad5af10b7250da9033ddcef0'
+[    2.276608] Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2017): 242ade75ac4a15e50d50c84b0d45ff3eae707a03'
+[    2.276617] Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (ESM 2018): 365188c1d374d6b07c3c8f240f8ef722433d6a8b'
+[    2.276625] Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2019): c0746fd6c5da3ae827864651ad66ae47fe24b3e8'
+[    2.276633] Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v1): a8d54bbb3825cfb94fa13c9f8a594a195c107b8d'
+[    2.276641] Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v2): 4cf046892d6fd3c9a5b03f98d845f90851dc6a8c'
+[    2.276649] Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v3): 100437bb6de6e469b581e61cd66bce3ef4ed53af'
+[    2.276661] Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (Ubuntu Core 2019): c1d57b8f6b743f23ee41f4f7ee292f06eecadfb9'
+[    2.280775] Demotion targets for Node 0: null
+[    2.280861] Key type .fscrypt registered
+[    2.280862] Key type fscrypt-provisioning registered
+[    2.280919] Key type big_key registered
+[    2.281009] Key type trusted registered
+[    2.287311] nvme nvme0: 2/0/0 default/read/poll queues
+[    2.308894]  nvme0n1: p1 p2 p3
+[    2.353974] Freeing initrd memory: 181380K
+[    2.442727] input: AT Translated Set 2 keyboard as /devices/platform/i8042/serio0/input/input2
+[    2.493908] Key type encrypted registered
+[    2.493927] AppArmor: AppArmor sha256 policy hashing enabled
+[    2.493938] Loading compiled-in module X.509 certificates
+[    2.494467] Loaded X.509 cert 'Build time autogenerated kernel key: e83933aebc29a69bbcc06aea6e3aaf995c87d248'
+[    2.494469] ima: Allocated hash algorithm: sha256
+[    2.509859] audit: type=1807 audit(1793983883.772:2): action=measure func=KEXEC_KERNEL_CHECK res=1
+[    2.509873] evm: Initialising EVM extended attributes:
+[    2.509874] audit: type=1807 audit(1793983883.772:3): action=measure func=MODULE_CHECK res=1
+[    2.509875] evm: security.selinux
+[    2.509877] evm: security.SMACK64
+[    2.509879] evm: security.SMACK64EXEC
+[    2.509880] evm: security.SMACK64TRANSMUTE
+[    2.509882] evm: security.SMACK64MMAP
+[    2.509883] evm: security.apparmor
+[    2.509884] evm: security.ima
+[    2.509884] evm: security.capability
+[    2.509885] evm: HMAC attrs: 0x1
+[    2.536851] integrity: Loading X.509 certificate: UEFI:db
+[    2.537195] integrity: Loaded X.509 cert 'Sentinel TEST db image 2026-11-06 throwaway 3: cc29f903988ee5bdb43862f1065406b0e28ff7a3'
+[    2.554813] integrity: Revoking X.509 certificate: UEFI:dbx
+[    2.554842] blacklist: Revoked X.509 cert 'Canonical Ltd. Secure Boot Signing: 61482aa2830d0ab2ad5af10b7250da9033ddcef0'
+[    2.554843] integrity: Revoking X.509 certificate: UEFI:dbx
+[    2.554855] blacklist: Revoked X.509 cert 'Cisco: Virtual UEFI SubCA: 13df2e3f54ebf347dcaecebf21d3cbb2355a4c9a'
+[    2.554856] integrity: Revoking X.509 certificate: UEFI:dbx
+[    2.554867] blacklist: Revoked X.509 cert 'Debian Secure Boot Signer: 00a7468def'
+[    2.573573] PM:   Magic number: 2:518:893
+[    2.573852] RAS: Correctable Errors collector initialized.
+[    2.574006] Lockdown: swapper/0: hibernation is restricted; see man kernel_lockdown.7
+[    2.574060] clk: Disabling unused clocks
+[    2.574062] PM: genpd: Disabling unused power domains
+[    2.605140] Freeing unused decrypted memory: 2028K
+[    2.607063] Freeing unused kernel image (initmem) memory: 5456K
+[    2.607112] Write protecting the kernel read-only data: 43008k
+[    2.609657] Freeing unused kernel image (text/rodata gap) memory: 1144K
+[    2.611450] Freeing unused kernel image (rodata/data gap) memory: 1828K
+[    2.621700] x86/mm: Checked W+X mappings: passed, no W+X pages found.
+[    2.621719] Run /init as init process
+[    2.629953] systemd[1]: Inserted module 'autofs4'
+[    3.368172] systemd[1]: systemd 255.4-1ubuntu8.18 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+[    3.368191] systemd[1]: Detected virtualization google.
+[    3.368202] systemd[1]: Detected confidential virtualization tdx.
+[    3.368205] systemd[1]: Detected architecture x86-64.
+
+Welcome to Ubuntu 24.04.5 LTS!
+
+
+[    3.368207] systemd[1]: Running in initrd.
+[    3.376594] systemd[1]: No hostname configured, using default hostname.
+[    3.376627] systemd[1]: Hostname set to <localhost>.
+[    3.376687] systemd[1]: Initializing machine ID from random generator.
+[    3.390486] systemd-fstab-generator[105]: Using verity root device /dev/mapper/root.
+[    3.397877] systemd-veritysetup-generator[114]: Using data device /dev/disk/by-partuuid/8d380973-780a-1e7c-153f-89944291c04a and hash device /dev/disk/by-partuuid/37f05a24-4831-21ff-d023-1acd674e5352 for root.
+[    3.427615] systemd[1]: Queued start job for default target initrd.target.
+[    3.436853] systemd[1]: Created slice system-modprobe.slice - Slice /system/modprobe.
+[  OK  ] Created slice system-modprobe.slice - Slice /system/modprobe.
+
+[    3.439885] systemd[1]: Created slice system-systemd\x2dveritysetup.slice - Verity Protection Service Slice.
+[  OK  ] Created slice system-systemd\x2dve… - Verity Protection Service Slice.
+
+[    3.443111] systemd[1]: Started systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch.
+[  OK  ] Started systemd-ask-password-conso…equests to Console Directory Watch.
+
+[    3.446524] systemd[1]: Set up automount proc-sys-fs-binfmt_misc.automount - Arbitrary Executable File Formats File System Automount Point.
+[  OK  ] Set up automount proc-sys-fs-binfm…ormats File System Automount Point.
+
+[    3.450199] systemd[1]: Expecting device dev-disk-by\x2dpartuuid-37f05a24\x2d4831\x2d21ff\x2dd023\x2d1acd674e5352.device - /dev/disk/by-partuuid/37f05a24-4831-21ff-d023-1acd674e5352...
+         Expecting device dev-disk-by\x2dpa…5a24-4831-21ff-d023-1acd674e5352...
+
+[    3.454191] systemd[1]: Expecting device dev-disk-by\x2dpartuuid-8d380973\x2d780a\x2d1e7c\x2d153f\x2d89944291c04a.device - /dev/disk/by-partuuid/8d380973-780a-1e7c-153f-89944291c04a...
+         Expecting device dev-disk-by\x2dpa…0973-780a-1e7c-153f-89944291c04a...
+
+[    3.458241] systemd[1]: Expecting device dev-mapper-root.device - /dev/mapper/root...
+         Expecting device dev-mapper-root.device - /dev/mapper/root...
+
+[    3.460895] systemd[1]: Reached target initrd-usr-fs.target - Initrd /usr File System.
+[  OK  ] Reached target initrd-usr-fs.target - Initrd /usr File System.
+
+[  OK  ] Reached target integritysetup.targ… Local Integrity Protected Volumes.
+
+[    3.463672] systemd[1]: Reached target integritysetup.target - Local Integrity Protected Volumes.
+[    3.465331] systemd[1]: Reached target paths.target - Path Units.
+[  OK  ] Reached target paths.target - Path Units.
+
+[    3.468884] systemd[1]: Reached target remote-cryptsetup.target - Remote Encrypted Volumes.
+[  OK  ] Reached target remote-cryptsetup.target - Remote Encrypted Volumes.
+
+[    3.471822] systemd[1]: Reached target remote-veritysetup.target - Remote Verity Protected Volumes.
+[  OK  ] Reached target remote-veritysetup.… - Remote Verity Protected Volumes.
+
+[  OK  ] Reached target slices.target - Slice Units.
+
+[    3.474891] systemd[1]: Reached target slices.target - Slice Units.
+[    3.476117] systemd[1]: Reached target swap.target - Swaps.
+[  OK  ] Reached target swap.target - Swaps.
+
+[    3.479208] systemd[1]: Listening on systemd-initctl.socket - initctl Compatibility Named Pipe.
+[  OK  ] Listening on systemd-initctl.socke…- initctl Compatibility Named Pipe.
+
+[    3.482511] systemd[1]: Listening on systemd-journald-audit.socket - Journal Audit Socket.
+[  OK  ] Listening on systemd-journald-audit.socket - Journal Audit Socket.
+
+[    3.485525] systemd[1]: Listening on systemd-journald-dev-log.socket - Journal Socket (/dev/log).
+[  OK  ] Listening on systemd-journald-dev-…socket - Journal Socket (/dev/log).
+
+[    3.488660] systemd[1]: Listening on systemd-journald.socket - Journal Socket.
+[  OK  ] Listening on systemd-journald.socket - Journal Socket.
+
+[    3.491260] systemd[1]: Listening on systemd-networkd.socket - Network Service Netlink Socket.
+[  OK  ] Listening on systemd-networkd.socket - Network Service Netlink Socket.
+
+[    3.529966] systemd[1]: Listening on systemd-pcrextend.socket - TPM2 PCR Extension (Varlink).
+[  OK  ] Listening on systemd-pcrextend.socket - TPM2 PCR Extension (Varlink).
+
+[    3.533057] systemd[1]: Listening on systemd-udevd-control.socket - udev Control Socket.
+[  OK  ] Listening on systemd-udevd-control.socket - udev Control Socket.
+
+[    3.535956] systemd[1]: Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+[  OK  ] Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+
+[    3.543282] systemd[1]: Mounting dev-hugepages.mount - Huge Pages File System...
+         Mounting dev-hugepages.mount - Huge Pages File System...
+
+[    3.546393] systemd[1]: Mounting dev-mqueue.mount - POSIX Message Queue File System...
+         Mounting dev-mqueue.mount - POSIX Message Queue File System...
+
+[    3.549744] systemd[1]: Mounting sys-kernel-debug.mount - Kernel Debug File System...
+         Mounting sys-kernel-debug.mount - Kernel Debug File System...
+
+         Mounting sys-k[    3.553328] systemd[1]: Mounting sys-kernel-tracing.mount - Kernel Trace File System...
+ernel-tracing.mount - Kernel Trace File System...
+
+         Starting syste[    3.557672] systemd[1]: Starting systemd-journald.service - Journal Service...
+md-journald.service - Journal Service...
+
+         Starting kmod-[    3.561285] systemd[1]: Starting kmod-static-nodes.service - Create List of Static Device Nodes...
+static-nodes.service…eate List of Static Device Nodes...
+
+         Starting modprobe@configfs.service - Load Kernel Module configfs...
+[    3.565796] systemd[1]: Starting modprobe@configfs.service - Load Kernel Module configfs...
+
+         Starting modprobe@dm_mod.service - Load Kernel Module dm_m[    3.569781] systemd[1]: Starting modprobe@dm_mod.service - Load Kernel Module dm_mod...
+od...
+[    3.571518] systemd-journald[121]: Collecting audit messages is enabled.
+
+[    3.575546] systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+         Starting modprobe@efi_pstore.servi… - Load Kernel Module efi_pstore...
+
+         Starting modprobe@fuse.service - Load Kernel Module fuse..[    3.580370] systemd[1]: Starting modprobe@fuse.service - Load Kernel Module fuse...
+.
+
+[    3.583960] pstore: Using crash dump compression: deflate
+[    3.584426] systemd[1]: Starting modprobe@loop.service - Load Kernel Module loop...
+         Starting modprobe@loop.service - Load Kernel Module loop...
+
+[    3.588548] systemd[1]: systemd-battery-check.service - Check battery level during early boot was skipped because of an unmet condition check (ConditionVirtualization=no).
+[    3.588586] systemd[1]: systemd-bsod.service - Displays emergency message in full screen. was skipped because of an unmet condition check (ConditionVirtualization=no).
+[    3.588623] systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database was skipped because of an unmet condition check (ConditionNeedsUpdate=/etc).
+[    3.589932] systemd[1]: Starting systemd-modules-load.service - Load Kernel Modules...
+         Starting systemd-modules-load.service - Load Kernel Modules...
+
+[    3.601000] systemd[1]: Starting systemd-network-generator.service - Generate network units from Kernel command line...
+         Starting systemd-network-generator…k units from Kernel command line...
+
+[    3.605275] systemd[1]: systemd-pcrmachine.service - TPM2 PCR Machine ID Measurement was skipped because of an unmet condition check (ConditionPathExists=!/etc/initrd-release).
+[    3.605881] systemd[1]: Starting systemd-pcrphase-initrd.service - TPM2 PCR Barrier (initrd)...
+         Starting systemd-pcrphase-initrd.s…vice - TPM2 PCR Barrier (initrd)...
+
+[    3.612072] systemd[1]: systemd-random-seed.service - Load/Save OS Random Seed was skipped because of an unmet condition check (ConditionPathExists=!/etc/initrd-release).
+[    3.614266] systemd[1]: Starting systemd-tpm2-setup-early.service - TPM2 SRK Setup (Early)...
+         Starting systemd-tpm2-setup-early.service - TPM2 SRK Setup (Early)...
+
+         Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+
+[    3.618917] systemd[1]: Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+[    3.621771] systemd[1]: Started systemd-journald.service - Journal Service.
+[  OK  ] Started systemd-journald.service - Journal Service.
+
+[    3.626604] audit: type=1130 audit(1793983884.888:4): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=systemd-journald comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  ] Mounted dev-hugepages.mount - Huge Pages File System.
+
+[  OK  ] Mounted dev-mqueue.mount - POSIX Message Queue File System.
+
+[  OK  ] Mounted sys-kernel-debug.mount - Kernel Debug File System.
+
+[  OK  ] Mounted sys-kernel-tracing.mount - Kernel Trace File System.
+
+[  OK  ] Finished kmod-static-nodes.service…Create List of Static Device Nodes.
+
+[    3.641367] audit: type=1130 audit(1793983884.903:5): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=kmod-static-nodes comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  ] Finished modprobe@configfs.service - Load Kernel Module configfs.
+
+[    3.647614] audit: type=1130 audit(1793983884.910:6): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@configfs comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[    3.647620] audit: type=1131 audit(1793983884.910:7): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@configfs comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  ] Finished modprobe@dm_mod.service - Load Kernel Module dm_mod.
+
+[  OK  ] Finished [0[    3.658388] audit: type=1130 audit(1793983884.920:8): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@dm_mod comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+;1;39mmodprobe@f[    3.658394] audit: type=1131 audit(1793983884.920:9): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@dm_mod comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+use.service - Load Kernel Module fuse.
+
+[    3.668149] audit: type=1130 audit(1793983884.930:10): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@fuse comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  ] Finished modprobe@loop.service - Load Kernel Module loop.
+
+[  OK  ] Finished systemd-modules-load.service - Load Kernel Modules.
+
+[  OK  ] Finished systemd-network-generator…ork units from Kernel command line.
+
+[  OK  ] Reached target network-pre.target - Preparation for Network.
+
+         Mounting sys-fs-fuse-connections.mount - FUSE Control File System...
+
+         Mounting sys-kernel-config.mount - Kernel Configuration File System...
+
+         Starting systemd-sysctl.service - Apply Kernel Variables...
+
+         Starting systemd-tmpfiles-setup-de… Device Nodes in /dev gracefully...
+
+[  OK  ] Finished systemd-udev-trigger.service - Coldplug All udev Devices.
+
+[  OK  ] Mounted sys-fs-fuse-connections.mount - FUSE Control File System.
+
+[  OK  ] Mounted sys-kernel-config.mount - Kernel Configuration File System.
+
+[    3.757135] workqueue: tpm_dev_async_work hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND
+[  OK  ] Finished systemd-sysctl.service - Apply Kernel Variables.
+
+[  OK  ] Finished systemd-tmpfiles-setup-de…ic Device Nodes in /dev gracefully.
+
+         Starting systemd-tmpfiles-setup-de…eate Static Device Nodes in /dev...
+
+[    3.795129] workqueue: tpm_dev_async_work hogged CPU for >10000us 5 times, consider switching to WQ_UNBOUND
+[  OK  ] Finished systemd-tmpfiles-setup-de…Create Static Device Nodes in /dev.
+
+[  OK  ] Reached target local-fs-pre.target…Preparation for Local File Systems.
+
+[  OK  ] Reached target local-fs.target - Local File Systems.
+
+[  OK  ] Listening on systemd-sysext.socket…tension Image Management (Varlink).
+
+[  OK  ] Reached target sockets.target - Socket Units.
+
+         Starting systemd-udevd.service - R…ager for Device Events and Files...
+
+[  OK  ] Finished systemd-tpm2-setup-early.service - TPM2 SRK Setup (Early).
+
+[  OK  ] Started systemd-udevd.service - Ru…anager for Device Events and Files.
+
+[    3.959521] vmware: Incorrect usage
+[    3.975266] ACPI: \_SB_.LNKC: Enabled at IRQ 10
+[    3.990972] piix4_smbus 0000:00:01.3: SMBus base address uninitialized - upgrade BIOS or use force_addr=0xaddr
+[    4.020112] gve 0000:00:03.0: Driver is running with DQO RDA queue format.
+[    4.020202] gve 0000:00:03.0: MAC addr: 42:01:0a:80:00:16
+[    4.020206] gve 0000:00:03.0: BUFFER SIZES device option enabled with max_rx_buffer_size of 4096, header_buf_size of 128.
+[    4.020209] gve 0000:00:03.0: FLOW STEERING device option enabled with max rule limit of 20000.
+[    4.020245] gve 0000:00:03.0: TX queues 4, RX queues 4
+[    4.020248] gve 0000:00:03.0: Max TX queues 4, Max RX queues 4
+[    4.032757] pstore: Registered efi_pstore as persistent store backend
+[  OK  ] Finished modprobe@efi_pstore.service - Load Kernel Module efi_pstore.
+
+[    4.059903] gve 0000:00:03.0: GVE version 1.0.0
+[    4.059924] gve 0000:00:03.0: GVE queue format 3
+[    4.067840] gve 0000:00:03.0 ens3: renamed from eth0
+         Starting systemd-networkd.service - Network Configuration...
+
+[  OK  ] Finished systemd-pcrphase-initrd.service - TPM2 PCR Barrier (initrd).
+
+[  OK  ] Reached target cryptsetup.target - Local Encrypted Volumes.
+
+         Starting systemd-tmpfiles-setup.se…e Volatile Files and Directories...
+
+[  OK  ] Found device dev-disk-by\x2dpartuu….device - nvme_card-pd root-x86-64.
+
+[  OK  ] Found device dev-disk-by\x2dpartuu… - nvme_card-pd root-x86-64-verity.
+
+[  OK  ] Finished systemd-tmpfiles-setup.se…ate Volatile Files and Directories.
+
+         Starting systemd-veritysetup@root.…egrity Protection Setup for root...
+
+[    4.205729] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    4.205899] Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    4.206043] Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+[    4.206081] faux_driver regulatory: Direct firmware load for regulatory.db failed with error -2
+[    4.206084] cfg80211: failed to load regulatory.db
+[  OK  ] Started systemd-networkd.service - Network Configuration.
+
+[  OK  ] Reached target network.target - Network.
+
+[  OK  ] Found device dev-mapper-root.device - /dev/mapper/root.
+
+[  OK  ] Finished systemd-veritysetup@root.…ntegrity Protection Setup for root.
+
+[  OK  ] Reached target blockdev@dev-mapper…e Preparation for /dev/mapper/root.
+
+[  OK  ] Reached target initrd-root-device.target - Initrd Root Device.
+
+[  OK  ] Reached target veritysetup.target - Local Verity Protected Volumes.
+
+[  OK  ] Reached target sysinit.target - System Initialization.
+
+[  OK  ] Reached target timers.target - Timer Units.
+
+         Starting systemd-fsck-root.service…System Check on /dev/mapper/root...
+
+[  OK  ] Reached target basic.target - Basic System.
+
+[  OK  ] Finished systemd-fsck-root.service…e System Check on /dev/mapper/root.
+
+         Mounting sysroot.mount - /sysroot...
+
+[    4.362363] erofs (device dm-0): initialized per-cpu workers successfully.
+[    4.362394] erofs (device dm-0): mounted with root inode @ nid 36.
+[  OK  ] Mounted sysroot.mount - /sysroot.
+
+[  OK  ] Reached target initrd-root-fs.target - Initrd Root File System.
+
+         Starting initrd-parse-etc.service …ints Configured in the Real Root...
+
+[  OK  ] Finished initrd-parse-etc.service …points Configured in the Real Root.
+
+[  OK  ] Reached target initrd-fs.target - Initrd File Systems.
+
+[  OK  ] Reached target initrd.target - Initrd Default Target.
+
+         Starting initrd-cleanup.service - …ing Up and Shutting Down Daemons...
+
+[  OK  ] Stopped target blockdev@dev-mapper…e Preparation for /dev/mapper/root.
+
+[  OK  ] Stopped target initrd.target - Initrd Default Target.
+
+[  OK  ] Stopped target basic.target - Basic System.
+
+[  OK  ] Stopped target initrd-root-device.target - Initrd Root Device.
+
+[  OK  ] Stopped target initrd-usr-fs.target - Initrd /usr File System.
+
+[  OK  ] Stopped target network.target - Network.
+
+[  OK  ] Stopped target paths.target - Path Units.
+
+[  OK  ] Stopped target remote-cryptsetup.target - Remote Encrypted Volumes.
+
+[  OK  ] Stopped target remote-veritysetup.… - Remote Verity Protected Volumes.
+
+[  OK  ] Stopped target slices.target - Slice Units.
+
+[  OK  ] Stopped target sockets.target - Socket Units.
+
+[  OK  ] Stopped target sysinit.target - System Initialization.
+
+[  OK  ] Stopped target cryptsetup.target - Local Encrypted Volumes.
+
+[  OK  ] Stopped systemd-ask-password-conso…equests to Console Directory Watch.
+
+[  OK  ] Stopped target integritysetup.targ… Local Integrity Protected Volumes.
+
+[  OK  ] Stopped target swap.target - Swaps.
+
+[  OK  ] Stopped target timers.target - Timer Units.
+
+[  OK  ] Stopped target veritysetup.target - Local Verity Protected Volumes.
+
+[  OK  ] Closed systemd-initctl.socket - initctl Compatibility Named Pipe.
+
+[  OK  ] Closed systemd-pcrextend.socket - TPM2 PCR Extension (Varlink).
+
+[  OK  ] Closed systemd-sysext.socket - Sys…tension Image Management (Varlink).
+
+         Starting modprobe@dm_mod.service - Load Kernel Module dm_mod...
+
+         Starting modprobe@loop.service - Load Kernel Module loop...
+
+         Stopping systemd-networkd.service - Network Configuration...
+
+         Stopping systemd-pcrphase-initrd.s…vice - TPM2 PCR Barrier (initrd)...
+
+[  OK  ] Stopped systemd-tmpfiles-setup.ser…ate Volatile Files and Directories.
+
+[  OK  ] Stopped target local-fs.target - Local File Systems.
+
+[  OK  ] Stopped target local-fs-pre.target…Preparation for Local File Systems.
+
+[  OK  ] Stopped systemd-tpm2-setup-early.service - TPM2 SRK Setup (Early).
+
+[  OK  ] Stopped systemd-udev-trigger.service - Coldplug All udev Devices.
+
+[  OK  ] Stopped systemd-networkd.service - Network Configuration.
+
+[  OK  ] Finished modprobe@dm_mod.service - Load Kernel Module dm_mod.
+
+[  OK  ] Finished modprobe@loop.service - Load Kernel Module loop.
+
+[  OK  ] Finished initrd-cleanup.service - …aning Up and Shutting Down Daemons.
+
+[  OK  ] Stopped target network-pre.target - Preparation for Network.
+
+[  OK  ] Closed systemd-networkd.socket - Network Service Netlink Socket.
+
+[  OK  ] Stopped systemd-sysctl.service - Apply Kernel Variables.
+
+[  OK  ] Stopped systemd-modules-load.service - Load Kernel Modules.
+
+         Stopping systemd-udevd.service - R…ager for Device Events and Files...
+
+[  OK  ] Stopped systemd-udevd.service - Ru…anager for Device Events and Files.
+
+[  OK  ] Closed systemd-udevd-control.socket - udev Control Socket.
+
+[  OK  ] Closed systemd-udevd-kernel.socket - udev Kernel Socket.
+
+         Starting initrd-udevadm-cleanup-db.service - Cleanup udev Database...
+
+[  OK  ] Stopped systemd-network-generator.…ork units from Kernel command line.
+
+[  OK  ] Stopped systemd-tmpfiles-setup-dev…Create Static Device Nodes in /dev.
+
+[  OK  ] Stopped systemd-tmpfiles-setup-dev…ic Device Nodes in /dev gracefully.
+
+[  OK  ] Stopped kmod-static-nodes.service …Create List of Static Device Nodes.
+
+[  OK  ] Stopped systemd-pcrphase-initrd.service - TPM2 PCR Barrier (initrd).
+
+[  OK  ] Finished initrd-udevadm-cleanup-db.service - Cleanup udev Database.
+
+[  OK  ] Reached target initrd-switch-root.target - Switch Root.
+
+         Starting initrd-switch-root.service - Switch Root...
+
+[    4.599527] systemd-journald[121]: Received SIGTERM from PID 1 (systemd).
+[    4.645567] input: ImExPS/2 Generic Explorer Mouse as /devices/platform/i8042/serio1/input/input4
+[    5.538424] systemd[1]: systemd 255.4-1ubuntu8.18 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+[    5.538832] systemd[1]: Detected virtualization google.
+
+[    5.538842] systemd[1]: Detected confidential virtualization tdx.
+[    5.538845] systemd[1]: Detected architecture x86-64.
+[    5.538868] systemd[1]: Detected first boot.
+Welcome to Ubuntu 24.04.5 LTS!
+
+
+[    5.552079] systemd[1]: Initializing machine ID from random generator.
+[    5.677099] systemd-veritysetup-generator[260]: Using data device /dev/disk/by-partuuid/8d380973-780a-1e7c-153f-89944291c04a and hash device /dev/disk/by-partuuid/37f05a24-4831-21ff-d023-1acd674e5352 for root.
+[    5.680937] systemd-fstab-generator[250]: Using verity root device /dev/mapper/root.
+[    5.863206] systemd[1]: Populated /etc with preset unit settings.
+[    5.958973] systemd[1]: initrd-switch-root.service: Deactivated successfully.
+[    5.959083] systemd[1]: Stopped initrd-switch-root.service - Switch Root.
+[  OK  ] Stopped initrd-switch-root.service - Switch Root.
+
+[    5.963484] systemd[1]: systemd-journald.service: Scheduled restart job, restart counter is at 1.
+[    5.963761] systemd[1]: Created slice user.slice - User and Session Slice.
+[  OK  ] Created slice user.slice - User and Session Slice.
+
+[    5.967995] systemd[1]: Started systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch.
+[  OK  ] Started systemd-ask-password-conso…equests to Console Directory Watch.
+
+[    5.971551] systemd[1]: Started systemd-ask-password-wall.path - Forward Password Requests to Wall Directory Watch.
+[  OK  ] Started systemd-ask-password-wall.…d Requests to Wall Directory Watch.
+
+[    5.975003] systemd[1]: Set up automount proc-sys-fs-binfmt_misc.automount - Arbitrary Executable File Formats File System Automount Point.
+[  OK  ] Set up automount proc-sys-fs-binfm…ormats File System Automount Point.
+
+[    5.978693] systemd[1]: Reached target blockdev@dev-mapper-root.target - Block Device Preparation for /dev/mapper/root.
+[  OK  ] Reached target blockdev@dev-mapper…e Preparation for /dev/mapper/root.
+
+[  OK  [[    5.982218] systemd[1]: Reached target cryptsetup.target - Local Encrypted Volumes.
+0m] Reached target cryptsetup.target - Local Encrypted Volumes.
+
+[    5.985105] systemd[1]: Stopped target initrd-switch-root.target - Switch Root.
+[  OK  ] Stopped target initrd-switch-root.target - Switch Root.
+
+[    5.987805] systemd[1]: Stopped target initrd-fs.target - Initrd File Systems.
+[  OK  ] Stopped target initrd-fs.target - Initrd File Systems.
+
+[    5.990559] systemd[1]: Stopped target initrd-root-fs.target - Initrd Root File System.
+[  OK  ] Stopped target initrd-root-fs.target - Initrd Root File System.
+
+[    5.993519] systemd[1]: Reached target integritysetup.target - Local Integrity Protected Volumes.
+[  OK  ] Reached target integritysetup.targ… Local Integrity Protected Volumes.
+
+[    5.996851] systemd[1]: Reached target paths.target - Path Units.
+[  OK  ] Reached target paths.target - Path Units.
+
+[    5.999262] systemd[1]: Reached target remote-cryptsetup.target - Remote Encrypted Volumes.
+[  OK  ] Reached target remote-cryptsetup.target - Remote Encrypted Volumes.
+
+[    6.002299] systemd[1]: Reached target remote-fs.target - Remote File Systems.
+[  OK  ] Reached target remote-fs.target - Remote File Systems.
+
+[    6.005026] systemd[1]: Reached target remote-veritysetup.target - Remote Verity Protected Volumes.
+[  OK  ] Reached target remote-veritysetup.… - Remote Verity Protected Volumes.
+
+[    6.008315] systemd[1]: Reached target slices.target - Slice Units.
+[  OK  ] Reached target slices.target - Slice Units.
+
+[    6.010843] systemd[1]: Reached target swap.target - Swaps.
+[  OK  ] Reached target swap.target - Swaps.
+
+[    6.013114] systemd[1]: Reached target veritysetup.target - Local Verity Protected Volumes.
+[  OK  ] Reached target veritysetup.target - Local Verity Protected Volumes.
+
+[    6.016367] systemd[1]: Listening on systemd-initctl.socket - initctl Compatibility Named Pipe.
+[  OK  ] Listening on systemd-initctl.socke…- initctl Compatibility Named Pipe.
+
+[    6.020047] systemd[1]: Listening on systemd-networkd.socket - Network Service Netlink Socket.
+[  OK  ] Listening on systemd-networkd.socket - Network Service Netlink Socket.
+
+[    6.059296] systemd[1]: Listening on systemd-pcrextend.socket - TPM2 PCR Extension (Varlink).
+[  OK  ] Listening on systemd-pcrextend.socket - TPM2 PCR Extension (Varlink).
+
+[    6.063211] systemd[1]: Listening on systemd-udevd-control.socket - udev Control Socket.
+[  OK  ] Listening on systemd-udevd-control.socket - udev Control Socket.
+
+[    6.066238] systemd[1]: Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+[  OK  ] Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+
+[    6.077296] systemd[1]: Starting systemd-journald.service - Journal Service...
+         Starting systemd-journald.service - Journal Service...
+
+[    6.081677] systemd[1]: Starting kmod-static-nodes.service - Create List of Static Device Nodes...
+         Starting kmod-static-nodes.service…eate List of Static Device Nodes...
+
+[    6.086294] systemd[1]: Starting modprobe@configfs.service - Load Kernel Module configfs...
+         Starting modprobe@configfs.service - Load Kernel Module configfs...
+
+[    6.090431] systemd[1]: Starting modprobe@dm_mod.service - Load Kernel Module dm_mod...
+         Starting modprobe@dm_mod.service - Load Kernel Module dm_mod...
+
+[    6.096767] systemd[1]: Starting modprobe@drm.service - Load Kernel Module drm...
+         Starting modprobe@drm.service - Load Kernel Module drm...
+
+         Starting modprobe@efi_pstore.servi… - Load Kernel Module efi_pstore...
+
+[    6.100347] systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+[    6.102588] systemd[1]: Starting modprobe@fuse.service - Load Kernel Module fuse...
+         Starting modprobe@fuse.service - Load Kernel Module fuse...
+
+[    6.107448] systemd[1]: Starting modprobe@loop.service - Load Kernel Module loop...
+         Starting modprobe@loop.service - Load Kernel Module loop...
+
+[    6.110300] systemd[1]: systemd-fsck-root.service: Deactivated successfully.
+[    6.110370] systemd[1]: Stopped systemd-fsck-root.service - File System Check on Root Device.
+[  OK  ] Stopped systemd-fsck-root.service - File System Check on Root Device.
+
+[    6.115295] systemd[1]: Starting systemd-modules-load.service - Load Kernel Modules...
+         Starting systemd-modules-load.service - Load Kernel Modules...
+
+[    6.119339] systemd[1]: Starting systemd-network-generator.service - Generate network units from Kernel command line...
+         Starting systemd-network-generator…k units from Kernel command line...
+
+[    6.123454] systemd[1]: Starting systemd-pcrlock-file-system.service - Lock File Systems to TPM2 PCR Policy...
+         Starting systemd-pcrlock-file-syst… File Systems to TPM2 PCR Policy...
+
+[    6.127788] systemd[1]: Starting systemd-pcrlock-machine-id.service - Lock Machine ID to TPM2 PCR Policy...
+         Starting systemd-pcrlock-machine-i…ck Machine ID to TPM2 PCR Policy...
+
+[    6.131717] systemd[1]: Starting systemd-pcrmachine.service - TPM2 PCR Machine ID Measurement...
+         Starting systemd-pcrmachine.servic… TPM2 PCR Machine ID Measurement...
+
+[    6.136949] systemd[1]: Starting systemd-remount-fs.service - Remount Root and Kernel File Systems...
+         Starting systemd-remount-fs.servic…unt Root and Kernel File Systems...
+
+[    6.140327] systemd-journald[263]: Collecting audit messages is enabled.
+[    6.147655] systemd[1]: systemd-tpm2-setup-early.service - TPM2 SRK Setup (Early) was skipped because of an unmet condition check (ConditionPathExists=!/run/systemd/tpm2-srk-public-key.pem).
+[    6.149404] systemd[1]: Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+         Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+
+[    6.154479] systemd[1]: Started systemd-journald.service - Journal Service.
+[  OK  ] Started systemd-journald.service - Journal Service.
+
+[  OK  ] Finished kmod-static-nodes.service…Create List of Static Device Nodes.
+
+[  OK  ] Finished systemd-network-generator…ork units from Kernel command line.
+
+[  OK  ] Finished systemd-remount-fs.servic…mount Root and Kernel File Systems.
+
+[  OK  ] Reached target network-pre.target - Preparation for Network.
+
+         Starting systemd-tmpfiles-setup-de… Device Nodes in /dev gracefully...
+
+[  OK  ] Finished systemd-pcrmachine.service - TPM2 PCR Machine ID Measurement.
+
+[  OK  ] Finished systemd-modules-load.service - Load Kernel Modules.
+
+[    6.842103] kauditd_printk_skb: 84 callbacks suppressed
+[    6.842110] audit: type=1130 audit(1793983888.104:82): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=systemd-modules-load comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+         Starting systemd-sysctl.service - Apply Kernel Variables...
+
+[  OK  ] Finished modprobe@configfs.service - Load Kernel Module configfs.
+
+[    6.852588] audit: type=1130 audit(1793983888.115:83): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@configfs comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  [[    6.852596] audit: type=1131 audit(1793983888.115:84): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@configfs comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+0m] Finished modprobe@dm_mod.service - Load Kernel Module dm_mod.
+
+[    6.861368] audit: type=1130 audit(1793983888.124:85): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@dm_mod comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[    6.861377] audit: type=1131 audit(1793983888.124:86): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@dm_mod comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  ] Finished modprobe@drm.service - Load Kernel Module drm.
+
+[    6.871367] audit: type=1130 audit(1793983888.134:87): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@drm comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  [[    6.871375] audit: type=1131 audit(1793983888.134:88): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@drm comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+0m] Finished modprobe@efi_pstore.service - Load Kernel Module efi_pstore.
+
+[    6.880984] audit: type=1130 audit(1793983888.143:89): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@efi_pstore comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[    6.880992] audit: type=1131 audit(1793983888.143:90): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@efi_pstore comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  ] Finished modprobe@fuse.service - Load Kernel Module fuse.
+
+[    6.890973] audit: type=1130 audit(1793983888.153:91): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=modprobe@fuse comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  OK  ] Finished modprobe@loop.service - Load Kernel Module loop.
+
+[FAILED] Failed to start systemd-pcrlock-fi…ck File Systems to TPM2 PCR Policy.
+
+See 'systemctl status systemd-pcrlock-file-system.service' for details.
+
+[FAILED] Failed to start systemd-pcrlock-ma…Lock Machine ID to TPM2 PCR Policy.
+
+See 'systemctl status systemd-pcrlock-machine-id.service' for details.
+
+[  OK  ] Finished systemd-tmpfiles-setup-de…ic Device Nodes in /dev gracefully.
+
+[  OK  ] Finished systemd-sysctl.service - Apply Kernel Variables.
+
+         Starting systemd-tmpfiles-setup-de…eate Static Device Nodes in /dev...
+
+[  OK  ] Finished systemd-tmpfiles-setup-de…Create Static Device Nodes in /dev.
+
+[  OK  ] Reached target local-fs-pre.target…Preparation for Local File Systems.
+
+[  OK  ] Set up automount boot.automount - EFI System Partition Automount.
+
+         Mounting var.mount - /var...
+
+         Starting systemd-udevd.service - R…ager for Device Events and Files...
+
+[  OK  ] Mounted var.mount - /var.
+
+[  OK  ] Reached target local-fs.target - Local File Systems.
+
+[  OK  ] Listening on systemd-sysext.socket…tension Image Management (Varlink).
+
+[  OK  ] Reached target sockets.target - Socket Units.
+
+         Starting systemd-binfmt.service - Set Up Additional Binary Formats...
+
+         Starting systemd-journal-flush.ser…sh Journal to Persistent Storage...
+
+         Starting systemd-random-seed.service - Load/Save OS Random Seed...
+
+         Starting systemd-tpm2-setup.service - TPM2 SRK Setup...
+
+[  OK  ] Finished systemd-ud[    6.973077] systemd-journald[263]: Received client request to flush runtime journal.
+ev-trigger.service - Coldplug All udev Devices.
+
+[  OK  ] Finished systemd-journal-flush.ser…lush Journal to Persistent Storage.
+
+[  OK  ] Finished systemd-random-seed.service - Load/Save OS Random Seed.
+
+         Mounting proc-sys-fs-binfmt_misc.m…cutable File Formats File System...
+
+         Starting systemd-tmpfiles-setup.se…e Volatile Files and Directories...
+
+[  OK  ] Finished systemd-tmpfiles-setup.se…ate Volatile Files and Directories.
+
+[  OK  ] Reached target first-boot-complete.target - First Boot Complete.
+
+         Starting systemd-journal-catalog-u…ervice - Rebuild Journal Catalog...
+
+         Starting systemd-resolved.service - Network Name Resolution...
+
+         Starting systemd-timesyncd.service - Network Time Synchronization...
+
+         Starting systemd-update-utmp.servi…ord System Boot/Shutdown in UTMP...
+
+[  OK  ] Mounted proc-sys-fs-binfmt_misc.mo…xecutable File Formats File System.
+
+[  OK  ] Finished systemd-binfmt.service - Set Up Additional Binary Formats.
+
+[FAILED] Failed to start systemd-tpm2-setup.service - TPM2 SRK Setup.
+
+See 'systemctl status systemd-tpm2-setup.service' for details.
+
+[  OK  ] Finished systemd-update-utmp.servi…ecord System Boot/Shutdown in UTMP.
+
+         Starting systemd-pcrlock-firmware-…Firmware Code to TPM2 PCR Policy...
+
+         Starting systemd-pcrlock-firmware-…Configuration to TPM2 PCR Policy...
+
+         Starting systemd-pcrlock-secureboo…oot Authority to TPM2 PCR Policy...
+
+         Starting systemd-pcrlock-secureboo…reBoot Policy to TPM2 PCR Policy...
+
+[  OK  ] Started systemd-udevd.service - Ru…anager for Device Events and Files.
+
+[  OK  ] Finished systemd-journal-catalog-u….service - Rebuild Journal Catalog.
+
+[FAILED] Failed to start systemd-pcrlock-fi…k Firmware Code to TPM2 PCR Policy.
+
+See 'systemctl status systemd-pcrlock-firmware-code.service' for details.
+
+[FAILED] Failed to start systemd-pcrlock-fi…e Configuration to TPM2 PCR Policy.
+
+See 'systemctl status systemd-pcrlock-firmware-config.service' for details.
+
+         Starting modprobe@configfs.service - Load Kernel Module configfs...
+
+         Starting modprobe@fuse.service - Load Kernel Module fuse...
+
+         Starting systemd-networkd.service - Network Configuration...
+
+         Starting systemd-update-done.service - Update is Completed...
+
+[  OK  ] Finished modprobe@configfs.service - Load Kernel Module configfs.
+
+[  OK  ] Finished modprobe@fuse.service - Load Kernel Module fuse.
+
+[FAILED] Failed to start systemd-pcrlock-se…eBoot Authority to TPM2 PCR Policy.
+
+See 'systemctl status systemd-pcrlock-s…ureboot-authority.service' for details.
+
+[  OK  ] Finished systemd-update-done.service - Update is Completed.
+
+[  OK  ] Finished systemd-pcrlock-secureboo…cureBoot Policy to TPM2 PCR Policy.
+
+         Starting systemd-pcrlock-make-policy.service - Make TPM2 PCR Policy...
+
+[FAILED] Failed to start systemd-pcrlock-ma…icy.service - Make TPM2 PCR Policy.
+
+See 'systemctl status systemd-pcrlock-make-policy.service' for details.
+
+[  OK  ] Started systemd-timesyncd.service - Network Time Synchronization.
+
+[  OK  ] Reached target time-set.target - System Time Set.
+
+[  OK  ] Listening on systemd-rfkill.socket…ll Switch Status /dev/rfkill Watch.
+
+[  OK  ] Started systemd-networkd.service - Network Configuration.
+
+         Starting systemd-networkd-wait-onl…ait for Network to be Configured...
+
+[    8.483545] gve 0000:00:03.0 ens3: Device link is up.
+[  OK  ] Started systemd-resolved.service - Network Name Resolution.
+
+[  OK  ] Reached target network.target - Network.
+
+[  OK  ] Reached target nss-lookup.target - Host and Network Name Lookups.
+
+[  OK  ] Reached target sysinit.target - System Initialization.
+
+[  OK  ] Started dpkg-db-backup.timer - Daily dpkg database backup timer.
+
+[  OK  ] Started fstrim.timer - Discard unused filesystem blocks once a week.
+
+[  OK  ] Started motd-news.timer - Message of the Day.
+
+[  OK  ] Started systemd-sysupdate-reboot.t… Automatically After System Update.
+
+[  OK  ] Started systemd-sysupdate.timer - Automatic System Update.
+
+[  OK  ] Started systemd-tmpfiles-clean.tim…y Cleanup of Temporary Directories.
+
+[  OK  ] Reached target timers.target - Timer Units.
+
+[  OK  ] Listening on dbus.socket - D-Bus System Message Bus Socket.
+
+         Starting systemd-pcrphase-sysinit.…PM2 PCR Barrier (Initialization)...
+
+[  OK  ] Finished systemd-pcrphase-sysinit.… TPM2 PCR Barrier (Initialization).
+
+[  OK  ] Reached target basic.target - Basic System.
+
+         Starting dbus.service - D-Bus System Message Bus...
+
+[  OK  ] Reached target getty.target - Login Prompts.
+
+         Starting systemd-logind.service - User Login Management...
+
+         Starting systemd-pcrphase.service - TPM2 PCR Barrier (User)...
+
+[  OK  ] Finished systemd-pcrphase.service - TPM2 PCR Barrier (User).
+
+         Starting systemd-user-sessions.service - Permit User Sessions...
+
+[  OK  ] Finished systemd-user-sessions.service - Permit User Sessions.
+
+[  OK  ] Started systemd-logind.service - User Login Management.
+
+[  OK  ] Started dbus.service - D-Bus System Message Bus.
+
+         Starting systemd-hostnamed.service - Hostname Service...
+
+[  OK  ] Started systemd-hostnamed.service - Hostname Service.
+
+[  OK  ] Finished systemd-networkd-wait-onl… Wait for Network to be Configured.
+
+[  OK  ] Reached target network-online.target - Network is Online.
+
+[  OK  ] Started sentinel-miner.service - S…nel miner, from the measured image.
+
+[  OK  ] Reached target multi-user.target - Multi-User System.
+
+[  OK  ] Reached target graphical.target - Graphical Interface.
+
+         Starting systemd-update-utmp-runle…- Record Runlevel Change in UTMP...
+
+[  OK  ] Finished systemd-update-utmp-runle…e - Record Runlevel Change in UTMP.
+
+[   11.005620] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   11.006617] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   11.007196] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   11.008633] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   11.009056] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   11.009534] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   11.077960] device-mapper: verity: 259:2: data block 839710 is corrupted
+[   11.078018] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[   11.078059] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[    9.849468] python[384]: Traceback (most recent call last):
+[    9.854004] python[384]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[    9.855598] python[384]:     from sentinel.enclave import Enclave
+[    9.856743] python[384]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[    9.858205] python[384]:     from .attestation import (
+[    9.859189] python[384]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[   21.573848] kauditd_printk_skb: 63 callbacks suppressed
+[   21.573857] audit: type=1130 audit(1793983902.559:155): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   21.657466] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   21.657566] audit: type=1339 audit(1793983902.642:156): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   21.658053] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   21.658087] audit: type=1339 audit(1793983902.642:157): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   21.659455] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   21.659514] audit: type=1339 audit(1793983902.644:158): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   21.660169] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   21.660208] audit: type=1339 audit(1793983902.644:159): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   21.660583] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   21.660622] audit: type=1339 audit(1793983902.645:160): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   20.247975] p[   21.701286] device-mapper: verity: 259:2: data block 839710 is corrupted
+ython[391]: Trac[   21.701333] Buffer I/O error on dev dm-0, logical block 104963, async page read
+eback (most rece[   21.701341] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[   21.701346] audit: type=1339 audit(1793983902.685:161): module=verity op=verify-data dev=259:2 sector=839710 res=0
+nt call last):
+[   21.716942] audit: type=1131 audit(1793983902.700:162): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[   20.279466] python[391]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[   20.356086] python[391]:     from sentinel.enclave import Enclave
+[   20.363076] python[391]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[   20.372069] python[391]:     from .attestation import (
+[   20.378058] python[391]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[   32.031526] audit: type=1130 audit(1793983912.961:163): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   32.129811] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   32.129903] audit: type=1339 audit(1793983913.058:164): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   32.130769] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   32.130801] audit: type=1339 audit(1793983913.059:165): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   32.132489] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   32.132535] audit: type=1339 audit(1793983913.061:166): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   30.661693] p[   32.133217] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   32.133375] audit: type=1339 audit(1793983913.062:167): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[396]: Trac[   32.133701] device-mapper: verity: 259:2: data block 70007 is corrupted
+eback (most rece[   32.133746] audit: type=1339 audit(1793983913.062:168): module=verity op=verify-data dev=259:2 sector=70007 res=0
+nt call last):
+[   32.170608] device-mapper: verity: 259:2: data block 839710 is corrupted
+[   32.170651] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[   32.170659] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[   32.170739] audit: type=1339 audit(1793983913.099:169): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[   32.209037] audit: type=1131 audit(1793983913.137:170): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[   30.719064] python[396]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[   30.774268] python[396]:     from sentinel.enclave import Enclave
+[   30.782079] python[396]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[   30.791077] python[396]:     from .attestation import (
+[   30.797062] python[396]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[   39.835478] audit: type=1131 audit(1793983920.752:171): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=systemd-hostnamed comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   39.875102] audit: type=1334 audit(1793983920.793:172): prog-id=27 op=UNLOAD
+[   39.875120] audit: type=1334 audit(1793983920.793:173): prog-id=26 op=UNLOAD
+[   39.875125] audit: type=1334 audit(1793983920.793:174): prog-id=25 op=UNLOAD
+[   42.480987] audit: type=1130 audit(1793983923.396:175): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   42.578024] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   42.578117] audit: type=1339 audit(1793983923.493:176): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   42.578796] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   42.578844] audit: type=1339 audit(1793983923.494:177): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   42.580359] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   42.580399] audit: type=1339 audit(1793983923.495:178): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   42.581025] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   42.581055] audit: type=1339 audit(1793983923.496:179): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   42.581563] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   41.101039] p[   42.581649] audit: type=1339 audit(1793983923.496:180): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[402]: Trac[   42.623244] device-mapper: verity: 259:2: data block 839710 is corrupted
+eback (most rece[   42.623292] Buffer I/O error on dev dm-0, logical block 104963, async page read
+nt call last):
+[   42.623300] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[   41.169544] python[402]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[   41.178215] python[402]:     from sentinel.enclave import Enclave
+[   41.186083] python[402]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[   41.195083] python[402]:     from .attestation import (
+[   41.201094] python[402]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[   52.923536] kauditd_printk_skb: 2 callbacks suppressed
+[   52.923544] audit: type=1130 audit(1793983933.841:183): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   53.006866] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   53.006984] audit: type=1339 audit(1793983933.924:184): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   53.007782] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   53.007832] audit: type=1339 audit(1793983933.925:185): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   53.009248] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   53.009312] audit: type=1339 audit(1793983933.927:186): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   53.010039] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   53.010105] audit: type=1339 audit(1793983933.927:187): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   53.010503] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   51.524095] p[   53.010543] audit: type=1339 audit(1793983933.928:188): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[406]: Trac[   53.044728] device-mapper: verity: 259:2: data block 839710 is corrupted
+eback (most rece[   53.044761] Buffer I/O error on dev dm-0, logical block 104963, async page read
+nt call last):
+[   53.044777] audit: type=1339 audit(1793983933.962:189): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[   51.554814] p[   53.044790] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+ython[406]:   Fi[   53.065971] audit: type=1131 audit(1793983933.983:190): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+le "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[   51.639268] python[406]:     from sentinel.enclave import Enclave
+[   51.647090] python[406]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[   51.656080] python[406]:     from .attestation import (
+[   51.662066] python[406]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[   63.225746] audit: type=1130 audit(1793983944.143:191): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   63.323036] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   63.323133] audit: type=1339 audit(1793983944.240:192): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   63.323796] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   63.323843] audit: type=1339 audit(1793983944.241:193): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   63.325042] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   63.325097] audit: type=1339 audit(1793983944.242:194): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   63.325446] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   61.840322] p[   63.325487] audit: type=1339 audit(1793983944.243:195): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   63.325838] device-mapper: verity: 259:2: data block 70007 is corrupted
+ython[410]: Trac[   63.325877] audit: type=1339 audit(1793983944.243:196): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   63.360091] device-mapper: verity: 259:2: data block 839710 is corrupted
+eback (most rece[   63.360124] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[   63.360143] audit: type=1339 audit(1793983944.277:197): module=verity op=verify-data dev=259:2 sector=839710 res=0
+nt call last):
+[   63.360156] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[   63.395384] audit: type=1131 audit(1793983944.312:198): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[   61.930049] python[410]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[   61.959150] python[410]:     from sentinel.enclave import Enclave
+[   61.966078] python[410]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[   61.975077] python[410]:     from .attestation import (
+[   61.981077] python[410]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[   73.478111] audit: type=1130 audit(1793983954.396:199): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   73.575706] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   73.575804] audit: type=1339 audit(1793983954.494:200): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   73.577328] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   73.577397] audit: type=1339 audit(1793983954.495:201): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   73.579029] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   73.579077] audit: type=1339 audit(1793983954.497:202): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   73.579425] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   73.579707] audit: type=1339 audit(1793983954.497:203): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   73.579874] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   72.101360] p[   73.579892] audit: type=1339 audit(1793983954.498:204): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[414]: Trac[   73.620608] device-mapper: verity: 259:2: data block 839710 is corrupted
+eback (most rece[   73.620682] audit: type=1339 audit(1793983954.538:205): module=verity op=verify-data dev=259:2 sector=839710 res=0
+nt call last):
+[   73.620688] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[   73.620696] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[   73.651727] audit: type=1131 audit(1793983954.563:206): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[   72.172786] python[414]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[   72.201008] python[414]:     from sentinel.enclave import Enclave
+[   72.217147] python[414]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[   72.227087] python[414]:     from .attestation import (
+[   72.234079] python[414]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[   83.723737] audit: type=1130 audit(1793983964.642:207): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   83.821001] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   83.821115] audit: type=1339 audit(1793983964.739:208): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   83.821727] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   83.821765] audit: type=1339 audit(1793983964.740:209): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   83.823486] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   83.823535] audit: type=1339 audit(1793983964.742:210): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   83.824182] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   83.824225] audit: type=1339 audit(1793983964.742:211): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   82.342373] p[   83.824532] device-mapper: verity: 259:2: data block 70007 is corrupted
+ython[418]: Trac[   83.824561] audit: type=1339 audit(1793983964.743:212): module=verity op=verify-data dev=259:2 sector=70007 res=0
+eback (most rece[   83.861236] device-mapper: verity: 259:2: data block 839710 is corrupted
+[   83.861303] Buffer I/O error on dev dm-0, logical block 104963, async page read
+nt call last):
+[   83.861311] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[   83.861377] audit: type=1339 audit(1793983964.780:213): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[   83.880558] audit: type=1131 audit(1793983964.798:214): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[   82.426338] python[418]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[   82.455176] python[418]:     from sentinel.enclave import Enclave
+[   82.462080] python[418]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[   82.472075] python[418]:     from .attestation import (
+[   82.478078] python[418]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[   93.973364] audit: type=1130 audit(1793983974.892:215): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[   94.070628] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   94.070748] audit: type=1339 audit(1793983974.989:216): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   94.071402] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   94.071433] audit: type=1339 audit(1793983974.990:217): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   94.072621] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   94.072662] audit: type=1339 audit(1793983974.991:218): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   94.073055] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   94.073082] audit: type=1339 audit(1793983974.992:219): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[   94.073558] device-mapper: verity: 259:2: data block 70007 is corrupted
+[   92.589196] p[   94.073585] audit: type=1339 audit(1793983974.992:220): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[422]: Trac[   94.107778] device-mapper: verity: 259:2: data block 839710 is corrupted
+eback (most rece[   94.107822] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[   94.107830] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+nt call last):
+[   94.107839] audit: type=1339 audit(1793983975.026:221): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[   94.139551] audit: type=1131 audit(1793983975.048:222): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[   92.639480] python[422]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[   92.706230] python[422]:     from sentinel.enclave import Enclave
+[   92.714091] python[422]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[   92.723089] python[422]:     from .attestation import (
+[   92.729068] python[422]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[  104.223099] audit: type=1130 audit(1793983985.142:223): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  104.320194] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  104.320299] audit: type=1339 audit(1793983985.239:224): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  104.320860] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  104.320899] audit: type=1339 audit(1793983985.240:225): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  104.322320] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  104.322357] audit: type=1339 audit(1793983985.241:226): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  104.322736] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  104.322768] audit: type=1339 audit(1793983985.242:227): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  104.323109] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  102.845880] p[  104.323138] audit: type=1339 audit(1793983985.242:228): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[426]: Trac[  104.364190] device-mapper: verity: 259:2: data block 839710 is corrupted
+eback (most rece[  104.364245] Buffer I/O error on dev dm-0, logical block 104963, async page read
+nt call last):
+[  104.364253] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[  102.877420] p[  104.364264] audit: type=1339 audit(1793983985.283:229): module=verity op=verify-data dev=259:2 sector=839710 res=0
+ython[426]:   Fi[  104.390340] audit: type=1131 audit(1793983985.309:230): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+le "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[  102.877771] python[426]:     from sentinel.enclave import Enclave
+[  102.963128] python[426]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[  102.973086] python[426]:     from .attestation import (
+[  102.979075] python[426]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[  114.474107] audit: type=1130 audit(1793983995.393:231): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  114.571445] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  114.571544] audit: type=1339 audit(1793983995.490:232): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  114.572182] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  114.572220] audit: type=1339 audit(1793983995.491:233): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  114.573538] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  114.573594] audit: type=1339 audit(1793983995.492:234): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  114.574236] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  114.574286] audit: type=1339 audit(1793983995.493:235): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  113.090804] p[  114.574758] device-mapper: verity: 259:2: data block 70007 is corrupted
+ython[430]: Trac[  114.574783] audit: type=1339 audit(1793983995.494:236): module=verity op=verify-data dev=259:2 sector=70007 res=0
+eback (most rece[  114.609111] device-mapper: verity: 259:2: data block 839710 is corrupted
+nt call last):
+[  114.609152] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[  114.609191] audit: type=1339 audit(1793983995.528:237): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[  114.609198] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[  114.641052] audit: type=1131 audit(1793983995.560:238): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[  113.158861] python[430]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[  113.197665] python[430]:     from sentinel.enclave import Enclave
+[  113.214131] python[430]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[  113.223099] python[430]:     from .attestation import (
+[  113.229080] python[430]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[  124.723173] audit: type=1130 audit(1793984005.642:239): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  124.821276] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  124.821366] audit: type=1339 audit(1793984005.740:240): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  124.838842] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  124.838918] audit: type=1339 audit(1793984005.758:241): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  124.840626] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  124.840697] audit: type=1339 audit(1793984005.759:242): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  124.841217] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  124.841366] audit: type=1339 audit(1793984005.760:243): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  124.841780] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  124.841800] audit: type=1339 audit(1793984005.761:244): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  123.360997] p[  124.879350] device-mapper: verity: 259:2: data block 839710 is corrupted
+ython[434]: Trac[  124.879393] Buffer I/O error on dev dm-0, logical block 104963, async page read
+eback (most rece[  124.879401] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+nt call last):
+[  124.879436] audit: type=1339 audit(1793984005.798:245): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[  124.916763] audit: type=1131 audit(1793984005.835:246): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[  123.427542] python[434]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[  123.447921] python[434]:     from sentinel.enclave import Enclave
+[  123.466075] python[434]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[  123.476069] python[434]:     from .attestation import (
+[  123.483066] python[434]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[  134.973193] audit: type=1130 audit(1793984015.892:247): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  135.071114] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  135.071191] audit: type=1339 audit(1793984015.990:248): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  135.071776] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  135.071804] audit: type=1339 audit(1793984015.991:249): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  135.072979] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  135.073022] audit: type=1339 audit(1793984015.992:250): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  135.073507] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  133.592287] p[  135.073528] audit: type=1339 audit(1793984015.992:251): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[438]: Trac[  135.074101] device-mapper: verity: 259:2: data block 70007 is corrupted
+eback (most rece[  135.074125] audit: type=1339 audit(1793984015.993:252): module=verity op=verify-data dev=259:2 sector=70007 res=0
+nt call last):
+[  135.108403] device-mapper: verity: 259:2: data block 839710 is corrupted
+[  135.108437] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[  135.108454] audit: type=1339 audit(1793984016.027:253): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[  135.108466] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[  135.142727] audit: type=1131 audit(1793984016.061:254): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[  133.651100] python[438]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[  133.706101] python[438]:     from sentinel.enclave import Enclave
+[  133.713079] python[438]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[  133.722078] python[438]:     from .attestation import (
+[  133.729084] python[438]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[  145.223020] audit: type=1130 audit(1793984026.142:255): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  145.320274] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  145.320375] audit: type=1339 audit(1793984026.239:256): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  145.322044] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  145.322110] audit: type=1339 audit(1793984026.241:257): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  145.323527] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  145.323689] audit: type=1339 audit(1793984026.242:258): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  143.843228] p[  145.324087] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  145.324380] audit: type=1339 audit(1793984026.243:259): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[442]: Trac[  145.324504] device-mapper: verity: 259:2: data block 70007 is corrupted
+eback (most rece[  145.324534] audit: type=1339 audit(1793984026.243:260): module=verity op=verify-data dev=259:2 sector=70007 res=0
+nt call last):
+[  145.361425] device-mapper: verity: 259:2: data block 839710 is corrupted
+[  145.361468] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[  145.361476] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[  145.361513] audit: type=1339 audit(1793984026.280:261): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[  145.381489] audit: type=1131 audit(1793984026.300:262): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[  143.909819] python[442]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[  143.957244] python[442]:     from sentinel.enclave import Enclave
+[  143.965087] python[442]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[  143.975065] python[442]:     from .attestation import (
+[  143.981075] python[442]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[  155.473935] audit: type=1130 audit(1793984036.393:263): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  155.571932] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  155.572026] audit: type=1339 audit(1793984036.491:264): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  155.573535] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  155.573594] audit: type=1339 audit(1793984036.493:265): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  155.575187] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  155.575338] audit: type=1339 audit(1793984036.494:266): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  155.576068] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  155.576103] audit: type=1339 audit(1793984036.495:267): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  154.092125] p[  155.576773] device-mapper: verity: 259:2: data block 70007 is corrupted
+ython[446]: Trac[  155.576798] audit: type=1339 audit(1793984036.496:268): module=verity op=verify-data dev=259:2 sector=70007 res=0
+eback (most rece[  155.610229] device-mapper: verity: 259:2: data block 839710 is corrupted
+nt call last):
+[  155.610271] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[  154.122701] p[  155.610279] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+ython[446]:   Fi[  155.610289] audit: type=1339 audit(1793984036.529:269): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[  155.640840] audit: type=1131 audit(1793984036.549:270): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+le "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[  154.130928] python[446]:     from sentinel.enclave import Enclave
+[  154.214097] python[446]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[  154.223088] python[446]:     from .attestation import (
+[  154.230089] python[446]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[  165.722797] audit: type=1130 audit(1793984046.642:271): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  165.821431] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  165.821508] audit: type=1339 audit(1793984046.741:272): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  165.823985] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  165.824026] audit: type=1339 audit(1793984046.743:273): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  165.839087] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  165.839150] audit: type=1339 audit(1793984046.758:274): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  165.839927] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  165.839977] audit: type=1339 audit(1793984046.759:275): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  165.840321] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  165.840355] audit: type=1339 audit(1793984046.759:276): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  165.881824] device-mapper: verity: 259:2: data block 839710 is corrupted
+[  164.363837] p[  165.881866] Buffer I/O error on dev dm-0, logical block 104963, async page read
+[  165.881873] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+ython[450]: Trac[  165.881882] audit: type=1339 audit(1793984046.801:277): module=verity op=verify-data dev=259:2 sector=839710 res=0
+[  165.914846] audit: type=1131 audit(1793984046.827:278): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+eback (most recent call last):
+[  164.449104] python[450]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[  164.459205] python[450]:     from sentinel.enclave import Enclave
+[  164.466070] python[450]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[  164.476076] python[450]:     from .attestation import (
+[  164.482068] python[450]: ModuleNotFoundError: No module named 'sentinel.attestation'
+[  175.972643] audit: type=1130 audit(1793984056.892:279): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'
+[  176.070115] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  176.070198] audit: type=1339 audit(1793984056.989:280): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  176.070710] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  176.070743] audit: type=1339 audit(1793984056.990:281): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  176.071948] device-mapper: verity: 259:2: data block 70007 is corrupted
+[  176.071950] device-mapper: verity: 259:2: reached maximum errors
+[  176.071984] audit: type=1339 audit(1793984056.991:282): module=verity op=max-corrupted-errors dev=252:0 sector=? res=0
+[  176.071988] audit: type=1339 audit(1793984056.991:283): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  174.589349] p[  176.072365] audit: type=1339 audit(1793984056.992:284): module=verity op=verify-data dev=259:2 sector=70007 res=0
+[  176.072902] audit: type=1339 audit(1793984056.992:285): module=verity op=verify-data dev=259:2 sector=70007 res=0
+ython[454]: Trac[  176.107286] Buffer I/O error on dev dm-0, logical block 104963, async page read
+eback (most rece[  176.107296] erofs (device dm-0): failed to read inode meta block (nid: 13435370): -5
+[  176.107313] audit: type=1339 audit(1793984057.027:286): module=verity op=verify-data dev=259:2 sector=839710 res=0
+nt call last):
+[  176.139137] audit: type=1131 audit(1793984057.053:287): pid=1 uid=0 auid=4294967295 ses=4294967295 subj=unconfined msg='unit=sentinel-miner comm="systemd" exe="/usr/lib/systemd/systemd" hostname=? addr=? terminal=? res=failed'
+[  174.643159] python[454]:   File "/opt/sentinel/scripts/run_miner.py", line 38, in <module>
+[  174.702227] python[454]:     from sentinel.enclave import Enclave
+[  174.709593] python[454]:   File "/opt/sentinel/sentinel/enclave.py", line 28, in <module>
+[  174.719089] python[454]:     from .attestation import (
+[  174.726067] python[454]: ModuleNotFoundError: No module named 'sentinel.attestation'
+

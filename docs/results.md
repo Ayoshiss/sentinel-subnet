@@ -716,3 +716,46 @@ closed. That needs the dm-verity image. MRTD and the db certificate are validato
 flags, not yet in the on-chain registry, and every validator must pass the same
 values. The firmware is Google's: on this cloud the trust is Intel and Google, not
 the miner operator. The VMs and the image were deleted after capture.
+
+## The measured miner image: dm-verity root, reproducible, on GCP TDX, 2026-11-06
+
+The last piece of the integrity path. `image/` builds the miner as one signed UKI
+and a read-only erofs root under dm-verity, with the root hash on the UKI's
+embedded command line. The firmware measures the UKI, so the quote now covers the
+kernel, the initrd, the command line and, through the root hash, every file the
+miner runs. Evidence in `docs/evidence/tdx-verity-image-2026-11-06/`, asserted in
+`tests/test_tdx_verity_evidence.py`.
+
+**How it is built.** mkosi 25.3, every package from one dated Ubuntu snapshot
+(including the security pocket, which mkosi otherwise takes live), Python
+dependencies locked by hash with no source builds, fixed timestamp and partition
+seed, and the build toolchain itself built from the same snapshot. The image is
+built unsigned; `image/sign.sh` signs it separately, which does not change the
+digest. No SSH, no guest agent, no getty, root locked: the operator configures the
+miner through instance metadata, read as data by `scripts/miner_from_metadata.py`.
+
+| Test | Result |
+|---|---|
+| Two builds on independent VMs in different zones, one with no cache | **Identical UKI digest `60c5a2b9…` and root hash `8d380973…`** |
+| Boot on TDX under our test Secure Boot keys | Secure Boot on, root mounted through dm-verity as erofs, miner started from metadata |
+| Validator round from a laptop over the internet | **Verified, attestation 1.0** |
+| Image not approved / someone else's Secure Boot key | Refused / refused |
+| Same disk with bytes of the miner's code changed, same keys and UKI | **dm-verity refused the blocks, the miner crash-looped and never served** |
+
+### Honest limits
+
+- **Test keys.** The Secure Boot keys were throwaway. Production keys need a custody
+  plan, since whoever holds the db key decides what can boot.
+- **Google's firmware is trusted.** MRTD is Google's TD firmware, as before.
+- **Not yet registry-governed.** MRTD and the db certificate are still validator
+  flags rather than registry entries.
+- **The broker leg is still self-brokered here.** Credential release to a
+  customer's broker with a pinned certificate and an attested key (T20, T22) is
+  the next step, and only now meaningful, because the code doing the release is
+  finally measured.
+- **Two rough edges.** The UKI is 203 MB because the default initrd carries every
+  kernel module, and the unused TPM2 units fail at boot. Neither affects the
+  guarantee.
+- **Exfiltration is unchanged.** Code that answers correctly while copying data
+  is still invisible to scoring. What changed is that such code would now have to
+  be in the approved, reproducible image, where anyone can read it.
