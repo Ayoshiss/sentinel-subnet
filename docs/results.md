@@ -515,3 +515,95 @@ verified against the failure you had seen does not necessarily cover the next
 shape of the same failure. The three successful recoveries were real, and they
 quietly established confidence in a mechanism that only handled one of the two
 ways the chip can die.
+
+---
+
+## A unified kernel image anchors the boot chain on Intel TDX, with one hole, 2026-11-06
+
+The question from the measurement gap (T23): can a single measured image put the
+kernel, the initrd and the command line into the signed quote on GCP, so that a
+dm-verity root hash in that command line anchors the root filesystem? A unified
+kernel image (UKI) is one EFI binary carrying all three. Two throwaway TDX VMs,
+`c3-standard-4`, Ubuntu 24.04 image `ubuntu-2404-noble-amd64-v20261104a`, one in
+us-central1-a and one in us-central1-b. UKIs were built with `systemd-ukify` on
+host a from the image's own kernel and initrd and copied byte for byte to host b.
+The only difference between UKI A and UKI B is one character of the embedded
+command line (`sentinel.uki=A` against `sentinel.uki=B`).
+
+Raw quotes, nonces and firmware event logs are in
+`docs/evidence/tdx-uki-2026-11-06/`, and every claim below is asserted against
+them in `tests/test_tdx_uki_evidence.py`. Guest script: `scripts/probe_tdx_uki.sh`.
+Offline analysis: `scripts/tdx_eventlog.py`.
+
+| Boot | Host | RTMR0 | RTMR1 | RTMR2 |
+|---|---|---|---|---|
+| Stock GRUB | a and b | `b2458d27…` | `9d18b819…` | `e7ea1a58…` |
+| UKI A | a | `ee1ac051…` | `43982fac…` | zero |
+| UKI A | b | `ee1ac051…` | `43982fac…` | zero |
+| UKI B | a | `ee1ac051…` | `1e0824f2…` | zero |
+| UKI B | b | `ee1ac051…` | `1e0824f2…` | zero |
+| UKI A, command line overridden | a | `949ea24c…` | `43982fac…` | zero |
+
+MRTD was `f21e6b48…` throughout, on both hosts.
+
+### What held
+
+**GCP's TDX firmware boots a custom UKI directly.** No shim, no GRUB. The serial
+console shows the firmware loading `\EFI\sentinel\uki.efi` and the kernel starting
+with the embedded command line.
+
+**One changed character moves RTMR1, identically on both hosts.** Same image, same
+value in two zones; one character different, a different value, again the same in
+both zones. Rebuilding UKI A from the same inputs gave a byte-identical file.
+
+**RTMR1 can be computed from the file without booting it.** Replaying the firmware
+event log reproduces RTMR0, RTMR1 and RTMR2 exactly as signed. RTMR1's inputs are
+fixed action strings, the boot disk's partition table, and two image loads: the
+Authenticode SHA-384 of the UKI and of the kernel inside it. Both digests computed
+offline from the files match the log. So an approved value can be rebuilt from
+source and checked, rather than taken from whoever published it.
+
+### The hole
+
+**A boot entry can replace the embedded command line without moving RTMR1.** With
+Secure Boot off, the stub accepted the load options of a new boot entry pointing at
+UKI A. The guest booted with `sentinel.uki=EVIL`, and RTMR1 was the approved
+UKI A value. A policy that pins RTMR1 alone would accept a boot with dm-verity
+removed from the command line, which is T23 again by another route. Logged as T24.
+
+It did not go unrecorded. The firmware measures every boot variable into RTMR0, and
+the log shows `Boot0043`, carrying the override, among them. So pinning RTMR0
+alongside RTMR1 catches this case. The cost is that the approved value then fixes
+the exact set of boot entries, so provisioning has to create that set
+deterministically. The cleaner fix removes the override path: Secure Boot with our
+own key, under which the stub is documented to ignore load options, or a stub that
+ignores them regardless. Neither has been tested here.
+
+### Details an approved value has to fix
+
+- **Boot disk size.** The measured partition table carries the last usable block
+  and the root partition's extent, so two honest miners with different disk sizes
+  would differ in RTMR1.
+- **Boot variables.** Adding a boot entry moved RTMR0 from the stock value, as
+  expected, since RTMR0 is the boot configuration.
+- **TD firmware.** MRTD was `c1ee9c16…` on 2026-10-05 and is `f21e6b48…` now, so
+  Google updated the TD firmware in between. Both zones agreed on the day. The
+  registry's overlapping approved sets exist for exactly this rotation.
+- **RTMR2 carries nothing under a UKI.** The stub's own measurements did not reach
+  any RTMR. A vTPM is present at `/dev/tpm0`, emulated by the host, and is the
+  likely destination; that was not verified.
+
+### Honest limits
+
+The quotes' signatures were not verified against Intel's PCK chain; that is part of
+the port. No dm-verity root filesystem was built: this establishes that a hash in
+the embedded command line would be measured, not that the image which carries one
+boots and serves. The override test was run on one host.
+
+### What it means for the plan
+
+The path for closing T23 holds on GCP TDX: a UKI with a dm-verity root hash in its
+embedded command line, built reproducibly, with an approved value that anyone can
+recompute. It needs two things the plan did not have: closing or pinning the
+command line override (T24), and a recipe that fixes the boot disk size. The two
+VMs were deleted after capture.

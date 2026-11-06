@@ -1,0 +1,42 @@
+{
+  "captured": "2026-11-06",
+  "provider": "GCP",
+  "machine_type": "c3-standard-4",
+  "confidential_compute_type": "TDX",
+  "image": "ubuntu-2404-noble-amd64-v20261104a",
+  "kernel": "7.0.0-1014-gcp",
+  "boot_disk_gb": 20,
+  "hosts": {
+    "a": "us-central1-a",
+    "b": "us-central1-b"
+  },
+  "built_with": "systemd-ukify (Ubuntu 24.04), kernel and initrd from the image, built on host a and copied byte for byte to host b",
+  "images": {
+    "A": {
+      "sha256": "d7eb84854376a71b61f983ea020c01848bba0138c0c9d897e5d8c6720e499ad3",
+      "bytes": 67324416,
+      "authenticode_sha384": "8d17fbb286e8296ec0bc67b93ca34f3672ec5834b09209bc155991427a2a9b2adbdb5e05884bd854cc0c7fe9981313f0",
+      "kernel_authenticode_sha384": "aa5275d9ccb1cb3aae2bd3673ad2dbac2fb2fa1ec4683355fbe0e524773ca829cd9c88a6395724c9fc2483dbbfaef455",
+      "cmdline": "root=LABEL=cloudimg-rootfs ro console=ttyS0,115200 panic=-1 sentinel.uki=A"
+    },
+    "B": {
+      "sha256": "c5ffe6c110fad0b07edd094b11f4c242da0e0028b46998379f2a9ed874012972",
+      "bytes": 67324416,
+      "authenticode_sha384": "ae6eb0bf7bef64d67302dfec82988492b6d9a79a1fd16f618c855c4b70869dbd916893c1756948620034d0a0e6f14ce1",
+      "kernel_authenticode_sha384": "aa5275d9ccb1cb3aae2bd3673ad2dbac2fb2fa1ec4683355fbe0e524773ca829cd9c88a6395724c9fc2483dbbfaef455",
+      "cmdline": "root=LABEL=cloudimg-rootfs ro console=ttyS0,115200 panic=-1 sentinel.uki=B"
+    }
+  },
+  "captures": {
+    "baseline": "stock GRUB boot (shim, GRUB, kernel from disk), identical on both hosts",
+    "uki-A-hostA": "UKI A on host a",
+    "uki-A-hostB": "UKI A on host b",
+    "uki-B-hostA": "UKI B on host a",
+    "uki-B-hostB": "UKI B on host b",
+    "evil-on-A": "UKI A booted from a boot entry whose load options override the embedded command line with sentinel.uki=EVIL"
+  },
+  "event_logs": {
+    "ccel-B-host-a.bin": "uki-B-hostA",
+    "ccel-evil-host-a.bin": "evil-on-A"
+  }
+}

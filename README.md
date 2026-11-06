@@ -12,7 +12,7 @@ Sentinel is a Bittensor subnet where AI agents reach real systems through **hard
 
 **Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
 silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 275 tests, CI green on every push.
+independent verification, runs today under 290 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
@@ -171,7 +171,7 @@ Dockerfile.fly · docker-compose.yml · fly.toml · supervisord.conf
 docs/
 ├── architecture.md           # full engineering spec
 ├── whitepaper.md             # what the system is, and what is not built
-├── threat-register.md        # 23 threats, scored impact × likelihood
+├── threat-register.md        # 24 threats, scored impact × likelihood
 ├── bittensor-mechanics.md    # Yuma, commit-reveal, emissions, Taoflow
 └── development.md            # setup, tests, demos, how the pieces fit
 ROADMAP.md                    # milestone plan and what is still open
