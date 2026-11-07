@@ -41,12 +41,18 @@ build)
     gcloud compute instances attach-disk "$BUILDER" --disk="$OUT_DISK" --zone="$ZONE"
   fi
   gcloud compute instances start "$BUILDER" --zone="$ZONE" --quiet
-  for _ in 1 2 3 4 5 6; do
-    gcloud compute scp --zone="$ZONE" --quiet "$tarball" "$BUILDER:~/release.tgz" && break; sleep 10
+  # A VM that has just started takes a minute or two before it accepts SSH.
+  sent=
+  for _ in $(seq 18); do
+    if gcloud compute scp --zone="$ZONE" --quiet "$tarball" "$BUILDER:/tmp/release.tgz" 2>/dev/null; then
+      sent=1; break
+    fi
+    sleep 10
   done
   rm -f "$tarball"
+  [ -n "$sent" ] || { echo "could not reach $BUILDER over SSH" >&2; exit 1; }
   ssh_builder "sudo sh -c 'set -e; rm -rf /build/sentinel.new; mkdir -p /build/sentinel.new; \
-    tar xzf ~\$SUDO_USER/release.tgz -C /build/sentinel.new; \
+    tar xzf /tmp/release.tgz -C /build/sentinel.new; \
     if [ -d /build/sentinel/image/mkosi.cache ]; then mv /build/sentinel/image/mkosi.cache /build/sentinel.new/image/; fi; \
     rm -rf /build/sentinel; mv /build/sentinel.new /build/sentinel; echo $commit > /build/sentinel/COMMIT; \
     nohup env MKOSI=/opt/mkosi/bin/mkosi bash /build/sentinel/image/build.sh > /build/build.log 2>&1 &'"
@@ -67,8 +73,8 @@ sign)
     echo "refusing: signing changed the approved digest ($after)" >&2; exit 1
   fi
   osslsigncode verify -CAfile "$keys/db.crt" -in "$work/signed.efi" >/dev/null
-  gcloud compute scp --zone="$ZONE" --quiet "$work/signed.efi" "$BUILDER:~/sentinel-miner.signed.efi"
-  ssh_builder "sudo sh -c 'set -e; cd /build/sentinel/image; bash sign.sh ~\$SUDO_USER/sentinel-miner.signed.efi; \
+  gcloud compute scp --zone="$ZONE" --quiet "$work/signed.efi" "$BUILDER:/tmp/sentinel-miner.signed.efi"
+  ssh_builder "sudo sh -c 'set -e; cd /build/sentinel/image; bash sign.sh /tmp/sentinel-miner.signed.efi; \
     dd if=mkosi.output/sentinel-miner.raw of=/dev/disk/by-id/google-$OUT_DISK bs=4M conv=fsync status=none; sync'"
   echo "signed and written. approved digest: $after"
   echo "commit: $(ssh_builder 'cat /build/sentinel/COMMIT')"
