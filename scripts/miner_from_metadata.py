@@ -39,6 +39,7 @@ FIELDS: dict[str, tuple[type, str]] = {
     "allow_hotkey": (list, "--allow-hotkey"),
     "no_allow_validators": (bool, "--no-allow-validators"),
     "broker_url": (str, "--broker-url"),
+    "broker_insecure": (bool, "--broker-insecure"),
     "scope": (list, "--scope"),
     "tdx_mrtd": (list, "--tdx-mrtd"),
     "tdx_db_cert_b64": (str, "--tdx-db-cert"),

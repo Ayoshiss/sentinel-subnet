@@ -75,6 +75,7 @@ TAMPERED="$($PY -c 'from sentinel.attestation import sha384; print(sha384(b"tamp
 
 say "1. The broker starts, on what would be the customer's machine"
 $PY scripts/run_broker.py \
+    --identity-key "$WORK/broker-identity.pem" \
     --scope "analytics=${DSN}" \
     --measurement "$APPROVED" \
     --allow-mock-chip "$CHIP=$PUBKEY" \

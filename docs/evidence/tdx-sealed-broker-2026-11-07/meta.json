@@ -1,0 +1,32 @@
+{
+ "captured": "2026-11-07",
+ "provider": "GCP",
+ "zone": "us-central1-a",
+ "built_from_commit": "the commit that adds this directory (image/ and the sealing code); any later code change moves the digest",
+ "miner": {
+  "machine_type": "c3-standard-4",
+  "confidential_compute_type": "TDX",
+  "uki_authenticode_sha384": "9a009b7f50d10435b1610617675159601aac81e97e3d112d282472ffb3c361c415aa96f479333b5ef242ff095fbc60b3",
+  "roothash": "58658505f0772297ffc6023845cd93fb8d0196339ab77b9a09394f7c18e54ed7",
+  "mrtd": "f21e6b48743fe14c2d090078ca1197f09ae4c99438677f2c79901ef80e2aeefe2f9a7eb6e3eb3b5047c4f1511731e5d3",
+  "secure_boot_keys": "throwaway TEST keys; test-db.der is the public db certificate; private keys shredded"
+ },
+ "customer_broker": {
+  "host": "separate e2-small VM, scripts/run_broker.py, approving only the image, firmware and key above",
+  "fingerprint": "24c9aafbeec1e758f344dcf4eb7b8cd8207e19951bea3dae6cc7e4bb548ca2bc",
+  "credential_marker": "customer-7f3a9c41 (the credential was sqlite:////var/lib/sentinel/customer-7f3a9c41.db, a working path on the miner)"
+ },
+ "operator_relay": "separate e2-small VM between miner and broker, plain HTTP, forwarding and recording every byte both ways (relay.log)",
+ "operator_broker": {
+  "host": "the relay VM, scripts/run_broker.py with its own identity and a database of its choosing",
+  "fingerprint": "1ffa0c947b11981452bb652d69665a903e6fc6caf373f61bad9a3c9f73eef940"
+ },
+ "results": {
+  "relay in the path": "miner unlocked and served; relay.log holds the whole exchange and contains the credential marker 0 times; the release is a sealed blob",
+  "customer validator round, expecting 24c9aafb...": "verified, attestation 1.0 (probe-customer-broker.json)",
+  "subnet validator round, no expectation": "verified",
+  "customer expecting a different broker": "refused: answered from broker 24c9aafbeec1e758, not ours",
+  "operator repoints the miner at their own broker": "miner unlocked and served, every answer names 1ffa0c94...; customer round refused (answered from broker 1ffa0c947b119814, not ours); subnet round verified (probe-operator-broker.json)"
+ },
+ "validator": "run from a laptop over the internet"
+}

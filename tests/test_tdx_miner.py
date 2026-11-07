@@ -133,7 +133,7 @@ def _report(broker, resource="db", binding=None):
 
 
 def _broker(tdx=None):
-    b = KeyBroker(policy=ReleasePolicy(approved_measurement=UKI), tdx=tdx)
+    b = KeyBroker(policy=ReleasePolicy(approved_measurement=UKI, allow_plaintext_release=True), tdx=tdx)
     b.store_secret("db", "postgres://u:p@h/db")
     b.store_secret("other", "postgres://u:p@h/other")
     return b

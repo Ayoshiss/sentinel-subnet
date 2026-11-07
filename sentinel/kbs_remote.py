@@ -12,34 +12,24 @@ and `release()`, so a client with those two methods substitutes for the local
 broker without the enclave knowing the difference. The customer runs the broker
 on their own machine; the enclave runs on hardware they do not trust.
 
-**Read this before describing the split as closing the custody hole.** The
-credential crosses the wire in the clear, inside TLS. `kbs.py` has always said
-so, and over a function call it was theoretical. Over a network it is not, so
-this module refuses a plaintext URL unless an operator explicitly asks for one.
+**Read this before describing the split as closing the custody hole.** What
+crosses the wire is sealed: the credential is encrypted to a key the enclave
+generated and bound into its attestation (`sentinel.sealing`), so a relay, a
+proxy or anyone holding the TLS session sees ciphertext. Shown on GCP TDX on
+2026-11-07 with an operator's relay recording every byte over plain HTTP. The
+broker also signs the release, and the miner names that broker in every answer
+it attests, so an operator who points the miner at a broker of their own is
+visible to any customer checking for theirs.
 
-That is not sufficient, and specifically it is not sufficient against the party
-this exists to defend against. There is no certificate pinning here: TLS is
-validated against the guest's system trust store, and the operator of the guest
-owns that store. Because the launch measurement does not cover the root
-filesystem, that operator can add a certificate authority, point the broker's
-hostname at a local proxy, and read the credential without the measurement
-changing. Threat register T22 and T23.
+That holds only where the code is measured. On the measured TDX image
+(`image/`), the code that holds the decryption key is what the quote covers. On
+AMD SEV-SNP on GCP, where the measurement covers the firmware and nothing above
+it (T23), an operator can change the code and read what it decrypts, so sealing
+there changes the cost of taking the credential, not whether it can be taken.
+Never describe it as unobtainable on that platform.
 
-So what separating the broker actually buys is a change in the cost and the
-evidence: taking the credential stops being a matter of reading one's own
-variable and becomes active interception of one's own guest, which is
-unambiguously deliberate and which a customer can act on. Worth having. Not the
-same as unobtainable, and the docstring says so because this is the sentence a
-reader will quote.
-
-Pinning the certificate here would be easy and would still be worth little on its
-own, because a trust store the operator can edit is one they can also point at a
-pinned value of their choosing unless the pin lives in measured state. The fixes
-in order: get the rootfs covered by measured state, then pin the broker
-certificate inside that measured image, then encrypt the released secret to an
-ephemeral key carried in the attestation report. The last one is the one usually
-named as the fix and is the least useful alone: whoever can edit the code can
-read what it decrypts. None of the three are built.
+TLS is still the default, with a plaintext URL refused unless asked for: the
+credential no longer depends on it, but it still hides who is asking for what.
 
 What authenticates the enclave to the broker is the attestation itself. There is
 no API key here on purpose: anything else would be a second, weaker credential
@@ -58,6 +48,7 @@ from dataclasses import asdict
 from .attestation import AttestationReport
 from .database import Credentials
 from .kbs import CredentialReleaseError, KeyBroker
+from .sealing import SealedCredential, SealingError
 from .serving.handler import Request, Response
 
 logger = logging.getLogger("sentinel.kbs")
@@ -137,8 +128,11 @@ class RemoteBroker:
         report: AttestationReport,
         certificates: dict[str, bytes] | None = None,
         event_log: bytes | None = None,
-    ) -> Credentials:
+        enclave_key: str | None = None,
+    ) -> Credentials | SealedCredential:
         payload: dict = {"resource": resource, "attestation": asdict(report)}
+        if enclave_key:
+            payload["enclave_key"] = enclave_key
         if event_log:
             from .tdx import encode_event_log
 
@@ -151,6 +145,11 @@ class RemoteBroker:
                 for name, der in certificates.items()
             }
         answer = self._post("/release", payload)
+        if "sealed" in answer:
+            try:
+                return SealedCredential.from_dict(answer["sealed"])
+            except SealingError as exc:
+                raise CredentialReleaseError(f"broker sent an unreadable release: {exc}") from exc
         return Credentials(dsn=answer["dsn"], resource=answer["resource"])
 
 
@@ -231,8 +230,13 @@ class BrokerHandler:
     def handle(self, request: Request) -> Response:
         if request.path == "/health":
             # No secret counts, no resource names: a reachability probe should
-            # not double as an inventory of what the broker holds.
-            return Response(200, {"status": "ok", "role": "broker"})
+            # not double as an inventory of what the broker holds. The key is
+            # public, and it is what a customer checks miners' answers against.
+            return Response(200, {
+                "status": "ok", "role": "broker",
+                "broker_key": self.broker.identity.public_hex,
+                "fingerprint": self.broker.identity.fingerprint,
+            })
 
         if request.method != "POST":
             return Response(405, {"error": f"{request.method} not allowed"})
@@ -269,10 +273,14 @@ class BrokerHandler:
                     )
                 except (ValueError, VerificationError) as exc:
                     return Response(400, {"error": f"unreadable event log: {exc}"})
+            enclave_key = payload.get("enclave_key")
+            if enclave_key is not None and not isinstance(enclave_key, str):
+                return Response(400, {"error": "enclave_key must be a hex string"})
             try:
                 credentials = self.broker.release(
                     resource, report, certificates,
                     **({"event_log": event_log} if event_log else {}),
+                    enclave_key=enclave_key or None,
                 )
             except CredentialReleaseError as exc:
                 # 403, not 500: the request was well formed and the answer is no.
@@ -281,7 +289,10 @@ class BrokerHandler:
                 # stale nonce. None of those strings contain the secret.
                 logger.warning("refused release of %r: %s", resource, exc)
                 return Response(403, {"error": str(exc)})
-            logger.info("released %r to an attested enclave", resource)
+            if isinstance(credentials, SealedCredential):
+                logger.info("released %r to an attested enclave, sealed", resource)
+                return Response(200, {"sealed": credentials.to_dict()})
+            logger.info("released %r UNSEALED: test policy only", resource)
             return Response(200, {"dsn": credentials.dsn, "resource": credentials.resource})
 
         return Response(404, {"error": f"no route for {request.path}"})

@@ -14,7 +14,7 @@ RESOURCE = "customer-db"
 
 
 def make_broker(policy: ReleasePolicy | None = None) -> KeyBroker:
-    broker = KeyBroker(policy=policy or ReleasePolicy(approved_measurement=APPROVED))
+    broker = KeyBroker(policy=policy or ReleasePolicy(approved_measurement=APPROVED, allow_plaintext_release=True))
     broker.store_secret(RESOURCE, DSN)
     return broker
 
@@ -88,7 +88,7 @@ def test_replayed_attestation_gets_nothing():
 
 
 def test_expired_nonce_gets_nothing():
-    broker = make_broker(ReleasePolicy(approved_measurement=APPROVED, nonce_ttl_seconds=-1))
+    broker = make_broker(ReleasePolicy(approved_measurement=APPROVED, nonce_ttl_seconds=-1, allow_plaintext_release=True))
     enclave = make_enclave()
     trusted(broker, enclave)
     from sentinel.kbs import release_binding
@@ -176,7 +176,7 @@ def test_sevsnp_report_is_refused_when_no_verifier_is_configured():
     then a real report from an unregistered chip would be judged by the weaker
     check and could be admitted by it.
     """
-    broker = KeyBroker(policy=ReleasePolicy(approved_measurement="whatever"))
+    broker = KeyBroker(policy=ReleasePolicy(approved_measurement="whatever", allow_plaintext_release=True))
     broker.store_secret("customer-db", "postgres://u:p@h/db")
     nonce = broker.challenge()
     report = AttestationReport(
@@ -202,7 +202,7 @@ def test_sevsnp_report_is_refused_when_the_host_supplied_no_certificates():
     verifier = SevSnpVerifier("Milan", SevSnpPolicy(approved_measurement=b"\x00" * 48),
                               chain=chain, offline=True)
 
-    broker = KeyBroker(policy=ReleasePolicy(approved_measurement="x"), sevsnp=verifier)
+    broker = KeyBroker(policy=ReleasePolicy(approved_measurement="x", allow_plaintext_release=True), sevsnp=verifier)
     broker.store_secret("customer-db", "postgres://u:p@h/db")
     nonce = broker.challenge()
     report = AttestationReport(
@@ -236,7 +236,7 @@ def test_a_forged_sevsnp_report_does_not_release_the_secret():
         chain=chain, offline=True,
     )
 
-    broker = KeyBroker(policy=ReleasePolicy(approved_measurement="x"),
+    broker = KeyBroker(policy=ReleasePolicy(approved_measurement="x", allow_plaintext_release=True),
                        sevsnp=verifier, sevsnp_certs=certs)
     broker.store_secret("customer-db", "postgres://u:p@h/db")
 
@@ -257,7 +257,7 @@ def test_mock_reports_still_take_the_registered_key_path():
     from sentinel.attestation import MockSilicon
 
     silicon = MockSilicon()
-    broker = KeyBroker(policy=ReleasePolicy(approved_measurement="img-v1"))
+    broker = KeyBroker(policy=ReleasePolicy(approved_measurement="img-v1", allow_plaintext_release=True))
     broker.store_secret("customer-db", "postgres://u:p@h/db")
     broker.trust_chip(silicon.chip_id, silicon.public_verifier().public_key_hex)
 

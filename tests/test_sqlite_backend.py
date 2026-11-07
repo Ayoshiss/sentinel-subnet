@@ -119,7 +119,7 @@ def test_attested_flow_over_real_sql():
             verifier_from_public_key(enclave.public_key_hex),
             approved_measurement=APPROVED,
             expected_nonce=nonce,
-            expected_report_data=bind_response(request_id, attested.response_hash),
+            expected_report_data=bind_response(request_id, attested.response_hash, attested.broker),
         )
     finally:
         db.close()

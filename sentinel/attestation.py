@@ -48,8 +48,15 @@ def new_nonce() -> str:
     return secrets.token_hex(32)
 
 
-def bind_response(request_id: str, response_hash: str) -> str:
-    """Value bound into the report so a proof cannot be reused for other data."""
+def bind_response(request_id: str, response_hash: str, broker: str = "") -> str:
+    """Value bound into the report so a proof cannot be reused for other data.
+
+    `broker` is the fingerprint of the broker whose credential produced the
+    answer, when there is one. Binding it means a miner cannot answer from one
+    broker's database while claiming another's. Empty keeps the original form.
+    """
+    if broker:
+        return sha384(f"{request_id}:{response_hash}:{broker}".encode())
     return sha384(f"{request_id}:{response_hash}".encode())
 
 

@@ -12,7 +12,7 @@ Sentinel is a Bittensor subnet where AI agents reach real systems through **hard
 
 **Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
 silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 379 tests, CI green on every push.
+independent verification, runs today under 400 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
@@ -55,8 +55,11 @@ reachable by the operator, since the guest trust store is theirs to change
 which run on AMD. **The fix exists on Intel TDX and has been run once on
 hardware:** `image/` builds a reproducible miner image whose read-only root is
 covered by the measured boot, and a copy with changed code was refused by the kernel
-and never served. It is not deployed, its Secure Boot keys were test keys, and
-credential release to a customer's broker (T20, T22) is the next step.
+and never served. On that image the credential is sealed to the enclave's attested
+key, so an operator's relay between miner and broker saw only ciphertext, and a
+miner pointed at the operator's own broker names it in every answer, which the
+customer refuses (T20, T22). None of it is deployed, and the Secure Boot keys were
+test keys.
 
 **No design partners and no independent miners yet.** Every miner on 554 is ours.
 
@@ -218,7 +221,7 @@ Ordered by what blocks what. Nothing below is promised by a date.
 | Step | What | Unblocks |
 |---|---|---|
 | 1 | Measured application on Intel TDX: kernel, command line and read-only root filesystem in the signed measurement, image built reproducibly from this repository. **Built and run on hardware 2026-11-06 (`image/`); production keys, registry entries and deployment remain** | Closes T23; makes a signed response proof that the approved code produced it |
-| 2 | Credential release bound to an attested key, broker certificate pinned in measured state | Closes T20 and T22 |
+| 2 | Credential release bound to an attested key, broker identity attested in every answer. **Built and run on hardware 2026-11-07** | Closes T20 and T22 on TDX |
 | 3 | Miners run by independent operators | Correctness by vote means something |
 | 4 | External security review | Real credentials on third-party hardware |
 | 5 | Payments | Only once someone is using it |

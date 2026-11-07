@@ -95,6 +95,11 @@ def parse_args(argv=None):
     )
     p.add_argument("--tdx-db-cert", metavar="DER",
                    help="Secure Boot db certificate of the approved TDX image")
+    p.add_argument(
+        "--identity-key", default="~/.config/sentinel/broker-identity.pem", metavar="PATH",
+        help="this broker's signing key, created on first run. Its fingerprint is "
+             "what you check miners' answers against, so keep it stable and private.",
+    )
     p.add_argument("--bind", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8100)
     return p.parse_args(argv)
@@ -156,6 +161,16 @@ def build_broker(args) -> KeyBroker:
             db_cert=pathlib.Path(args.tdx_db_cert).read_bytes(),
         ))
 
+    from sentinel.sealing import BrokerIdentity
+
+    key_path = pathlib.Path(args.identity_key).expanduser()
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    broker.identity = BrokerIdentity.load_or_create(key_path)
+    logger.info(
+        "broker fingerprint %s: every answer from a miner using this broker names it",
+        broker.identity.fingerprint,
+    )
+
     for name, dsn in parse_scopes(args.scope).items():
         broker.store_secret(name, dsn)
         logger.info("holding a secret for scope %r", name)
@@ -173,8 +188,8 @@ def main(argv=None) -> int:
     )
     if args.bind not in ("127.0.0.1", "localhost", "::1"):
         logger.warning(
-            "bound to %s: put TLS in front of this. The released credential "
-            "travels in the response body.", args.bind,
+            "bound to %s: put TLS in front of this. The credential itself is "
+            "sealed to the enclave, but TLS still hides who asks for what.", args.bind,
         )
     try:
         server.serve_forever()

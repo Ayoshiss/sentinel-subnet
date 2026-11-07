@@ -19,12 +19,10 @@ chip registry stands in for AMD's certificate directory, and `MockSilicon`
 stands in for the processor. The interfaces are the same, so the real backend
 drops in without changing callers.
 
-Known limitation: once the decision to release is made, the credential is
-returned in the clear, so it is only as private as the channel carrying it.
-Production should encrypt it to the enclave's ephemeral public key (PK_TEE),
-carried in the attestation report, so that nothing but that enclave can decrypt
-it. That hardens what happens *after* the gate; the gating logic below is
-unchanged either way. Tracked in ROADMAP.md under Milestone 2.
+Once the decision to release is made, the credential is sealed to a key the
+enclave generated and bound into the attestation (`sentinel.sealing`), so only
+that enclave can read it, whatever carries it. A plaintext release remains
+only for tests that exercise the gate itself, and only when the policy asks.
 """
 
 from __future__ import annotations
@@ -43,6 +41,7 @@ from .attestation import (
     verifier_from_public_key,
 )
 from .database import Credentials
+from .sealing import BrokerIdentity, SealedCredential, SealingError
 
 
 class CredentialReleaseError(Exception):
@@ -58,14 +57,23 @@ class ReleasePolicy:
     approved_measurement: str | Iterable[str]
     min_tcb: int = 7
     nonce_ttl_seconds: float = 60.0
+    #: Return the credential unsealed when the enclave supplies no key. For
+    #: tests of the gate only: a real broker refuses, because a plaintext
+    #: credential is readable by whoever relays it.
+    allow_plaintext_release: bool = False
 
 
-def release_binding(resource: str) -> str:
+def release_binding(resource: str, enclave_key: str = "") -> str:
     """The value an enclave must bind into its report to request `resource`.
 
     Ties the proof to one specific secret, so an attestation obtained for the
-    analytics database cannot be replayed to unlock the payments database.
+    analytics database cannot be replayed to unlock the payments database. With
+    `enclave_key` it also ties the proof to the key the credential is sealed to,
+    so a relay cannot substitute a key of its own: the attestation would no
+    longer match.
     """
+    if enclave_key:
+        return bind_response("kbs-release", sha384(f"{resource}:{enclave_key}".encode()))
     return bind_response("kbs-release", sha384(resource.encode()))
 
 
@@ -126,6 +134,8 @@ class KeyBroker:
     sevsnp_factory: object | None = None
     #: Verifier for Intel TDX, a `TdxVerifier`. `None` refuses TDX quotes.
     tdx: object | None = None
+    #: Signs every sealed release. Customers recognise their broker by it.
+    identity: BrokerIdentity = field(default_factory=BrokerIdentity)
     _secrets: dict[str, Credentials] = field(default_factory=dict, repr=False)
     _trusted_chips: dict[str, str] = field(default_factory=dict, repr=False)
     _issued_nonces: dict[str, float] = field(default_factory=dict, repr=False)
@@ -160,14 +170,25 @@ class KeyBroker:
         report: AttestationReport,
         certificates: dict[str, bytes] | None = None,
         event_log: bytes | None = None,
-    ) -> Credentials:
+        enclave_key: str | None = None,
+    ) -> Credentials | SealedCredential:
         """Verify the report and release the credential, or raise.
+
+        With `enclave_key`, the credential comes back sealed to it, and the
+        report must bind that key. Without one, only a policy that allows
+        plaintext release returns anything.
 
         Order matters: cheap structural checks first, signature last, and the
         secret is only read from storage after every check has passed.
         """
         if resource not in self._secrets:
             raise CredentialReleaseError(f"no secret stored for resource {resource!r}")
+        if not enclave_key and not self.policy.allow_plaintext_release:
+            raise CredentialReleaseError(
+                "the enclave sent no key to seal the credential to; this broker "
+                "does not release credentials in the clear"
+            )
+        binding = release_binding(resource, enclave_key or "")
 
         # Freshness: the nonce must be one we issued and have not yet spent.
         self._expire_nonces()
@@ -177,19 +198,27 @@ class KeyBroker:
         # Real silicon and mock silicon prove themselves differently, so the
         # shape of the signature decides which check applies.
         if looks_like_tdx(report.signature):
-            self._verify_tdx(report, resource, event_log)
+            self._verify_tdx(report, binding, event_log)
         elif looks_like_sevsnp(report.signature):
-            self._verify_sevsnp(report, resource, certificates)
+            self._verify_sevsnp(report, binding, certificates)
         else:
-            self._verify_registered_key(report, resource)
+            self._verify_registered_key(report, binding)
 
         # Spend the nonce so this proof cannot unlock anything twice.
         self._issued_nonces.pop(report.nonce, None)
-        return self._secrets[resource]
+        if not enclave_key:
+            return self._secrets[resource]
+        try:
+            return self.identity.seal(
+                self._secrets[resource].dsn, enclave_key=enclave_key,
+                resource=resource, nonce=report.nonce,
+            )
+        except SealingError as exc:
+            raise CredentialReleaseError(f"cannot seal to that key: {exc}") from exc
 
     # -- internals -------------------------------------------------------------
 
-    def _verify_registered_key(self, report: AttestationReport, resource: str) -> None:
+    def _verify_registered_key(self, report: AttestationReport, binding: str) -> None:
         """The development path: an Ed25519 key registered in advance."""
         public_key = self._trusted_chips.get(report.chip_id)
         if public_key is None:
@@ -203,7 +232,7 @@ class KeyBroker:
                 approved_measurement=self.policy.approved_measurement,
                 expected_nonce=report.nonce,
                 min_tcb=self.policy.min_tcb,
-                expected_report_data=release_binding(resource),
+                expected_report_data=binding,
             )
         except VerificationError as exc:
             raise CredentialReleaseError(f"attestation rejected: {exc}") from exc
@@ -211,7 +240,7 @@ class KeyBroker:
     def _verify_sevsnp(
         self,
         report: AttestationReport,
-        resource: str,
+        binding: str,
         certificates: dict[str, bytes] | None = None,
     ) -> None:
         """The hardware path: AMD's certificate chain, anchored to a pinned root.
@@ -263,13 +292,13 @@ class KeyBroker:
         # about which secret the report was asking for, so check that separately:
         # otherwise a proof obtained for the analytics database would unlock the
         # payments one.
-        if report.report_data != release_binding(resource):
+        if report.report_data != binding:
             raise CredentialReleaseError(
-                "attestation is bound to a different resource"
+                "attestation is bound to a different resource or key"
             )
 
     def _verify_tdx(
-        self, report: AttestationReport, resource: str, event_log: bytes | None
+        self, report: AttestationReport, binding: str, event_log: bytes | None
     ) -> None:
         """The Intel path: Intel's chain, approved firmware, and the boot policy.
 
@@ -290,8 +319,8 @@ class KeyBroker:
             )
         except VerificationError as exc:
             raise CredentialReleaseError(f"attestation rejected: {exc}") from exc
-        if report.report_data != release_binding(resource):
-            raise CredentialReleaseError("attestation is bound to a different resource")
+        if report.report_data != binding:
+            raise CredentialReleaseError("attestation is bound to a different resource or key")
 
     def _expire_nonces(self) -> None:
         now = time.monotonic()

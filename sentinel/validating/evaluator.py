@@ -102,6 +102,7 @@ class MinerEvaluator:
         tdx_mrtd: Iterable[str] = (),
         tdx_db_cert: bytes | None = None,
         tdx_collateral: Any = None,
+        expected_broker: str | None = None,
     ) -> None:
         self.wallet = wallet
         #: One value or many. The measurement covers host firmware as well as
@@ -127,6 +128,9 @@ class MinerEvaluator:
         #: Kept across rounds: Intel's collateral is per machine and changes
         #: rarely, so fetching it every round would be wasted traffic.
         self.tdx_collateral = tdx_collateral
+        #: A customer checking answers sets this to their broker's fingerprint.
+        #: A subnet validator leaves it unset: it cannot know every customer.
+        self.expected_broker = expected_broker
         self.min_tcb = min_tcb
         self.latency_target_ms = latency_target_ms
         self.latency_ceiling_ms = latency_ceiling_ms
@@ -228,7 +232,15 @@ class MinerEvaluator:
         # valid report at all.
         outcome.scores.nonce_discipline = 1.0 if report.nonce == nonce else 0.0
 
-        binding = bind_response(request_id, outcome.response_hash or "")
+        # The broker the miner names is bound into its proof, so it cannot claim
+        # one broker while answering from another. Which broker is acceptable is
+        # the customer's call (`expected_broker`); the subnet only needs the
+        # claim to be honest.
+        broker = str(payload.get("broker") or "")
+        if self.expected_broker is not None and broker != self.expected_broker:
+            outcome.error = f"attestation rejected: answered from broker {broker[:16] or 'none'}, not ours"
+            return outcome
+        binding = bind_response(request_id, outcome.response_hash or "", broker)
         try:
             if health.get("attestation") == "sev-snp":
                 self._verify_sevsnp(report, health, binding, expected_nonce=nonce)

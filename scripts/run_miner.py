@@ -370,7 +370,10 @@ def build_miner(args, hotkey_ss58: str):
                 "the broker approved, the chip is not trusted, or the firmware is "
                 "below its floor. Nothing is served without the credential."
             ) from exc
-        logger.info("credential released to the enclave for %r", name)
+        logger.info(
+            "credential released to the enclave for %r, sealed, by broker %s",
+            name, enclave.broker_fingerprint,
+        )
         mcp.register(PostgresQueryTool(
             open_database(credentials, args.seed),
             scope=None if name == RESOURCE else name,

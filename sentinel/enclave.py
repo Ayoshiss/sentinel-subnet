@@ -33,7 +33,8 @@ from .attestation import (
     sha384,
 )
 from .database import Credentials, canonical
-from .kbs import KeyBroker, release_binding
+from .kbs import CredentialReleaseError, KeyBroker, release_binding
+from .sealing import EnclaveKey, SealedCredential, SealingError
 
 
 @dataclass
@@ -43,9 +44,13 @@ class AttestedResponse:
     result: Any
     attestation: AttestationReport
     response_hash: str
+    #: Fingerprint of the broker whose credential this enclave holds, bound
+    #: into the attestation. Empty when the enclave has unlocked nothing.
+    broker: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        extra = {"broker": self.broker} if self.broker else {}
+        return {**extra,
             "result": self.result,
             "attestation": {
                 "chip_id": self.attestation.chip_id,
@@ -72,6 +77,12 @@ class Enclave:
         self.launch_measurement = launch_measurement
         self.agent = AttestationAgent(silicon, launch_measurement, tcb_level)
         self._credentials: dict[str, Credentials] = {}
+        #: Generated here, in memory, for this enclave's lifetime. Credentials
+        #: are sealed to its public half, which the attestation carries.
+        self._key = EnclaveKey()
+        #: The broker every credential came from. One per enclave, so every
+        #: answer can name it without ambiguity.
+        self.broker_fingerprint = ""
 
     @property
     def chip_id(self) -> str:
@@ -91,7 +102,9 @@ class Enclave:
         running approved code on a trusted chip.
         """
         nonce = broker.challenge()
-        report = self.agent.attest(nonce, release_binding(resource))
+        # The attestation binds the resource and the key the credential is to
+        # be sealed to, so a relay cannot swap in a key of its own.
+        report = self.agent.attest(nonce, release_binding(resource, self._key.public_hex))
         # The certificates travel with the report. A broker on another machine
         # cannot read this host's certificate store, and should not have to:
         # AMD's root is pinned on the broker side, so supplying the chain lets
@@ -100,9 +113,22 @@ class Enclave:
         # TDX sends its firmware event log the same way, for the same reason.
         event_log = getattr(self.silicon, "event_log", None)
         extra = {"event_log": event_log} if event_log else {}
-        credentials = broker.release(
-            resource, report, getattr(self.silicon, "certificates", None), **extra,
+        sealed = broker.release(
+            resource, report, getattr(self.silicon, "certificates", None),
+            enclave_key=self._key.public_hex, **extra,
         )
+        if not isinstance(sealed, SealedCredential):
+            raise CredentialReleaseError("the broker released the credential unsealed")
+        try:
+            dsn, broker_fingerprint = self._key.open(sealed, resource=resource, nonce=nonce)
+        except SealingError as exc:
+            raise CredentialReleaseError(str(exc)) from exc
+        if self.broker_fingerprint and broker_fingerprint != self.broker_fingerprint:
+            raise CredentialReleaseError(
+                "a second broker answered; one enclave takes credentials from one broker"
+            )
+        self.broker_fingerprint = broker_fingerprint
+        credentials = Credentials(dsn=dsn, resource=resource)
         self._credentials[resource] = credentials
         return credentials
 
@@ -115,8 +141,13 @@ class Enclave:
     def attest_result(self, request_id: str, result: Any, nonce: str) -> AttestedResponse:
         """Bind `result` into a fresh report so it cannot be altered in transit."""
         response_hash = sha384(canonical(result))
-        report = self.agent.attest(nonce, bind_response(request_id, response_hash))
-        return AttestedResponse(result=result, attestation=report, response_hash=response_hash)
+        report = self.agent.attest(
+            nonce, bind_response(request_id, response_hash, self.broker_fingerprint)
+        )
+        return AttestedResponse(
+            result=result, attestation=report, response_hash=response_hash,
+            broker=self.broker_fingerprint,
+        )
 
     def run_attested(
         self,

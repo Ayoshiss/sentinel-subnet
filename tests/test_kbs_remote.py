@@ -51,7 +51,7 @@ def running_broker():
 
 
 def approved_broker(measurement: str = APPROVED) -> KeyBroker:
-    broker = KeyBroker(policy=ReleasePolicy(approved_measurement=measurement))
+    broker = KeyBroker(policy=ReleasePolicy(approved_measurement=measurement, allow_plaintext_release=True))
     broker.store_secret(RESOURCE, DSN)
     return broker
 
@@ -231,7 +231,7 @@ def test_a_miner_supplied_chain_with_its_own_root_is_refused(running_broker):
     silicon = FakeSevSnpSilicon(vcek_key, measurement)
 
     broker = KeyBroker(
-        policy=ReleasePolicy(approved_measurement=measurement.hex()),
+        policy=ReleasePolicy(approved_measurement=measurement.hex(), allow_plaintext_release=True),
         sevsnp_factory=verifier_factory("Milan", [measurement.hex()], {"min_snp": 8}),
     )
     broker.store_secret(RESOURCE, DSN)
@@ -267,7 +267,7 @@ def test_a_chain_missing_its_root_releases_nothing(running_broker):
     _chain, vcek_key, _vcek = build_cert_chain("Milan")
     measurement = bytes.fromhex(APPROVED)[:48].ljust(48, b"\x00")
     broker = KeyBroker(
-        policy=ReleasePolicy(approved_measurement=measurement.hex()),
+        policy=ReleasePolicy(approved_measurement=measurement.hex(), allow_plaintext_release=True),
         sevsnp_factory=verifier_factory("Milan", [measurement.hex()], {"min_snp": 8}),
     )
     broker.store_secret(RESOURCE, DSN)

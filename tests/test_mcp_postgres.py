@@ -145,7 +145,7 @@ def test_end_to_end_result_is_independently_verifiable():
         verifier_from_public_key(enclave.public_key_hex),
         approved_measurement=APPROVED,
         expected_nonce=nonce,
-        expected_report_data=bind_response(request_id, attested.response_hash),
+        expected_report_data=bind_response(request_id, attested.response_hash, attested.broker),
     )
 
 
@@ -163,7 +163,7 @@ def test_altered_result_fails_verification():
             verifier_from_public_key(enclave.public_key_hex),
             approved_measurement=APPROVED,
             expected_nonce=nonce,
-            expected_report_data=bind_response(request_id, sha384(canonical(forged))),
+            expected_report_data=bind_response(request_id, sha384(canonical(forged)), attested.broker),
         )
 
 

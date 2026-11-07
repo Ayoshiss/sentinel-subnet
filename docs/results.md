@@ -761,3 +761,48 @@ Any later change to the miner's code or locked dependencies changes the root has
 - **Exfiltration is unchanged.** Code that answers correctly while copying data
   is still invisible to scoring. What changed is that such code would now have to
   be in the approved, reproducible image, where anyone can read it.
+
+## Sealed credential release to a customer's broker, on GCP TDX, 2026-11-07
+
+The second critical finding: the operator chooses the miner's broker URL, so
+they can put a relay of their own between the miner and the customer's broker,
+let the real broker approve a genuine attestation, and read the credential on
+its way back. TLS does not stop it, because the relay has a valid certificate
+for its own name. And pinning the customer's certificate inside the measured
+image would mean a different image, and digest, for every customer.
+
+**What changed.** The enclave generates an X25519 key in memory and binds the
+public half into the attestation it sends the broker. The broker checks the
+attestation as before, then seals the credential to that key (X25519, HKDF,
+AES-256-GCM) and signs the release with its own key (`sentinel/sealing.py`).
+The enclave names that broker's key in every answer it attests afterwards, inside
+the signed binding. A real broker refuses to release in the clear. In place of a
+pinned certificate, the customer checks answers name their broker.
+
+**Setup.** The measured image rebuilt with this code (UKI `9a009b7f…`), booted
+on TDX under test Secure Boot keys. The customer's broker on a separate VM,
+approving only that image, firmware and key. An operator relay on a third VM
+between them, over plain HTTP, recording every byte. The credential was a
+working database path carrying the marker `customer-7f3a9c41`. Evidence in
+`docs/evidence/tdx-sealed-broker-2026-11-07/`, asserted in
+`tests/test_tdx_sealed_broker_evidence.py`; the protocol and attacks are also
+tested on sockets in `tests/test_sealing.py`.
+
+| Test | Result |
+|---|---|
+| Miner unlocks through the operator's relay | Unlocked and served. **The relay's log holds the whole exchange and the marker 0 times**; the release is a sealed blob |
+| Customer's validator round, expecting their broker | Verified, attestation 1.0 |
+| Subnet validator round, no expectation | Verified |
+| Customer expecting a different broker | Refused: answered from broker `24c9aafb…`, not ours |
+| Operator repoints the miner at a broker of their own | Unlocked and served, and every answer names `1ffa0c94…`; **the customer's round refused it**, the subnet's verified it, because the claim is honest |
+| Relay substitutes its own key, or a miner claims a broker it did not use | Refused (sockets and offline evidence) |
+
+### Honest limits
+
+- **TDX only.** On AMD SEV-SNP the code is not measured, so whoever can change
+  the code can read what it decrypts. Every live miner on 554 is still AMD.
+- **The customer has to check.** A subnet validator cannot know every customer's
+  broker, so it verifies only that the claim is honest. Which broker is
+  acceptable is the customer's call, by fingerprint.
+- **Still not covered:** exfiltration by approved code (now readable in a
+  reproducible image), the production key custody, and deployment.

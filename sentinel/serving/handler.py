@@ -248,6 +248,10 @@ class MinerHandler:
             "chip_id": self.enclave.chip_id,
             "launch_measurement": self.enclave.launch_measurement,
         }
+        if self.enclave.broker_fingerprint:
+            # Which broker's credential this miner holds. Public, and bound into
+            # every answer anyway; here so a customer can check before asking.
+            body["broker"] = self.enclave.broker_fingerprint
 
         certificates = getattr(self.enclave.silicon, "certificates", None)
         event_log = getattr(self.enclave.silicon, "event_log", None)

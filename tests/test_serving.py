@@ -413,7 +413,7 @@ def test_attested_query_over_http(live, validator_wallet, miner_wallet):
         verifier_from_public_key(health["public_key"]),
         approved_measurement=APPROVED,
         expected_nonce=nonce,
-        expected_report_data=bind_response("req-1", out["response_hash"]),
+        expected_report_data=bind_response("req-1", out["response_hash"], out["broker"]),
     )
 
 
@@ -431,7 +431,7 @@ def test_challenge_over_http_is_bound_to_the_nonce(live, validator_wallet, miner
         verifier_from_public_key(health["public_key"]),
         approved_measurement=APPROVED,
         expected_nonce=nonce,
-        expected_report_data=bind_response("challenge", out["response_hash"]),
+        expected_report_data=bind_response("challenge", out["response_hash"], out["broker"]),
     )
 
 
