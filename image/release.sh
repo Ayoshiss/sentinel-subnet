@@ -62,6 +62,8 @@ build)
 sign)
   keys=${2:?directory holding db.key and db.crt}
   work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+  gcloud compute instances start "$BUILDER" --zone="$ZONE" --quiet
+  sleep 30
   gcloud compute scp --zone="$ZONE" --quiet "$BUILDER:$remote_out/sentinel-miner.efi" "$work/unsigned.efi"
   before=$(digest_of "$work/unsigned.efi")
   echo "unsigned UKI digest: $before"
