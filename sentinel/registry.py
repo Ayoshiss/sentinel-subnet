@@ -88,6 +88,12 @@ class Registry:
     #: without re-deriving it, and so a cached copy round-trips through the same
     #: verification path as a freshly fetched one rather than a looser one.
     source: str = ""
+    #: TDX only. An approved image digest says which code may boot, but a TDX
+    #: verifier also needs the TD firmware it may boot on (MRTD) and the Secure
+    #: Boot certificate the image is signed under. Carried here so every
+    #: validator reads them from the same commitment instead of from flags.
+    tdx_mrtd: frozenset[str] = frozenset()
+    tdx_db_certs: tuple[bytes, ...] = ()
 
     @property
     def measurements(self) -> frozenset[str]:
@@ -152,13 +158,51 @@ def parse(
     if not images:
         raise RegistryError("registry approves nothing; refusing rather than opening up")
 
+    tdx_mrtd, tdx_db_certs = _parse_tdx(payload.get("tdx"))
+
     return Registry(
         version=version,
         netuid=int(payload["netuid"]),
         effective_from=effective_from,
         images=images,
         source=body,
+        tdx_mrtd=tdx_mrtd,
+        tdx_db_certs=tdx_db_certs,
     )
+
+
+def _parse_tdx(block: Any) -> tuple[frozenset[str], tuple[bytes, ...]]:
+    """The optional `tdx` section: approved MRTDs and Secure Boot db certificates.
+
+    Both or neither. Half a TDX policy would leave validators that read it
+    unable to verify anyone, and refusing the file says so at publish time
+    rather than as every TDX miner scoring zero.
+    """
+    if block is None:
+        return frozenset(), ()
+    if not isinstance(block, dict):
+        raise RegistryError("tdx section must be an object")
+    mrtd = block.get("mrtd") or []
+    certs = block.get("secure_boot_db") or []
+    if not mrtd or not certs:
+        raise RegistryError("tdx section needs both mrtd and secure_boot_db")
+    out_mrtd = set()
+    for m in mrtd:
+        m = str(m).lower()
+        if len(m) != 96 or any(c not in "0123456789abcdef" for c in m):
+            raise RegistryError(f"tdx mrtd must be 96 hex characters, got {m[:16]}…")
+        out_mrtd.add(m)
+    out_certs = []
+    for c in certs:
+        try:
+            der = bytes.fromhex(str(c))
+            from cryptography import x509
+
+            x509.load_der_x509_certificate(der)
+        except ValueError as exc:
+            raise RegistryError(f"tdx secure_boot_db entry is not a DER certificate: {exc}") from exc
+        out_certs.append(der)
+    return frozenset(out_mrtd), tuple(out_certs)
 
 
 def manifest_line(reg_digest: str, effective_from: int, url: str) -> tuple[str, str]:

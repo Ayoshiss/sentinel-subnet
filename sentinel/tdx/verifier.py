@@ -192,8 +192,9 @@ class TdxPolicy:
     approved_uki: Iterable[str]
     #: Approved TD firmware. See the module docstring for why this is needed.
     approved_mrtd: Iterable[str]
-    #: The DER certificate in the image's Secure Boot db.
-    db_cert: bytes
+    #: The DER certificate in the image's Secure Boot db, or several during a
+    #: key rotation. The boot must be signed under exactly one of them.
+    db_cert: bytes | Iterable[bytes]
     allowed_tcb_status: frozenset[str] = field(default=ALLOWED_TCB_STATUS)
 
     def check(self, quote: bytes, log: bytes) -> str:
@@ -228,13 +229,18 @@ class TdxPolicy:
             raise VerificationError(
                 f"booted image is not approved: {[i[:16] for i in images]}"
             )
-        try:
-            failures = eventlog.boot_policy(evs, uki=uki, db_cert=self.db_cert)
-        except Exception as exc:  # noqa: BLE001
-            raise VerificationError(f"unreadable event log: {exc}") from exc
-        if failures:
-            raise VerificationError("boot policy: " + "; ".join(failures))
-        return uki
+        certs = [self.db_cert] if isinstance(self.db_cert, (bytes, bytearray)) else list(self.db_cert)
+        if not certs:
+            raise VerificationError("no Secure Boot certificate is approved")
+        failures: list[str] = []
+        for cert in certs:
+            try:
+                failures = eventlog.boot_policy(evs, uki=uki, db_cert=bytes(cert))
+            except Exception as exc:  # noqa: BLE001
+                raise VerificationError(f"unreadable event log: {exc}") from exc
+            if not failures:
+                return uki
+        raise VerificationError("boot policy: " + "; ".join(failures))
 
 
 @dataclass(frozen=True)

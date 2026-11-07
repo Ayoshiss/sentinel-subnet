@@ -100,7 +100,7 @@ class MinerEvaluator:
         product: str = "Milan",
         sevsnp_min_tcb: Mapping[str, int] | None = None,
         tdx_mrtd: Iterable[str] = (),
-        tdx_db_cert: bytes | None = None,
+        tdx_db_cert: bytes | Iterable[bytes] | None = None,
         tdx_collateral: Any = None,
         expected_broker: str | None = None,
     ) -> None:
@@ -334,7 +334,7 @@ class MinerEvaluator:
 
         from ..tdx import CollateralCache, TdxPolicy, TdxVerifier, decode_event_log
 
-        if not self.tdx_mrtd or self.tdx_db_cert is None:
+        if not self.tdx_mrtd or not self.tdx_db_cert:
             raise VerificationError("this validator is not configured to verify TDX")
         try:
             packed = base64.b64decode(health.get("event_log") or "", validate=True)

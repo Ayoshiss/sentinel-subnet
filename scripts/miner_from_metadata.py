@@ -13,6 +13,11 @@ not start, which is a louder failure than ignoring it.
 
     {"hotkey_ss58": "5...", "measurement": "<uki digest>",
      "allow_hotkey": ["5..."], "broker_url": "https://...", "scope": ["db"]}
+
+A pilot customer's agent is not on Bittensor, so it calls with an API key.
+`api_keys` carries the SHA-256 digests from scripts/make_api_key.py, never the
+keys themselves: metadata is readable by the operator, and a digest is useless
+to them.
 """
 
 from __future__ import annotations
@@ -43,6 +48,7 @@ FIELDS: dict[str, tuple[type, str]] = {
     "scope": (list, "--scope"),
     "tdx_mrtd": (list, "--tdx-mrtd"),
     "tdx_db_cert_b64": (str, "--tdx-db-cert"),
+    "api_keys": (dict, "--api-keys"),
 }
 REQUIRED = ("hotkey_ss58", "measurement")
 
@@ -85,6 +91,8 @@ def argv_from(config: dict, cert_path: pathlib.Path) -> list[str]:
             if isinstance(value, bool) or not isinstance(value, int):
                 raise ConfigError(f"{key} must be an integer")
             argv += [flag, str(value)]
+        elif kind is dict:
+            argv += [flag, str(_write_api_keys(value, cert_path.with_name("api-keys.json")))]
         elif key == "tdx_db_cert_b64":
             try:
                 cert_path.write_bytes(base64.b64decode(str(value), validate=True))
@@ -96,6 +104,21 @@ def argv_from(config: dict, cert_path: pathlib.Path) -> list[str]:
                 raise ConfigError(f"{key} must be a string")
             argv += [flag, _value(key, value)]
     return argv
+
+
+def _write_api_keys(value: object, path: pathlib.Path) -> pathlib.Path:
+    """Check the digests the same way the miner will, then write them out."""
+    sys.path.insert(0, str(ROOT))
+    from sentinel.serving.apikeys import ApiKeyError, ApiKeyStore
+
+    if not isinstance(value, dict) or not value:
+        raise ConfigError("api_keys must be a non-empty object of label -> digest")
+    try:
+        ApiKeyStore(value)
+    except ApiKeyError as exc:
+        raise ConfigError(f"api_keys: {exc}") from exc
+    path.write_text(json.dumps(value))
+    return path
 
 
 def fetch() -> dict:

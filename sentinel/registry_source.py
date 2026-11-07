@@ -133,6 +133,14 @@ class RegistrySource:
         self._warn_fallback()
         return self.fallback
 
+    def tdx(self) -> tuple[frozenset[str], tuple[bytes, ...]] | None:
+        """(approved MRTDs, Secure Boot db certificates) from the registry in
+        force, or None if it carries no tdx section. Call after `approved_at`,
+        which decides which registry is in force."""
+        if self.active is None or not self.active.tdx_mrtd:
+            return None
+        return self.active.tdx_mrtd, self.active.tdx_db_certs
+
     def status(self) -> SourceStatus:
         return SourceStatus(
             using_fallback=self.active is None,

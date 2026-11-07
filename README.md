@@ -12,7 +12,7 @@ Sentinel is a Bittensor subnet where AI agents reach real systems through **hard
 
 **Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
 silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 400 tests, CI green on every push.
+independent verification, runs today under 426 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
@@ -76,6 +76,10 @@ one is to evaluate the design and report what breaks.
 - **[Run a validator](docs/validating.md)**. No special hardware; a validator
   checks attestations rather than producing them.
 - **[Subnet facts and the approved measurement](TESTNET.md)**
+
+Outside the subnet, a single customer can run Sentinel in front of their own
+database: **[pilot install](docs/pilot-install.md)**, and
+**[who holds which key](docs/key-custody.md)**.
 
 ## Project history
 

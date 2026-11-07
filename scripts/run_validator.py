@@ -56,6 +56,11 @@ async def one_round(st, args, wallet, evaluator, source) -> None:
     block = int((await st.read("metagraph", netuid=args.netuid))["block"])
     await source.refresh(st)
     evaluator.approved_measurement = source.approved_at(block)
+    # TDX firmware and Secure Boot certificate come from the same registry when
+    # it carries them, so validators agree on those as well as on images.
+    tdx = source.tdx()
+    if tdx is not None:
+        evaluator.tdx_mrtd, evaluator.tdx_db_cert = tdx
 
     miners = await discover_miners(st, args.netuid, exclude_hotkeys=[val_hotkey])
     if not miners:
@@ -176,8 +181,8 @@ if __name__ == "__main__":
                    help="last verified registry, so a restart during an outage "
                         "does not silently fall back to --measurement")
     p.add_argument("--product", default="Milan", help="EPYC product line")
-    # TDX miners are refused until both are given. Approved images still come
-    # from the registry; these say which firmware and which Secure Boot key.
+    # Fallbacks for TDX, used only until the registry carries a tdx section.
+    # Without either source, TDX miners are refused rather than half-checked.
     p.add_argument("--tdx-mrtd", action="append", default=[],
                    help="approved TD firmware measurement (MRTD); repeat for each")
     p.add_argument("--tdx-db-cert",

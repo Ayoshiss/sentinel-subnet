@@ -62,9 +62,13 @@ class FakeSource:
     was handed at startup.
     """
 
-    def __init__(self, approved=frozenset({"ab" * 48})):
+    def __init__(self, approved=frozenset({"ab" * 48}), tdx=None):
         self.approved = approved
         self.refreshed = 0
+        self._tdx = tdx
+
+    def tdx(self):
+        return self._tdx
 
     async def refresh(self, st):
         self.refreshed += 1
@@ -199,3 +203,17 @@ def test_dry_run_scores_but_never_writes(rv, monkeypatch):
     evaluator = SimpleNamespace(evaluate_round=lambda targets: [outcome()])
     asyncio.run(rv.one_round(FakeChain(), args(dry_run=True), WALLET, evaluator, FakeSource()))
     assert spy.calls == []
+
+
+def test_tdx_firmware_and_certificate_also_come_from_the_registry(rv, monkeypatch):
+    """Same reasoning as the image list: flags are the fallback, not the source."""
+    async def fake_discover(st, netuid, exclude_hotkeys=None):
+        return []
+
+    monkeypatch.setattr(rv, "discover_miners", fake_discover)
+    source = FakeSource(tdx=(frozenset({"ef" * 48}), (b"cert",)))
+    evaluator = SimpleNamespace(evaluate_round=lambda t: [], approved_measurement=frozenset(),
+                                tdx_mrtd=frozenset({"00" * 48}), tdx_db_cert=b"flag-cert")
+    asyncio.run(rv.one_round(FakeChain(), args(), WALLET, evaluator, source))
+    assert evaluator.tdx_mrtd == {"ef" * 48}
+    assert evaluator.tdx_db_cert == (b"cert",)

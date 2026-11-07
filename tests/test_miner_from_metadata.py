@@ -32,7 +32,19 @@ def test_the_db_certificate_is_written_to_a_file(tmp_path):
     assert (tmp_path / "db.der").read_bytes() == b"\x00\x01\x02"
 
 
+def test_api_key_digests_are_written_for_non_bittensor_callers(tmp_path):
+    import json
+
+    keys = {"pilot-agent": "ab" * 32, "support": {"digest": "cd" * 32, "scopes": ["support"]}}
+    out = argv({**BASE, "api_keys": keys}, tmp_path)
+    assert out[-2:] == ["--api-keys", str(tmp_path / "api-keys.json")]
+    assert json.loads((tmp_path / "api-keys.json").read_text()) == keys
+
+
 @pytest.mark.parametrize("config, reason", [
+    ({**BASE, "api_keys": {"agent": "not-a-digest"}}, "sha256 digest"),
+    ({**BASE, "api_keys": {}}, "non-empty"),
+    ({**BASE, "api_keys": ["ab" * 32]}, "non-empty"),
     ({**BASE, "allow_any": True}, "unknown keys"),
     ({**BASE, "allow_mock": True}, "unknown keys"),
     ({"hotkey_ss58": "5A"}, "missing"),

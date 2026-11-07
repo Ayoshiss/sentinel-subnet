@@ -36,6 +36,10 @@ from ..mcp import MCPServer, ToolError
 #: Routes that answer without a signature. Liveness only, no state, no secrets.
 PUBLIC_PATHS = frozenset({"/health"})
 
+#: MCP protocol revisions this endpoint speaks, newest first. Only tools are
+#: offered, and their shape has not changed across these.
+MCP_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+
 
 def _tool_allowed(tool: str, scopes: frozenset[str] | None) -> bool:
     """Whether a caller limited to `scopes` may call `tool`.
@@ -198,6 +202,12 @@ class MinerHandler:
                 return self._call(request, caller)
             if request.method == "POST" and request.path == "/challenge":
                 return self._challenge(request, caller)
+            if request.path == "/mcp":
+                if request.method != "POST":
+                    # Streamable HTTP lets a server decline the GET stream; this
+                    # one has nothing to push, so every reply is the POST's body.
+                    return Response(405, {"error": "POST JSON-RPC to /mcp; no event stream is offered"})
+                return self._mcp(request, caller)
             return Response(404, {"error": f"no route for {request.method} {request.path}"})
 
         except http_auth.AuthError as exc:
@@ -303,6 +313,77 @@ class MinerHandler:
             request_id, nonce, lambda: self.mcp.call_tool(tool, arguments)
         )
         return Response(200, {"request_id": request_id, **attested.to_dict()})
+
+    def _mcp(self, request: Request, caller: Identity) -> Response:
+        """The standard MCP endpoint, so an off-the-shelf MCP client can connect.
+
+        JSON-RPC 2.0 over Streamable HTTP, answered with plain JSON. Same
+        authentication and scopes as /tools and /call. Every tool result carries
+        the attestation in `structuredContent`, so a client that ignores it still
+        works and one that checks it can. The attestation nonce comes from
+        `params._meta.nonce` when the caller sends one; otherwise the miner picks
+        it, which still proves which code answered but not that the answer is
+        fresh, so a caller that cares sends its own.
+        """
+        body = request.json()
+        rpc_id = body.get("id")
+        method = body.get("method")
+
+        def ok(result: dict) -> Response:
+            return Response(200, {"jsonrpc": "2.0", "id": rpc_id, "result": result})
+
+        def error(code: int, message: str) -> Response:
+            return Response(200, {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": code, "message": message}})
+
+        if body.get("jsonrpc") != "2.0" or not isinstance(method, str):
+            return error(-32600, "not a JSON-RPC 2.0 request")
+        if "id" not in body:
+            # A notification, e.g. notifications/initialized. Nothing to answer.
+            return Response(202, {})
+        params = body.get("params") or {}
+        if not isinstance(params, dict):
+            return error(-32602, "params must be an object")
+
+        if method == "initialize":
+            requested = params.get("protocolVersion")
+            return ok({
+                "protocolVersion": requested if requested in MCP_VERSIONS else MCP_VERSIONS[0],
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {"name": "sentinel", "version": "0.1"},
+                "instructions": "Every tool result is attested: structuredContent "
+                                "carries the proof of which code produced it and "
+                                "which key server released its credential.",
+            })
+        if method == "ping":
+            return ok({})
+        if method == "tools/list":
+            return ok({"tools": _in_scope(self.mcp.list_tools(), caller.scopes)})
+        if method != "tools/call":
+            return error(-32601, f"method {method!r} is not supported")
+
+        tool = params.get("name")
+        arguments = params.get("arguments") or {}
+        if not isinstance(tool, str) or not tool or not isinstance(arguments, dict):
+            return error(-32602, "tools/call needs a name and object arguments")
+        if not _tool_allowed(tool, caller.scopes):
+            return error(-32602, f"{caller.name!r} is not permitted the {tool!r} scope")
+        meta = params.get("_meta") or {}
+        nonce = meta.get("nonce") if isinstance(meta, dict) else None
+        if not isinstance(nonce, str) or not nonce:
+            nonce = secrets.token_hex(16)
+        request_id = caller.nonce_ns
+        try:
+            attested = self.enclave.run_attested(
+                request_id, nonce, lambda: self.mcp.call_tool(tool, arguments)
+            )
+        except ToolError as exc:
+            return ok({"content": [{"type": "text", "text": str(exc)}], "isError": True})
+        proof = {"request_id": request_id, "nonce": nonce, **attested.to_dict()}
+        return ok({
+            "content": [{"type": "text", "text": json.dumps(proof.get("result"), default=str)}],
+            "structuredContent": proof,
+            "isError": False,
+        })
 
     def _challenge(self, request: Request, caller: Identity) -> Response:
         """Answer a validator's liveness/integrity challenge with an attestation.

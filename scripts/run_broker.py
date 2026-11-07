@@ -21,18 +21,17 @@ process whose launch measurement the broker checked, and only while that
 measurement stays approved. Rotate the secret here and the old image cannot get
 the new one.
 
-What this does NOT fix. The credential crosses the wire in the clear inside TLS,
-and TLS does not protect it from the miner's operator: the client does not pin
-this broker's certificate, so it validates against the guest's trust store, which
-that operator owns, and the launch measurement does not cover the root filesystem
-where that store lives. So an operator who is willing to intercept their own
-guest can still read the credential. Threat register T22 and T23.
+How the credential travels. The broker never sends it in the clear: it seals
+it to a key the enclave made and bound into its attestation, and signs what it
+sends with this broker's identity key (--identity-key). A relay the operator puts
+in the path sees ciphertext, with or without TLS. If the operator points the
+miner at a broker of their own instead, every answer names that broker, so a
+customer checks the fingerprint this script logs at start against the answers.
 
-What the split does buy is that taking the credential is no longer passive. It
-requires deliberate interception rather than reading a local variable, and that
-leaves evidence. Terminate TLS on this box, keep proxies you do not control out of
-the path, and treat --insecure as loopback-only, but do not tell a customer the
-credential is unobtainable, because it is not yet.
+That holds on Intel TDX, where the whole image is measured. On AMD SEV-SNP only
+the firmware is measured, so an operator can change the running code and read
+the credential after it is opened. Threat register T20, T22 and T23. Never tell
+a customer the credential is unobtainable.
 
 Usage, mock chip, both ends on one laptop:
 
