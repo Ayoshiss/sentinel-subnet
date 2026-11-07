@@ -4,6 +4,7 @@
 #
 #     bash image/release.sh build                 # build HEAD on the build VM (~1 hour)
 #     bash image/release.sh sign <keydir>         # sign here, write the disk there
+#     bash image/release.sh write                 # rewrite the disk from the signed build
 #     bash image/release.sh image <name>          # make the GCP image
 #
 # The build VM never sees a private key. It builds the unsigned image from a
@@ -24,6 +25,33 @@ remote_out=/build/sentinel/image/mkosi.output
 
 ssh_builder() { gcloud compute ssh "$BUILDER" --zone="$ZONE" --quiet --command="$1"; }
 
+# Attach the output disk under its own name, so /dev/disk/by-id/google-$OUT_DISK
+# is that disk. Under another device name the path does not exist, and dd would
+# write an ordinary file in /dev and report success.
+attach_out() {
+  if gcloud compute instances describe "$BUILDER" --zone="$ZONE" \
+       --format='value(disks[].deviceName)' | tr ';' '\n' | grep -qx "$OUT_DISK"; then
+    return
+  fi
+  if gcloud compute instances describe "$BUILDER" --zone="$ZONE" \
+       --format='value(disks[].source)' | grep -q "/$OUT_DISK"; then
+    gcloud compute instances detach-disk "$BUILDER" --disk="$OUT_DISK" --zone="$ZONE" --quiet
+  fi
+  gcloud compute instances attach-disk "$BUILDER" --disk="$OUT_DISK" --device-name="$OUT_DISK" --zone="$ZONE"
+}
+
+# Write the signed raw image to the output disk, then read the boot file back
+# from the disk and compare it with the signed one.
+write_out() {
+  ssh_builder "sudo sh -c 'set -e; dev=/dev/disk/by-id/google-$OUT_DISK; out=/build/sentinel/image/mkosi.output; \
+    [ -b \$dev ] || { echo \$dev is not a block device >&2; exit 1; }; \
+    dd if=\$out/sentinel-miner.raw of=\$dev bs=4M conv=fsync status=none; sync; \
+    blockdev --rereadpt \$dev; udevadm settle; \
+    mcopy -n -i \${dev}-part1 ::/EFI/BOOT/BOOTX64.EFI /tmp/readback.efi; \
+    cmp /tmp/readback.efi \$out/sentinel-miner.signed.efi; rm /tmp/readback.efi; \
+    echo the disk holds the signed boot file'"
+}
+
 digest_of() { python3 "$repo/scripts/tdx_eventlog.py" image "$1" | head -1 | awk '{print $NF}'; }
 
 cmd=${1:-}
@@ -36,10 +64,7 @@ build)
   commit=$(git -C "$repo" rev-parse HEAD)
   tarball=$(mktemp -t sentinel-release).tgz
   git -C "$repo" archive --format=tar.gz -o "$tarball" HEAD
-  if ! gcloud compute instances describe "$BUILDER" --zone="$ZONE" \
-       --format='value(disks[].source)' | grep -q "/$OUT_DISK"; then
-    gcloud compute instances attach-disk "$BUILDER" --disk="$OUT_DISK" --zone="$ZONE"
-  fi
+  attach_out
   gcloud compute instances start "$BUILDER" --zone="$ZONE" --quiet
   # A VM that has just started takes a minute or two before it accepts SSH.
   sent=
@@ -62,6 +87,7 @@ build)
 sign)
   keys=${2:?directory holding db.key and db.crt}
   work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+  attach_out
   gcloud compute instances start "$BUILDER" --zone="$ZONE" --quiet
   sleep 30
   gcloud compute scp --zone="$ZONE" --quiet "$BUILDER:$remote_out/sentinel-miner.efi" "$work/unsigned.efi"
@@ -76,10 +102,17 @@ sign)
   fi
   osslsigncode verify -CAfile "$keys/db.crt" -in "$work/signed.efi" >/dev/null
   gcloud compute scp --zone="$ZONE" --quiet "$work/signed.efi" "$BUILDER:/tmp/sentinel-miner.signed.efi"
-  ssh_builder "sudo sh -c 'set -e; cd /build/sentinel/image; bash sign.sh /tmp/sentinel-miner.signed.efi; \
-    dd if=mkosi.output/sentinel-miner.raw of=/dev/disk/by-id/google-$OUT_DISK bs=4M conv=fsync status=none; sync'"
+  ssh_builder "sudo sh -c 'set -e; cd /build/sentinel/image; bash sign.sh /tmp/sentinel-miner.signed.efi'"
+  write_out
   echo "signed and written. approved digest: $after"
   echo "commit: $(ssh_builder 'cat /build/sentinel/COMMIT')"
+  ;;
+write)
+  # Write an already signed build to the disk again, no key needed.
+  attach_out
+  gcloud compute instances start "$BUILDER" --zone="$ZONE" --quiet
+  sleep 30
+  write_out
   ;;
 image)
   name=${2:?image name, e.g. sentinel-miner-v1}
@@ -93,6 +126,6 @@ image)
   echo "image $name ready. Boot it with --confidential-compute-type=TDX --shielded-secure-boot."
   ;;
 *)
-  sed -n '3,9p' "$0"; exit 2
+  sed -n '3,10p' "$0"; exit 2
   ;;
 esac
