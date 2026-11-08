@@ -59,6 +59,9 @@ def main(argv=None) -> int:
                    help="accept a miner serving plain http (testing only)")
     p.add_argument("--registry", default=str(ROOT / "measurements.json"),
                    help="registry file with the approved image, firmware and certificate")
+    p.add_argument("--scope",
+                   help="the scope to probe, as given to the key server; checks with SELECT 1 "
+                        "through the <scope>.query tool (default: the unscoped postgres.query)")
     p.add_argument("--key-file", default="~/.config/sentinel/checking-key",
                    help="where the local checking key lives")
     args = p.parse_args(argv)
@@ -84,6 +87,8 @@ def main(argv=None) -> int:
         tdx_mrtd=registry.tdx_mrtd, tdx_db_cert=registry.tdx_db_certs,
         expected_broker=args.expected_broker.lower(),
         require_tls=not args.allow_plain, ca_file=args.ca,
+        probe_tool=f"{args.scope}.query" if args.scope else "postgres.query",
+        probe_arguments={"sql": "SELECT 1"},
     )
     (outcome,) = evaluator.evaluate_round(
         [MinerTarget(uid=0, hotkey_ss58=args.miner_hotkey, base_url=args.url.rstrip("/"))]

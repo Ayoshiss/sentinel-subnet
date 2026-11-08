@@ -87,7 +87,36 @@ def test_full_attested_flow_against_real_db():
             verifier_from_public_key(enclave.public_key_hex),
             approved_measurement=APPROVED,
             expected_nonce=nonce,
-            expected_report_data=bind_response(request_id, attested.response_hash),
+            expected_report_data=bind_response(
+                request_id, attested.response_hash, attested.broker, attested.tls
+            ),
         )
     finally:
         db.close()
+
+
+def test_a_failed_query_does_not_break_the_next(live_db):
+    """Found in the first pilot rehearsal: a query the role was refused left the
+    connection in an aborted transaction, and every later query failed with it."""
+    from sentinel.database import QueryError
+
+    with pytest.raises(QueryError):
+        live_db.query("SELECT * FROM no_such_table")
+    assert live_db.query("SELECT 1 AS ok").rows == [[1]]
+
+
+def test_no_transaction_is_left_open(live_db):
+    """An open transaction holds locks and an old snapshot on the customer's
+    database for as long as the miner runs."""
+    from psycopg.pq import TransactionStatus
+
+    live_db.query("SELECT 1")
+    assert live_db._conn.info.transaction_status == TransactionStatus.IDLE
+
+
+def test_the_engine_still_refuses_writes_after_a_rollback(live_db):
+    from sentinel.database import QueryError
+
+    for _ in range(2):
+        with pytest.raises(QueryError, match="read-only transaction"):
+            live_db.query("CREATE TEMP TABLE should_not_exist (id int)")

@@ -106,9 +106,11 @@ own random value as `params._meta.nonce`.
 ```bash
 .venv/bin/python scripts/check_miner.py \
   --url https://<sentinel host>:8091 --miner-hotkey <from /health> \
-  --expected-broker <your fingerprint> --ca /etc/sentinel/tls-ca/ca.crt
+  --expected-broker <your fingerprint> --ca /etc/sentinel/tls-ca/ca.crt \
+  --scope analytics
 ```
 
+`--scope` is one of the scope names from step 3; the check runs `SELECT 1` through it.
 The first run prints a local address to add to the miner's allow list. After
 that, exit status 0 means: genuine Intel TDX, the approved image and firmware,
 Secure Boot under the approved certificate, answers that name your key

@@ -228,10 +228,16 @@ class PostgresDatabase:
                 "(pip install 'psycopg[binary]')"
             ) from exc
 
+        import threading
+
         import psycopg
 
         self.credentials = credentials
         self.closed = False
+        # One connection, shared by the server's request threads. Each query
+        # runs in its own transaction, ended before the lock is released, so
+        # one caller's rollback never lands in another caller's transaction.
+        self._lock = threading.Lock()
         try:
             self._conn = psycopg.connect(credentials.dsn, connect_timeout=connect_timeout)
         except Exception as exc:
@@ -259,18 +265,31 @@ class PostgresDatabase:
     def query(self, sql: str, params: Sequence[Any] = ()) -> QueryResult:
         if self.closed:
             raise QueryError("query on a closed database")
-        try:
-            with self._conn.cursor() as cur:
-                cur.execute(sql, tuple(params) or None)
-                if cur.description is None:  # non-SELECT
-                    return QueryResult(columns=[], rows=[])
-                columns = [d[0] for d in cur.description]
-                rows = [list(r) for r in cur.fetchall()]
-                return QueryResult(columns=columns, rows=rows)
-        except Exception as exc:
-            raise QueryError(f"query failed: {exc}") from exc
+        with self._lock:
+            try:
+                with self._conn.cursor() as cur:
+                    cur.execute(sql, tuple(params) or None)
+                    if cur.description is None:  # non-SELECT
+                        return QueryResult(columns=[], rows=[])
+                    columns = [d[0] for d in cur.description]
+                    rows = [list(r) for r in cur.fetchall()]
+                    return QueryResult(columns=columns, rows=rows)
+            except Exception as exc:
+                raise QueryError(f"query failed: {exc}") from exc
+            finally:
+                # End the transaction every time. Left open, a failed query
+                # aborts it and every later query is refused until restart,
+                # and a successful one holds a snapshot on the customer's
+                # database indefinitely. Nothing is ever written, so there is
+                # nothing to commit. The session stays read-only: that is a
+                # connection setting, applied again to each new transaction.
+                try:
+                    self._conn.rollback()
+                except Exception:  # noqa: BLE001 - a dead connection fails the next query
+                    pass
 
     def close(self) -> None:
         if not self.closed:
-            self._conn.close()
+            with self._lock:
+                self._conn.close()
             self.closed = True

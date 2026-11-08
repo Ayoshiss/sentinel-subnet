@@ -105,6 +105,8 @@ class MinerEvaluator:
         expected_broker: str | None = None,
         require_tls: bool = False,
         ca_file: str | None = None,
+        probe_tool: str = PROBE_TOOL,
+        probe_arguments: Mapping[str, Any] | None = None,
     ) -> None:
         self.wallet = wallet
         #: One value or many. The measurement covers host firmware as well as
@@ -137,6 +139,11 @@ class MinerEvaluator:
         #: yet, so miners that predate it keep scoring.
         self.require_tls = require_tls
         self.ca_file = ca_file
+        #: The subnet probes the shared test database. A customer's miner has
+        #: no such table and names its tool for a scope, so a customer's check
+        #: probes their own scope instead.
+        self.probe_tool = probe_tool
+        self.probe_arguments = dict(probe_arguments or PROBE_ARGUMENTS)
         self.min_tcb = min_tcb
         self.latency_target_ms = latency_target_ms
         self.latency_ceiling_ms = latency_ceiling_ms
@@ -225,7 +232,7 @@ class MinerEvaluator:
 
             nonce = new_nonce()
             request_id = f"probe-{nonce[:12]}"
-            response = client.call_full(PROBE_TOOL, PROBE_ARGUMENTS, nonce, request_id=request_id)
+            response = client.call_full(self.probe_tool, self.probe_arguments, nonce, request_id=request_id)
         except MinerClientError as exc:
             outcome.error = str(exc)
             return outcome

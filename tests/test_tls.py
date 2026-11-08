@@ -120,7 +120,7 @@ def test_make_ca_will_not_overwrite(ca_dir):
 
 # -- serving -------------------------------------------------------------------
 
-def tls_miner(broker, *, serve_with=None, plain=False):
+def tls_miner(broker, *, serve_with=None, plain=False, scope=None):
     """A running miner. `serve_with` serves under a different TLS key than the
     enclave's, as a terminating proxy would; `plain` serves http."""
     enclave = enclave_for(broker)
@@ -128,7 +128,9 @@ def tls_miner(broker, *, serve_with=None, plain=False):
     if not enclave.tls.certificate_pem:
         enclave.tls.self_sign()
     mcp = MCPServer()
-    mcp.register(PostgresQueryTool(MockDatabase(credentials, columns=["id", "email", "plan"], rows=ROWS)))
+    mcp.register(PostgresQueryTool(
+        MockDatabase(credentials, columns=["id", "email", "plan"], rows=ROWS), scope=scope,
+    ))
     hotkey = Keypair.create_from_uri(f"//Miner{id(enclave)}")
     handler = MinerHandler(enclave, mcp, hotkey_ss58=hotkey.ss58_address)
     context = None if plain else (serve_with or enclave.tls).server_context()
@@ -154,6 +156,20 @@ def test_an_agent_trusting_the_customer_ca_is_verified(ca_dir):
     finally:
         server.shutdown()
     assert outcome.verified, outcome.error
+
+
+def test_a_customer_check_probes_its_own_scope(ca_dir):
+    """A pilot's tool is named for its scope. Found in the first pilot rehearsal:
+    the check asked for postgres.query and the miner, rightly, had none."""
+    server, target, _ = tls_miner(broker_with_ca(ca_dir), scope="ledger")
+    try:
+        default = check(target, ca_file=str(ca_dir / "ca.crt"))
+        scoped = check(target, ca_file=str(ca_dir / "ca.crt"), probe_tool="ledger.query",
+                       probe_arguments={"sql": "SELECT 1"})
+    finally:
+        server.shutdown()
+    assert not default.verified and "unknown tool" in default.error
+    assert scoped.verified, scoped.error
 
 
 def test_without_a_ca_the_key_is_pinned_by_the_proof():
