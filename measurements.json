@@ -1,6 +1,14 @@
 {
   "measurements": [
     {
+      "image": "sentinel-miner-v3",
+      "machine_type": "c3-standard-4",
+      "measurement": "2b5cf22c4f65e0f319eef34da11685e421fbd82dc31e9cee06df4c3f962843b05e65fd82cc65fcf2d4bb0784a98f3e7b",
+      "note": "Postgres sessions end every query, so one refused query no longer breaks the next; built from commit 5c24685; Authenticode SHA-384 of the UKI, the same on any host",
+      "observed_in": "us-central1-a",
+      "platform": "gcp-tdx"
+    },
+    {
       "image": "sentinel-miner-v2",
       "machine_type": "c3-standard-4",
       "measurement": "08193cb8f85aa3c9b672a30b99ea36bd02ff6b0796b52175e59cb54e73bb28092b3649d4646cbb93e553af4ea5de6ac8",
