@@ -1,0 +1,5 @@
+python[452]: 2026-11-08 06:33:50,368 INFO    sentinel.miner: Intel TDX guest detected, platform TDX-d782475802da90aa
+python[452]: 2026-11-08 06:33:50,369 INFO    sentinel.miner: brokering to http://10.128.0.43:8100; this host stores no credential for customer-db
+python[452]: 2026-11-08 06:33:50,711 INFO    sentinel.miner: credential released to the enclave for 'customer-db', sealed, by broker 26b2f9c4425d76df3ba409ba72e8ee1e133c9b1ca6d13ea5ae46b7189bfcbb1e
+python[452]: 2026-11-08 06:34:00,745 INFO    sentinel.miner: TLS certificate issued by the broker for key 9743e342b2608245b461444f853660b5b9bb98e99eebd77be89eeb8004917893
+python[452]: 2026-11-08 06:34:00,748 INFO    sentinel.miner: miner serving https on 0.0.0.0:8091  chip=TDX-d782475802da90aa  hotkey=5C86Dk6nSfQHm7uiarLBKrNGXgjLjCNprpyR3rZA86TCcoNN

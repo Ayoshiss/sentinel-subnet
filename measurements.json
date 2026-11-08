@@ -1,6 +1,14 @@
 {
   "measurements": [
     {
+      "image": "sentinel-miner-v2",
+      "machine_type": "c3-standard-4",
+      "measurement": "08193cb8f85aa3c9b672a30b99ea36bd02ff6b0796b52175e59cb54e73bb28092b3649d4646cbb93e553af4ea5de6ac8",
+      "note": "TLS inside the enclave (T25), built from commit a1587cd; Authenticode SHA-384 of the UKI, the same on any host",
+      "observed_in": "us-central1-a",
+      "platform": "gcp-tdx"
+    },
+    {
       "image": "sentinel-miner-v1",
       "machine_type": "c3-standard-4",
       "measurement": "6c9362d3bd45f7a91d2b6111a90e8ec22d54a65b81b92213e81523b0f0b13174cd7b6d0945b2b0a3849a075c6511b0c1",

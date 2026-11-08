@@ -806,3 +806,52 @@ tested on sockets in `tests/test_sealing.py`.
   acceptable is the customer's call, by fingerprint.
 - **Still not covered:** exfiltration by approved code (now readable in a
   reproducible image), the production key custody, and deployment.
+
+## TLS that ends inside the enclave, on GCP TDX, 2026-11-08
+
+T25: the credential was sealed to the enclave, but the miner served plain
+HTTP, so the agent's API key and every query result crossed the network
+readable, including by whoever runs the machine. TLS in front of the miner does
+not fix it, since the operator would hold that key.
+
+**What changed.** The enclave generates a TLS key in memory and binds its
+fingerprint into the attestation it sends the key server, next to the sealing
+key. A key server started with `--tls-ca` checks the attestation as before and
+signs a certificate for that key with the customer's own CA, and refuses an
+enclave that sends no TLS key (`sentinel/tls.py`). Every answer's proof names the
+TLS key it was served under. `check_miner.py` requires https and refuses a
+connection that did not meet that key. The measured image always serves TLS;
+metadata cannot turn it off.
+
+**Setup.** Release `sentinel-miner-v2`, built from commit `a1587cd`
+(UKI `08193cb8…`), signed with the production db key, booted on TDX under
+Secure Boot. The customer's key server on a separate VM, approving only that
+image and firmware, with a fresh CA. The agent ran on the key server's VM and
+called the miner by its internal host name, with every packet on port 8091
+recorded. Evidence in `docs/evidence/tdx-tls-2026-11-08/`; the attacks are also
+tested on sockets in `tests/test_tls.py`.
+
+| Test | Result |
+|---|---|
+| Miner unlocks and gets its certificate | Credential released sealed; certificate issued for key `9743e342…`; serving https |
+| MCP call, agent trusting only the customer CA | Answered, `isError` false. Proof names TLS key `9743e342…`, broker `26b2f9c4…`, our nonce |
+| Key the connection met (`openssl s_client`) | `9743e342…`, the same key the proof names. TLS 1.3, AES-256-GCM, verify OK |
+| Agent trusting only public CAs | Refused: unable to get local issuer certificate |
+| Plain http to the miner | Empty reply |
+| `check_miner.py --ca`, expecting our key server | Verified, attestation 1.0, correctness 1.0 |
+| `check_miner.py` expecting another key server | Refused: answered from broker `26b2f9c4…`, not ours |
+| Recording of the MCP call, searched for the API key, the query, the result rows, `Bearer`, the nonce | **0 matches each** (21,919 bytes recorded) |
+
+The first boot found a bug the socket tests did not: the key server put the host
+name in the certificate's common name, which is capped at 64 characters, and
+GCP's internal names are longer. Fixed in `3a8fa3c` on the key server only; the
+image did not change.
+
+### Honest limits
+
+- **The agent has to trust only the customer's CA.** An agent that accepts any
+  certificate, or a public CA, can be pointed at a machine the operator runs.
+  `check_miner.py` checks the key against the proof regardless.
+- **Hosted agent platforms** that only trust public CAs cannot use this yet.
+- **The recording is not published**, because the host name in it carries our
+  cloud project ID. The counts above come from it.

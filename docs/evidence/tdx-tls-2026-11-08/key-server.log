@@ -1,0 +1,3 @@
+2026-11-08 06:33:43,984 INFO broker fingerprint 26b2f9c4425d76df3ba409ba72e8ee1e133c9b1ca6d13ea5ae46b7189bfcbb1e: every answer from a miner using this broker names it
+2026-11-08 06:33:43,989 INFO issuing enclave TLS certificates for sentinel-smoke-miner.us-central1-a.c.<project>.internal; agents trust ~/tls-ca/ca.crt
+2026-11-08 06:33:50,691 INFO released 'customer-db' to an attested enclave, sealed
