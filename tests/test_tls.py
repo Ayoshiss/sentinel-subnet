@@ -71,6 +71,17 @@ def test_an_attested_enclave_gets_a_certificate_for_its_own_key(ca_dir):
     assert [str(ip) for ip in san.get_values_for_type(x509.IPAddress)] == ["10.0.0.5"]
 
 
+def test_a_host_name_longer_than_a_common_name_allows(ca_dir):
+    """GCP internal names run past 64 characters. Found on the first TDX run."""
+    name = "sentinel-smoke-miner.us-central1-a.c.example-project-0000-0000-00000.internal"
+    broker = broker_with_ca(ca_dir, [name])
+    enclave = enclave_for(broker)
+    enclave.unlock(broker, RESOURCE)
+    cert = x509.load_pem_x509_certificate(enclave.tls.certificate_pem.encode())
+    san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    assert san.get_values_for_type(x509.DNSName) == [name]
+
+
 def test_a_broker_with_a_ca_refuses_an_enclave_without_tls(ca_dir):
     broker = broker_with_ca(ca_dir)
     enclave = enclave_for(broker, tls=False)

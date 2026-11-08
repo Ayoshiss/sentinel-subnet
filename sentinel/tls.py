@@ -170,9 +170,11 @@ class TlsIssuer:
         if not isinstance(public_key, ec.EllipticCurvePublicKey):
             raise TlsError("the TLS key must be an EC key")
         now = _dt.datetime.now(_dt.timezone.utc)
+        # Clients match the host against the SAN, not the CN, and a CN is capped
+        # at 64 characters, which cloud internal host names exceed.
         cert = (
             x509.CertificateBuilder()
-            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, self.names[0])]))
+            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "sentinel enclave")]))
             .issuer_name(self.ca_cert.subject)
             .public_key(public_key)
             .serial_number(x509.random_serial_number())
