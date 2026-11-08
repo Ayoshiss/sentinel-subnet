@@ -18,7 +18,7 @@ def argv(config, tmp_path):
 
 
 def test_the_minimum_config_serves_without_a_wallet(tmp_path):
-    assert argv(BASE, tmp_path) == ["--no-chain", "--hotkey-ss58", "5CA3onFp", "--measurement", "c13d7aa6"]
+    assert argv(BASE, tmp_path) == ["--no-chain", "--tls", "--hotkey-ss58", "5CA3onFp", "--measurement", "c13d7aa6"]
 
 
 def test_lists_repeat_and_booleans_add_the_flag(tmp_path):

@@ -129,10 +129,13 @@ class RemoteBroker:
         certificates: dict[str, bytes] | None = None,
         event_log: bytes | None = None,
         enclave_key: str | None = None,
+        tls_key: str | None = None,
     ) -> Credentials | SealedCredential:
         payload: dict = {"resource": resource, "attestation": asdict(report)}
         if enclave_key:
             payload["enclave_key"] = enclave_key
+        if tls_key:
+            payload["tls_key"] = tls_key
         if event_log:
             from .tdx import encode_event_log
 
@@ -276,11 +279,15 @@ class BrokerHandler:
             enclave_key = payload.get("enclave_key")
             if enclave_key is not None and not isinstance(enclave_key, str):
                 return Response(400, {"error": "enclave_key must be a hex string"})
+            tls_key = payload.get("tls_key")
+            if tls_key is not None and not isinstance(tls_key, str):
+                return Response(400, {"error": "tls_key must be a hex string"})
             try:
                 credentials = self.broker.release(
                     resource, report, certificates,
                     **({"event_log": event_log} if event_log else {}),
                     enclave_key=enclave_key or None,
+                    tls_key=tls_key or None,
                 )
             except CredentialReleaseError as exc:
                 # 403, not 500: the request was well formed and the answer is no.

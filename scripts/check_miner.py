@@ -4,7 +4,8 @@ Check a Sentinel endpoint the way a customer should: is it running an approved
 image, on genuine Intel TDX, and answering from MY key server?
 
     python scripts/check_miner.py --url https://sentinel.example:8091 \
-        --miner-hotkey 5... --expected-broker <fingerprint from run_broker.py>
+        --miner-hotkey 5... --expected-broker <fingerprint from run_broker.py> \
+        --ca <the key server's --tls-ca directory>/ca.crt
 
 The first run creates a checking key in --key-file and prints its address. Add
 that address to the miner's `allow_hotkey` list, so the miner answers this
@@ -13,6 +14,11 @@ check. It is a local key, never registered anywhere.
 Approved images, TD firmware and the Secure Boot certificate come from the
 registry file (measurements.json from the repo by default), so this checks the
 same values the subnet's validators do. Exit status 0 means verified.
+
+The connection must be https, and the TLS key it meets must be the one the
+chip-signed proof names, so the encryption is shown to end inside the enclave.
+With --ca the certificate must also come from your key server's CA, which is
+what your agent relies on.
 """
 
 from __future__ import annotations
@@ -48,11 +54,17 @@ def main(argv=None) -> int:
     p.add_argument("--miner-hotkey", required=True, help="the miner's hotkey address")
     p.add_argument("--expected-broker", required=True,
                    help="your key server's fingerprint, as run_broker.py logs it at start")
+    p.add_argument("--ca", help="your key server's CA certificate (DIR/ca.crt from --tls-ca)")
+    p.add_argument("--allow-plain", action="store_true",
+                   help="accept a miner serving plain http (testing only)")
     p.add_argument("--registry", default=str(ROOT / "measurements.json"),
                    help="registry file with the approved image, firmware and certificate")
     p.add_argument("--key-file", default="~/.config/sentinel/checking-key",
                    help="where the local checking key lives")
     args = p.parse_args(argv)
+    if not args.url.startswith("https://") and not args.allow_plain:
+        p.error("the URL must be https: over http your API key and results cross the "
+                "network readable (--allow-plain to test anyway)")
 
     from sentinel.registry import RegistryError, parse
     from sentinel.validating import MinerEvaluator, MinerTarget
@@ -71,6 +83,7 @@ def main(argv=None) -> int:
         key, registry.measurements,
         tdx_mrtd=registry.tdx_mrtd, tdx_db_cert=registry.tdx_db_certs,
         expected_broker=args.expected_broker.lower(),
+        require_tls=not args.allow_plain, ca_file=args.ca,
     )
     (outcome,) = evaluator.evaluate_round(
         [MinerTarget(uid=0, hotkey_ss58=args.miner_hotkey, base_url=args.url.rstrip("/"))]

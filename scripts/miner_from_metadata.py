@@ -73,8 +73,10 @@ def argv_from(config: dict, cert_path: pathlib.Path) -> list[str]:
     if missing:
         raise ConfigError(f"missing {missing}")
 
-    # The image never publishes to chain itself: it holds no wallet.
-    argv = ["--no-chain"]
+    # The image never publishes to chain itself: it holds no wallet. TLS is not
+    # an option here: the operator writes the metadata, and must not be able to
+    # make the miner serve API keys and results in the clear.
+    argv = ["--no-chain", "--tls"]
     for key, value in config.items():
         kind, flag = FIELDS[key]
         if kind is bool:

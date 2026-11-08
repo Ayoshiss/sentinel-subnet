@@ -47,9 +47,14 @@ class AttestedResponse:
     #: Fingerprint of the broker whose credential this enclave holds, bound
     #: into the attestation. Empty when the enclave has unlocked nothing.
     broker: str = ""
+    #: Fingerprint of the TLS key this enclave serves under, bound into the
+    #: attestation. Empty when it serves plain HTTP.
+    tls: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         extra = {"broker": self.broker} if self.broker else {}
+        if self.tls:
+            extra["tls"] = self.tls
         return {**extra,
             "result": self.result,
             "attestation": {
@@ -72,6 +77,7 @@ class Enclave:
         silicon: Silicon,
         launch_measurement: str,
         tcb_level: int = 7,
+        tls: bool = False,
     ) -> None:
         self.silicon = silicon
         self.launch_measurement = launch_measurement
@@ -83,6 +89,13 @@ class Enclave:
         #: The broker every credential came from. One per enclave, so every
         #: answer can name it without ambiguity.
         self.broker_fingerprint = ""
+        #: TLS key generated here, so the connection to the agent ends inside
+        #: the enclave rather than at something the operator runs.
+        self.tls = None
+        if tls:
+            from .tls import EnclaveTls
+
+            self.tls = EnclaveTls()
 
     @property
     def chip_id(self) -> str:
@@ -104,7 +117,10 @@ class Enclave:
         nonce = broker.challenge()
         # The attestation binds the resource and the key the credential is to
         # be sealed to, so a relay cannot swap in a key of its own.
-        report = self.agent.attest(nonce, release_binding(resource, self._key.public_hex))
+        tls_fp = self.tls.fingerprint if self.tls else ""
+        report = self.agent.attest(
+            nonce, release_binding(resource, self._key.public_hex, tls_fp)
+        )
         # The certificates travel with the report. A broker on another machine
         # cannot read this host's certificate store, and should not have to:
         # AMD's root is pinned on the broker side, so supplying the chain lets
@@ -113,6 +129,8 @@ class Enclave:
         # TDX sends its firmware event log the same way, for the same reason.
         event_log = getattr(self.silicon, "event_log", None)
         extra = {"event_log": event_log} if event_log else {}
+        if self.tls:
+            extra["tls_key"] = self.tls.spki.hex()
         sealed = broker.release(
             resource, report, getattr(self.silicon, "certificates", None),
             enclave_key=self._key.public_hex, **extra,
@@ -128,6 +146,13 @@ class Enclave:
                 "a second broker answered; one enclave takes credentials from one broker"
             )
         self.broker_fingerprint = broker_fingerprint
+        if self.tls and sealed.tls_certificate:
+            from .tls import TlsError
+
+            try:
+                self.tls.accept(sealed.tls_certificate)
+            except TlsError as exc:
+                raise CredentialReleaseError(f"the broker's TLS certificate: {exc}") from exc
         credentials = Credentials(dsn=dsn, resource=resource)
         self._credentials[resource] = credentials
         return credentials
@@ -141,12 +166,13 @@ class Enclave:
     def attest_result(self, request_id: str, result: Any, nonce: str) -> AttestedResponse:
         """Bind `result` into a fresh report so it cannot be altered in transit."""
         response_hash = sha384(canonical(result))
+        tls_fp = self.tls.fingerprint if self.tls else ""
         report = self.agent.attest(
-            nonce, bind_response(request_id, response_hash, self.broker_fingerprint)
+            nonce, bind_response(request_id, response_hash, self.broker_fingerprint, tls_fp)
         )
         return AttestedResponse(
             result=result, attestation=report, response_hash=response_hash,
-            broker=self.broker_fingerprint,
+            broker=self.broker_fingerprint, tls=tls_fp,
         )
 
     def run_attested(

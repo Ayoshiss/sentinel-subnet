@@ -13,10 +13,11 @@ attestation" should never be a hidden detail.
 
 from __future__ import annotations
 
+import http.client
 import json
+import ssl
 import time
-import urllib.error
-import urllib.request
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -39,6 +40,10 @@ class MinerResponse:
     payload: dict[str, Any]
     headers: dict[str, str] = field(default_factory=dict)
     latency_ms: float = 0.0
+    #: Fingerprint of the TLS key the server presented, empty over plain HTTP.
+    #: Compared with the one the proof names, it shows whether the connection
+    #: ended inside the attested enclave.
+    peer_tls: str = ""
 
     def header(self, name: str) -> str:
         """Case-insensitive header lookup."""
@@ -52,11 +57,17 @@ class MinerResponse:
 class MinerClient:
     """Talks to one miner at `base_url`, signing as `wallet`'s hotkey."""
 
-    def __init__(self, base_url: str, wallet: Any, miner_hotkey_ss58: str, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str, wallet: Any, miner_hotkey_ss58: str, timeout: float = 30.0,
+                 ca_file: str | None = None) -> None:
+        """Over https, `ca_file` makes the client require a certificate from that
+        CA (the customer's key server CA). Without it the certificate is not
+        checked against any CA; the caller compares `peer_tls` with the proof.
+        """
         self.base_url = base_url.rstrip("/")
         self.wallet = wallet
         self.miner_hotkey_ss58 = miner_hotkey_ss58
         self.timeout = timeout
+        self.ca_file = ca_file
 
     # -- routes ---------------------------------------------------------------
 
@@ -122,22 +133,51 @@ class MinerClient:
                 )
             )
 
-        req = urllib.request.Request(f"{self.base_url}{path}", data=body or None, headers=headers, method=method)
+        url = urllib.parse.urlsplit(self.base_url)
+        if url.scheme == "https":
+            if self.ca_file:
+                context = ssl.create_default_context(cafile=self.ca_file)
+            else:
+                # Not trust on first use: the key is checked against the proof,
+                # which the chip signs, by whoever reads `peer_tls`.
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+            conn: http.client.HTTPConnection = http.client.HTTPSConnection(
+                url.hostname, url.port or 443, timeout=self.timeout, context=context
+            )
+        elif url.scheme == "http":
+            conn = http.client.HTTPConnection(url.hostname, url.port or 80, timeout=self.timeout)
+        else:
+            raise MinerClientError(f"unsupported URL {self.base_url}")
         started = time.perf_counter()
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read() or b"{}")
-                return MinerResponse(
-                    payload=data,
-                    headers=dict(resp.headers.items()),
-                    latency_ms=(time.perf_counter() - started) * 1000.0,
-                )
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode(errors="replace")
+            conn.request(method, url.path + path, body=body or None, headers=headers)
+            peer_tls = ""
+            if url.scheme == "https" and conn.sock is not None:
+                from ..tls import cert_fingerprint
+
+                der = conn.sock.getpeercert(binary_form=True)
+                peer_tls = cert_fingerprint(der) if der else ""
+            resp = conn.getresponse()
+            raw = resp.read()
+            latency_ms = (time.perf_counter() - started) * 1000.0
+        except (OSError, http.client.HTTPException) as exc:
+            raise MinerClientError(f"{method} {path} -> unreachable: {exc}") from exc
+        finally:
+            conn.close()
+        if resp.status >= 400:
+            detail = raw.decode(errors="replace")
             try:
                 detail = json.loads(detail).get("error", detail)
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, AttributeError):
                 pass
-            raise MinerClientError(f"{method} {path} -> HTTP {exc.code}: {detail}") from exc
-        except urllib.error.URLError as exc:
-            raise MinerClientError(f"{method} {path} -> unreachable: {exc.reason}") from exc
+            raise MinerClientError(f"{method} {path} -> HTTP {resp.status}: {detail}")
+        try:
+            data = json.loads(raw or b"{}")
+        except json.JSONDecodeError as exc:
+            raise MinerClientError(f"{method} {path} -> not JSON: {exc}") from exc
+        return MinerResponse(
+            payload=data, headers=dict(resp.getheaders()),
+            latency_ms=latency_ms, peer_tls=peer_tls,
+        )

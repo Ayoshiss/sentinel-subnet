@@ -262,6 +262,11 @@ class MinerHandler:
             # Which broker's credential this miner holds. Public, and bound into
             # every answer anyway; here so a customer can check before asking.
             body["broker"] = self.enclave.broker_fingerprint
+        tls = getattr(self.enclave, "tls", None)
+        if tls is not None:
+            # The key this miner serves HTTPS under. Every answer binds it too;
+            # here so a client can see what to expect before it asks.
+            body["tls"] = tls.fingerprint
 
         certificates = getattr(self.enclave.silicon, "certificates", None)
         event_log = getattr(self.enclave.silicon, "event_log", None)

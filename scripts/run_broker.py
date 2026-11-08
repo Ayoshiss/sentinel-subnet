@@ -99,6 +99,14 @@ def parse_args(argv=None):
         help="this broker's signing key, created on first run. Its fingerprint is "
              "what you check miners' answers against, so keep it stable and private.",
     )
+    p.add_argument(
+        "--tls-ca", metavar="DIR",
+        help="issue each approved enclave a TLS certificate from the CA in DIR "
+             "(ca.key, ca.crt; created on first run), and refuse enclaves that "
+             "do not ask for one. Give your agent DIR/ca.crt to trust.",
+    )
+    p.add_argument("--tls-name", action="append", default=[], metavar="HOST",
+                   help="host name or IP the agent uses to reach the miner; repeatable")
     p.add_argument("--bind", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8100)
     return p.parse_args(argv)
@@ -169,6 +177,21 @@ def build_broker(args) -> KeyBroker:
         "broker fingerprint %s: every answer from a miner using this broker names it",
         broker.identity.fingerprint,
     )
+
+    if args.tls_ca or args.tls_name:
+        if not (args.tls_ca and args.tls_name):
+            raise SystemExit("TLS needs both --tls-ca and --tls-name")
+        from sentinel.tls import TlsIssuer, make_ca
+
+        ca_dir = pathlib.Path(args.tls_ca).expanduser()
+        if not (ca_dir / "ca.key").exists():
+            make_ca(ca_dir)
+            logger.info("created a TLS CA in %s", ca_dir)
+        broker.tls_issuer = TlsIssuer.from_dir(ca_dir, args.tls_name)
+        logger.info(
+            "issuing enclave TLS certificates for %s; agents trust %s",
+            ", ".join(args.tls_name), ca_dir / "ca.crt",
+        )
 
     for name, dsn in parse_scopes(args.scope).items():
         broker.store_secret(name, dsn)

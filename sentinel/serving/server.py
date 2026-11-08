@@ -10,6 +10,7 @@ validator's challenge, which is the difference between a low score and no score.
 from __future__ import annotations
 
 import logging
+import ssl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -60,9 +61,35 @@ def _make_request_handler(handler: MinerHandler) -> type[BaseHTTPRequestHandler]
     return _Handler
 
 
-def make_server(handler: MinerHandler, host: str = "127.0.0.1", port: int = 8091) -> ThreadingHTTPServer:
-    """Build (but do not start) a threaded server. Port 0 picks a free one."""
-    return ThreadingHTTPServer((host, port), _make_request_handler(handler))
+class _Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address) -> None:
+        """A client that fails the TLS handshake (plain http, an untrusted CA,
+        a port scan) is routine, not a crash worth a traceback."""
+        import sys
+
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ssl.SSLError, ConnectionError)):
+            logger.debug("%s: %s", client_address[0], exc)
+            return
+        super().handle_error(request, client_address)
+
+
+def make_server(
+    handler: MinerHandler, host: str = "127.0.0.1", port: int = 8091,
+    tls: ssl.SSLContext | None = None,
+) -> ThreadingHTTPServer:
+    """Build (but do not start) a threaded server. Port 0 picks a free one.
+
+    With `tls`, the server speaks HTTPS only. The handshake is deferred to the
+    worker thread, so a client that connects and stalls cannot hold up accept()
+    for everyone else.
+    """
+    server = _Server((host, port), _make_request_handler(handler))
+    if tls is not None:
+        server.socket = tls.wrap_socket(
+            server.socket, server_side=True, do_handshake_on_connect=False
+        )
+    return server
 
 
 def serve(handler: MinerHandler, host: str = "127.0.0.1", port: int = 8091) -> None:

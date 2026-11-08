@@ -71,10 +71,14 @@ class SealedCredential:
     iv: str
     ciphertext: str
     signature: str
+    #: A TLS certificate the broker issued for the enclave's attested key, PEM.
+    #: Outside the signature: it is signed by the customer's CA, and the enclave
+    #: checks it names its own key, so it needs no second seal.
+    tls_certificate: str = ""
 
     def _header(self) -> bytes:
         """Every public field, canonically, for the AEAD and the signature."""
-        fields = {k: v for k, v in asdict(self).items() if k not in ("ciphertext", "signature")}
+        fields = {k: v for k, v in asdict(self).items() if k not in ("ciphertext", "signature", "tls_certificate")}
         return json.dumps(fields, sort_keys=True, separators=(",", ":")).encode()
 
     def _signed(self) -> bytes:
@@ -86,7 +90,8 @@ class SealedCredential:
     @classmethod
     def from_dict(cls, data: dict) -> "SealedCredential":
         try:
-            return cls(**{k: str(data[k]) for k in cls.__dataclass_fields__})
+            required = {k: str(data[k]) for k in cls.__dataclass_fields__ if k != "tls_certificate"}
+            return cls(**required, tls_certificate=str(data.get("tls_certificate") or ""))
         except (KeyError, TypeError) as exc:
             raise SealingError(f"malformed sealed credential: {exc}") from exc
 

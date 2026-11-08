@@ -48,7 +48,7 @@ def new_nonce() -> str:
     return secrets.token_hex(32)
 
 
-def bind_response(request_id: str, response_hash: str, broker: str = "") -> str:
+def bind_response(request_id: str, response_hash: str, broker: str = "", tls: str = "") -> str:
     """Value bound into the report so a proof cannot be reused for other data.
 
     `broker` is the fingerprint of the broker whose credential produced the

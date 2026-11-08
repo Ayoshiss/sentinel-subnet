@@ -103,6 +103,8 @@ class MinerEvaluator:
         tdx_db_cert: bytes | Iterable[bytes] | None = None,
         tdx_collateral: Any = None,
         expected_broker: str | None = None,
+        require_tls: bool = False,
+        ca_file: str | None = None,
     ) -> None:
         self.wallet = wallet
         #: One value or many. The measurement covers host firmware as well as
@@ -131,6 +133,10 @@ class MinerEvaluator:
         #: A customer checking answers sets this to their broker's fingerprint.
         #: A subnet validator leaves it unset: it cannot know every customer.
         self.expected_broker = expected_broker
+        #: A customer requires TLS that ends in the enclave; the subnet does not
+        #: yet, so miners that predate it keep scoring.
+        self.require_tls = require_tls
+        self.ca_file = ca_file
         self.min_tcb = min_tcb
         self.latency_target_ms = latency_target_ms
         self.latency_ceiling_ms = latency_ceiling_ms
@@ -191,10 +197,26 @@ class MinerEvaluator:
 
     def _probe(self, target: MinerTarget) -> ChallengeOutcome:
         outcome = ChallengeOutcome(uid=target.uid, hotkey_ss58=target.hotkey_ss58)
-        client = MinerClient(target.base_url, self.wallet, target.hotkey_ss58, timeout=self.timeout)
+        client = MinerClient(
+            target.base_url, self.wallet, target.hotkey_ss58,
+            timeout=self.timeout, ca_file=self.ca_file,
+        )
 
         try:
-            health = client.health()
+            try:
+                health = client.health()
+            except MinerClientError:
+                # Chain endpoints carry no scheme, so a miner serving TLS from
+                # the enclave is first tried over http and drops the connection.
+                # Try https once. A downgrade gains nothing: an answer whose
+                # proof names a TLS key is refused over plain http below.
+                if not target.base_url.startswith("http://"):
+                    raise
+                client = MinerClient(
+                    "https://" + target.base_url[len("http://"):], self.wallet,
+                    target.hotkey_ss58, timeout=self.timeout, ca_file=self.ca_file,
+                )
+                health = client.health()
             if health.get("attestation") not in ("sev-snp", "tdx"):
                 public_key = health.get("public_key")
                 if not public_key:
@@ -240,7 +262,24 @@ class MinerEvaluator:
         if self.expected_broker is not None and broker != self.expected_broker:
             outcome.error = f"attestation rejected: answered from broker {broker[:16] or 'none'}, not ours"
             return outcome
-        binding = bind_response(request_id, outcome.response_hash or "", broker)
+        # The proof names the TLS key the enclave serves under. Over https it
+        # must be the key this connection actually met, or something between us
+        # and the enclave terminated it. Over plain http a proof naming a key
+        # means the answer was relayed from an https endpoint we never reached.
+        tls = str(payload.get("tls") or "")
+        if response.peer_tls and tls != response.peer_tls:
+            outcome.error = (
+                "attestation rejected: the TLS connection did not end in the enclave "
+                f"(met {response.peer_tls[:16]}, proof names {tls[:16] or 'none'})"
+            )
+            return outcome
+        if not response.peer_tls and tls:
+            outcome.error = "attestation rejected: proof names a TLS key but the answer came over plain http"
+            return outcome
+        if self.require_tls and not response.peer_tls:
+            outcome.error = "TLS required, and the miner answered over plain http"
+            return outcome
+        binding = bind_response(request_id, outcome.response_hash or "", broker, tls)
         try:
             if health.get("attestation") == "sev-snp":
                 self._verify_sevsnp(report, health, binding, expected_nonce=nonce)

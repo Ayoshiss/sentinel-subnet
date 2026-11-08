@@ -347,7 +347,8 @@ def build_miner(args, hotkey_ss58: str):
             "operator of this host holds the secret. Development only."
         )
 
-    enclave = Enclave(silicon, launch_measurement=args.measurement)
+    enclave = Enclave(silicon, launch_measurement=args.measurement,
+                      tls=getattr(args, "tls", False))
     mcp = MCPServer()
     for name in scopes:
         # One attestation per scope, not one for all of them. The report is
@@ -392,7 +393,16 @@ def build_miner(args, hotkey_ss58: str):
         enclave, mcp, hotkey_ss58=hotkey_ss58,
         allowed_hotkeys=allowed, api_keys=api_keys,
     )
-    return make_server(handler, args.bind, args.port), enclave, allowed
+    tls_context = None
+    if enclave.tls is not None:
+        if enclave.tls.certificate_pem:
+            logger.info("TLS certificate issued by the broker for key %s", enclave.tls.fingerprint)
+        else:
+            # No CA vouches for it; clients check the key against each proof.
+            enclave.tls.self_sign()
+            logger.info("TLS self-signed (the broker issues none) for key %s", enclave.tls.fingerprint)
+        tls_context = enclave.tls.server_context()
+    return make_server(handler, args.bind, args.port, tls=tls_context), enclave, allowed
 
 
 DEFAULT_SEED = pathlib.Path(__file__).parent / "miner-seed.sql"
@@ -464,6 +474,9 @@ def main() -> int:
     p.add_argument("--advertise-ip", help="the address validators can reach")
     p.add_argument("--bind", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8091)
+    p.add_argument("--tls", action="store_true",
+                   help="serve HTTPS under a key generated inside the enclave and bound "
+                        "into every proof")
     p.add_argument("--product", default="Milan", help="EPYC product line")
     p.add_argument("--measurement", help="the approved launch measurement, hex; "
                    "on TDX, the UKI's Authenticode SHA-384")
@@ -567,8 +580,8 @@ def main() -> int:
 
     threading.Thread(target=server.serve_forever, daemon=True).start()
     logger.info(
-        "miner serving on %s:%d  chip=%s  hotkey=%s",
-        args.bind, server.server_port, enclave.chip_id, hotkey_ss58,
+        "miner serving %s on %s:%d  chip=%s  hotkey=%s",
+        "https" if enclave.tls else "http", args.bind, server.server_port, enclave.chip_id, hotkey_ss58,
     )
 
     if not args.no_chain:

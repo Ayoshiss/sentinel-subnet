@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import time
 from typing import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from .attestation import (
     AttestationReport,
@@ -63,15 +63,20 @@ class ReleasePolicy:
     allow_plaintext_release: bool = False
 
 
-def release_binding(resource: str, enclave_key: str = "") -> str:
+def release_binding(resource: str, enclave_key: str = "", tls_key: str = "") -> str:
     """The value an enclave must bind into its report to request `resource`.
 
     Ties the proof to one specific secret, so an attestation obtained for the
     analytics database cannot be replayed to unlock the payments database. With
     `enclave_key` it also ties the proof to the key the credential is sealed to,
     so a relay cannot substitute a key of its own: the attestation would no
-    longer match.
+    longer match. `tls_key` (the fingerprint of the enclave's TLS key) does the
+    same for the certificate the broker issues alongside.
     """
+    if tls_key:
+        return bind_response(
+            "kbs-release", sha384(f"{resource}:{enclave_key}:{tls_key}".encode())
+        )
     if enclave_key:
         return bind_response("kbs-release", sha384(f"{resource}:{enclave_key}".encode()))
     return bind_response("kbs-release", sha384(resource.encode()))
@@ -136,6 +141,11 @@ class KeyBroker:
     tdx: object | None = None
     #: Signs every sealed release. Customers recognise their broker by it.
     identity: BrokerIdentity = field(default_factory=BrokerIdentity)
+    #: Issues the enclave's TLS certificate from the customer's CA, a
+    #: `sentinel.tls.TlsIssuer`. Set, it also makes TLS mandatory: an enclave
+    #: that sends no TLS key gets nothing, since its answers would travel in
+    #: the clear.
+    tls_issuer: object | None = None
     _secrets: dict[str, Credentials] = field(default_factory=dict, repr=False)
     _trusted_chips: dict[str, str] = field(default_factory=dict, repr=False)
     _issued_nonces: dict[str, float] = field(default_factory=dict, repr=False)
@@ -171,12 +181,17 @@ class KeyBroker:
         certificates: dict[str, bytes] | None = None,
         event_log: bytes | None = None,
         enclave_key: str | None = None,
+        tls_key: str | None = None,
     ) -> Credentials | SealedCredential:
         """Verify the report and release the credential, or raise.
 
         With `enclave_key`, the credential comes back sealed to it, and the
         report must bind that key. Without one, only a policy that allows
         plaintext release returns anything.
+
+        With `tls_key` (the enclave's TLS public key, DER hex) the report must
+        bind that too, and a broker with a `tls_issuer` returns a certificate for
+        it inside the release.
 
         Order matters: cheap structural checks first, signature last, and the
         secret is only read from storage after every check has passed.
@@ -188,7 +203,20 @@ class KeyBroker:
                 "the enclave sent no key to seal the credential to; this broker "
                 "does not release credentials in the clear"
             )
-        binding = release_binding(resource, enclave_key or "")
+        if self.tls_issuer is not None and not tls_key:
+            raise CredentialReleaseError(
+                "this broker requires TLS inside the enclave, and the enclave sent "
+                "no TLS key"
+            )
+        tls_fingerprint = ""
+        if tls_key:
+            from .tls import TlsError, spki_fingerprint
+
+            try:
+                tls_fingerprint = spki_fingerprint(bytes.fromhex(tls_key))
+            except ValueError as exc:
+                raise CredentialReleaseError("tls_key must be hex") from exc
+        binding = release_binding(resource, enclave_key or "", tls_fingerprint)
 
         # Freshness: the nonce must be one we issued and have not yet spent.
         self._expire_nonces()
@@ -209,12 +237,18 @@ class KeyBroker:
         if not enclave_key:
             return self._secrets[resource]
         try:
-            return self.identity.seal(
+            sealed = self.identity.seal(
                 self._secrets[resource].dsn, enclave_key=enclave_key,
                 resource=resource, nonce=report.nonce,
             )
         except SealingError as exc:
             raise CredentialReleaseError(f"cannot seal to that key: {exc}") from exc
+        if self.tls_issuer is not None:
+            try:
+                sealed = replace(sealed, tls_certificate=self.tls_issuer.issue(tls_key))
+            except TlsError as exc:
+                raise CredentialReleaseError(f"cannot issue a TLS certificate: {exc}") from exc
+        return sealed
 
     # -- internals -------------------------------------------------------------
 
