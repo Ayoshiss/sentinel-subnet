@@ -23,30 +23,6 @@
       "note": "first signed release, built from commit 97f92b3; Authenticode SHA-384 of the UKI, the same on any host",
       "observed_in": "us-central1-a",
       "platform": "gcp-tdx"
-    },
-    {
-      "image": "ubuntu-2204-jammy-v20260826",
-      "machine_type": "n2d-standard-2",
-      "measurement": "e79ebb5b789ddb6b7a9897f663a655a65c69445aa482c4e1a5ff9fdeb4af1a2c8d5d30fcad5f4f0e04f1a13885eb984d",
-      "note": "current Sentinel miner, chip 8A11D3C4, after the 2026-11-03 host change",
-      "observed_in": "us-central1-c",
-      "platform": "gcp"
-    },
-    {
-      "image": "ubuntu-2204-jammy-v20260826",
-      "machine_type": "n2d-standard-2",
-      "measurement": "ccdc5cf01ba25526bd65503d95931b787b4385a3277cfe4448addf9c3e894948ae8cf7b099620e3e22717de2fb5d26fa",
-      "note": "host firmware before the 2026-11-03 rebuild; kept so nothing already on it is refused",
-      "observed_in": "us-central1-c",
-      "platform": "gcp"
-    },
-    {
-      "image": "ubuntu-2204-jammy-v20260826",
-      "machine_type": "n2d-standard-2",
-      "measurement": "2d24cf9624ee36449e50c6c84042540b05898f6559f02741b7b354e0cc2ed18d108352ade7dfc4cecce4fa974e51c773",
-      "note": "earlier host firmware; kept so miners still on it are not refused",
-      "observed_in": "us-central1-a",
-      "platform": "gcp"
     }
   ],
   "netuid": 554,

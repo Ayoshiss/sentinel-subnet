@@ -154,8 +154,13 @@ def test_the_published_registry_parses_and_holds_the_live_measurement():
     """The file is part of the protocol, so a typo in it is an outage."""
     reg = parse(REPO_FILE.read_text())
     assert reg.netuid == 554
-    live = "ccdc5cf01ba25526bd65503d95931b787b4385a3277cfe4448addf9c3e894948ae8cf7b099620e3e22717de2fb5d26fa"
+    # The subnet runs the newest signed TDX release. AMD entries were dropped
+    # once every miner moved to TDX: on AMD the measurement covers firmware
+    # only, so approving it would let modified miner code pass.
+    live = "2b5cf22c4f65e0f319eef34da11685e421fbd82dc31e9cee06df4c3f962843b05e65fd82cc65fcf2d4bb0784a98f3e7b"
     assert live in reg.measurements
+    assert all(image.platform == "gcp-tdx" for image in reg.images)
+    assert reg.tdx_mrtd
     # Every entry carries the recipe that produced it, so a reader can rebuild
     # that configuration and check the value rather than taking it on trust.
     for image in reg.images:
