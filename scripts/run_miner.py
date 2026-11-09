@@ -375,10 +375,7 @@ def build_miner(args, hotkey_ss58: str):
             "credential released to the enclave for %r, sealed, by broker %s",
             name, enclave.broker_fingerprint,
         )
-        mcp.register(PostgresQueryTool(
-            open_database(credentials, args.seed),
-            scope=None if name == RESOURCE else name,
-        ))
+        mcp.register(open_tool(credentials, name, args.seed))
 
     allowed = resolve_allowlist(args)
 
@@ -406,6 +403,24 @@ def build_miner(args, hotkey_ss58: str):
 
 
 DEFAULT_SEED = pathlib.Path(__file__).parent / "miner-seed.sql"
+
+
+def open_tool(credentials: Credentials, name: str, seed: pathlib.Path | None):
+    """The tool for one released secret: an API key or a database.
+
+    Which one is decided by what the key server released, not by anything on
+    this host, so the operator cannot turn a database scope into an HTTP one
+    or change where an API key is sent.
+    """
+    from sentinel.mcp.tools import HttpRequestTool, is_http_secret, parse_spec
+
+    if is_http_secret(credentials.dsn):
+        if name == RESOURCE:
+            raise SystemExit("an API key scope needs a name: --scope NAME on the miner and the key server")
+        tool = HttpRequestTool(parse_spec(credentials.dsn), scope=name)
+        logger.info("scope %r is an API key for %s", name, tool.spec.base_url)
+        return tool
+    return PostgresQueryTool(open_database(credentials, seed), scope=None if name == RESOURCE else name)
 
 
 def open_database(credentials: Credentials, seed: pathlib.Path | None):

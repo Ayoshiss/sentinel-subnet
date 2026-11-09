@@ -66,9 +66,12 @@ DEFAULT_RESOURCE = "database"
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description="Sentinel key broker (customer side)")
     p.add_argument(
-        "--scope", action="append", default=[], metavar="NAME=DSN",
-        help="a named secret, one per database role. Repeatable. The miner asks "
-             "for these by name and never learns another scope's DSN.",
+        "--scope", action="append", default=[], metavar="NAME=DSN|@FILE",
+        help="a named secret, one per database role or API key. Repeatable. The "
+             "miner asks for these by name and never learns another scope's "
+             "secret. NAME=@FILE reads it from a file, which keeps it out of the "
+             "process list; an API key is a JSON file with \"kind\": \"http\" "
+             "(see sentinel/mcp/tools/http.py).",
     )
     p.add_argument(
         "--measurement", action="append", default=[], metavar="HEX", required=True,
@@ -123,6 +126,24 @@ def parse_scopes(entries: list[str]) -> dict[str, str]:
             raise SystemExit(f"--scope must be NAME=DSN, got {entry!r}")
         if name in scopes:
             raise SystemExit(f"--scope {name!r} given twice")
+        if dsn.startswith("@"):
+            path = pathlib.Path(dsn[1:]).expanduser()
+            try:
+                dsn = path.read_text().strip()
+            except OSError as exc:
+                raise SystemExit(f"--scope {name}: cannot read {path}: {exc.strerror}") from None
+        if dsn.lstrip().startswith("{"):
+            # Checked here, at start, so a typo in the allow list fails now on
+            # the customer's machine, not later inside an enclave nobody can see into.
+            from sentinel.mcp.server import ToolError
+            from sentinel.mcp.tools import parse_spec
+
+            try:
+                spec = parse_spec(dsn)
+            except ToolError as exc:
+                raise SystemExit(f"--scope {name}: {exc}") from None
+            logger.info("scope %r is an API key for %s, %d allowed call(s)",
+                        name, spec.base_url, len(spec.rules))
         scopes[name] = dsn
     return scopes
 

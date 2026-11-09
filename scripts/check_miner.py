@@ -62,6 +62,9 @@ def main(argv=None) -> int:
     p.add_argument("--scope",
                    help="the scope to probe, as given to the key server; checks with SELECT 1 "
                         "through the <scope>.query tool (default: the unscoped postgres.query)")
+    p.add_argument("--probe-path",
+                   help="for an API key scope: an allowed GET path to probe through "
+                        "<scope>.request, e.g. /v1/balance (instead of SELECT 1)")
     p.add_argument("--key-file", default="~/.config/sentinel/checking-key",
                    help="where the local checking key lives")
     args = p.parse_args(argv)
@@ -81,14 +84,22 @@ def main(argv=None) -> int:
         print("the registry has no tdx section, so nothing can be checked on TDX", file=sys.stderr)
         return 2
 
+    if args.probe_path:
+        if not args.scope:
+            p.error("--probe-path needs --scope, the API key scope to probe")
+        probe_tool, probe_arguments = f"{args.scope}.request", {"method": "GET", "path": args.probe_path}
+    else:
+        probe_tool = f"{args.scope}.query" if args.scope else "postgres.query"
+        probe_arguments = {"sql": "SELECT 1"}
+
     key = checking_key(pathlib.Path(args.key_file).expanduser())
     evaluator = MinerEvaluator(
         key, registry.measurements,
         tdx_mrtd=registry.tdx_mrtd, tdx_db_cert=registry.tdx_db_certs,
         expected_broker=args.expected_broker.lower(),
         require_tls=not args.allow_plain, ca_file=args.ca,
-        probe_tool=f"{args.scope}.query" if args.scope else "postgres.query",
-        probe_arguments={"sql": "SELECT 1"},
+        probe_tool=probe_tool,
+        probe_arguments=probe_arguments,
     )
     (outcome,) = evaluator.evaluate_round(
         [MinerTarget(uid=0, hotkey_ss58=args.miner_hotkey, base_url=args.url.rstrip("/"))]

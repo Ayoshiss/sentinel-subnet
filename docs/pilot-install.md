@@ -117,6 +117,48 @@ Secure Boot under the approved certificate, answers that name your key
 server, and an encrypted connection that ends inside the enclave: the TLS key
 the connection met is the one the chip-signed proof names. Run it whenever you like; a scheduled run is a cheap monitor.
 
+## API keys instead of a database
+
+The same key server can hold an API key, such as a Stripe or payment processor
+key, instead of a database password. The agent then calls the API through
+Sentinel: it names a method and a path, and the enclave adds the key and makes
+the call. The key is never returned to the agent; if the API echoes it back,
+it is replaced with `[redacted]`.
+
+Put the key in a file only the key server's user can read, say
+`/etc/sentinel/stripe.json`:
+
+```json
+{
+  "kind": "http",
+  "base_url": "https://api.stripe.com",
+  "auth": {"header": "Authorization", "value": "Bearer sk_live_..."},
+  "allow": [
+    {"method": "GET", "path": "/v1/balance"},
+    {"method": "GET", "path": "/v1/charges/*"}
+  ]
+}
+```
+
+and add it to the key server as a scope read from the file:
+
+```bash
+  --scope stripe=@/etc/sentinel/stripe.json
+```
+
+The agent sees a `stripe.request` tool. The host and the allow list come from
+this file, inside the sealed secret, so the machine's operator cannot send
+the key anywhere else or call anything you did not list. A path ending in
+`/*` allows everything below it; any other path must match exactly. Only the
+methods you list are callable, so list GET only for read access. Redirects are
+never followed and the API's certificate must be valid for a public CA.
+
+To check it in step 6, probe an allowed GET path instead of `SELECT 1`:
+
+```bash
+  --scope stripe --probe-path /v1/balance
+```
+
 ## Changing the password
 
 Change it in the database and in the key server's `--scope`, restart the key
@@ -130,7 +172,8 @@ password on start; the old one is only ever in memory.
   controls. TLS ends inside the enclave only for a client that checks.
 - Query results go to your agent, and from there to whichever AI model it
   uses. Sentinel controls what the agent can reach, not where it sends it.
-- PostgreSQL only, SQL only.
+- PostgreSQL databases and HTTPS APIs with a key in one header. No other
+  databases, and no OAuth flows that refresh tokens.
 - Intel TDX on Google Cloud only. Google's firmware is part of the chain of
   trust.
 - Not yet independently audited.
