@@ -855,3 +855,59 @@ image did not change.
 - **Hosted agent platforms** that only trust public CAs cannot use this yet.
 - **The recording is not published**, because the host name in it carries our
   cloud project ID. The counts above come from it.
+
+## Releases v3 to v5, and a gap in the TLS binding, 2026-11-09 to 2026-11-10
+
+Three signed releases, each built from a commit, signed with the production db
+key, booted on TDX under Secure Boot against a separate key server, and added to
+the on-chain registry.
+
+| Release | Commit | UKI | What it adds |
+|---|---|---|---|
+| `sentinel-miner-v3` | `5c24685` | `2b5cf22c…` | A refused Postgres query no longer breaks the next one. All three miners on 554 run it since 2026-11-09, so the correctness gate has its quorum on TDX |
+| `sentinel-miner-v4` | `96f4137` | `b792b935…` | API keys held in the enclave: a `<scope>.request` tool calls an HTTPS API with a key the operator never sees, limited to the methods and paths the customer's key server lists |
+| `sentinel-miner-v5` | `12c891a` | `33794b17…` | The chip signs the TLS key name, and every answer carries the boot log |
+
+**v4 on hardware.** One miner held a Postgres scope and an API key scope for
+httpbin.org. Calls on the allow list answered; the key was never in a response
+(httpbin echoes request headers, and the Authorization header came back
+`[redacted]`); an agent-supplied Authorization header was replaced by the
+enclave's; an off-list path, a POST and a `..` path were refused before
+anything left the enclave. `check_miner.py` passed on both scopes.
+
+**The gap, found 2026-11-10 while building the browser verifier.** Every answer's
+proof named the TLS key it was served under, but `bind_response` accepted that
+name and left it out of the hash the chip signs. A proxy ending TLS under its own
+key could rename the key in the proof and still pass a validator, and
+`check_miner.py` run without `--ca`. The limit above ("`check_miner.py` checks
+the key against the proof regardless") was therefore not true for v1 to v4.
+An agent trusting only the customer's CA was never exposed: the key server
+certifies only the key the enclave attested, and that binding was always signed.
+A test that reproduces the attack failed on the old code and passes on the new
+(`tests/test_tls.py`). Recorded under T25.
+
+**v5 on hardware.** Same setup as v4. The answer's `report_data` matches the
+binding that includes the TLS key and not the one without it; every answer
+carries the boot log (about 18 KB compressed); the v4 checks above all held;
+`check_miner.py` passed on both scopes without `--accept-unsigned-tls`.
+Evidence in `docs/evidence/tdx-v5-release-2026-11-10/`.
+
+**Checking an answer in a browser.** `web/verify` runs the validator's checks in
+the reader's browser: Intel's signature (Phala's dcap-qvl, the library the
+validator uses), debug off, approved firmware, the boot log replayed to an
+approved release under our Secure Boot key, the answer bound to the chip's
+signature, the customer's key server, the TLS key and the nonce. On the v5
+answer every check passed; changing one character of the signed result failed
+the answer check. Building it found a second, smaller gap: a pasted answer also
+carries a text copy of the result, which the chip does not sign, and the page
+accepted an edited text copy. It now requires the two to match. Tests keep the
+JavaScript and the Python verifier in step (`tests/test_verify_page.py`).
+
+### Honest limits
+
+- **Miners still run v3.** Moving them to v5 needs the validator updated first
+  (the current one does not expect the signed TLS name), then the miners, then
+  v1 to v4 retired from the registry.
+- **The page is not published yet.**
+- **A v1 to v4 proof is accepted only with `--accept-unsigned-tls`,** which
+  exists for that rollout and goes once the miners have moved.
