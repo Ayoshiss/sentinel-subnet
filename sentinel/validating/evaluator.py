@@ -105,6 +105,7 @@ class MinerEvaluator:
         expected_broker: str | None = None,
         require_tls: bool = False,
         ca_file: str | None = None,
+        accept_unsigned_tls: bool = False,
         probe_tool: str = PROBE_TOOL,
         probe_arguments: Mapping[str, Any] | None = None,
     ) -> None:
@@ -139,6 +140,11 @@ class MinerEvaluator:
         #: yet, so miners that predate it keep scoring.
         self.require_tls = require_tls
         self.ca_file = ca_file
+        #: Images before v5 named their TLS key in each proof without the chip
+        #: signing it. Accepting that keeps them scoring while the fleet moves
+        #: to v5; it proves less (only a CA-pinned client is protected), so it
+        #: is off unless asked for, and comes out once v1 to v4 leave the registry.
+        self.accept_unsigned_tls = accept_unsigned_tls
         #: The subnet probes the shared test database. A customer's miner has
         #: no such table and names its tool for a scope, so a customer's check
         #: probes their own scope instead.
@@ -287,6 +293,11 @@ class MinerEvaluator:
             outcome.error = "TLS required, and the miner answered over plain http"
             return outcome
         binding = bind_response(request_id, outcome.response_hash or "", broker, tls)
+        if tls and self.accept_unsigned_tls:
+            unsigned = bind_response(request_id, outcome.response_hash or "", broker)
+            if getattr(report, "report_data", None) == unsigned:
+                logger.warning("%s: TLS key named but not signed (image before v5)", target.hotkey_ss58[:8])
+                binding = unsigned
         try:
             if health.get("attestation") == "sev-snp":
                 self._verify_sevsnp(report, health, binding, expected_nonce=nonce)

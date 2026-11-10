@@ -128,6 +128,7 @@ async def main(args) -> int:
         product=args.product,
         tdx_mrtd=args.tdx_mrtd,
         tdx_db_cert=pathlib.Path(args.tdx_db_cert).read_bytes() if args.tdx_db_cert else None,
+        accept_unsigned_tls=args.accept_unsigned_tls,
     )
     logger.info(
         "validator %s on netuid %d, every %ds",
@@ -185,6 +186,9 @@ if __name__ == "__main__":
     # Without either source, TDX miners are refused rather than half-checked.
     p.add_argument("--tdx-mrtd", action="append", default=[],
                    help="approved TD firmware measurement (MRTD); repeat for each")
+    p.add_argument("--accept-unsigned-tls", action="store_true",
+                   help="while miners move to v5: accept proofs that name their TLS key "
+                        "without the chip signing it (images v1 to v4)")
     p.add_argument("--tdx-db-cert",
                    help="DER certificate in the approved image's Secure Boot db")
     p.add_argument("--interval", type=int, default=DEFAULT_INTERVAL_SECONDS)

@@ -7,6 +7,7 @@ under. These tests run real sockets and check that the ways around it fail:
 
     * a relay that swaps in its own TLS key at release time   -> refused
     * a proxy that terminates TLS with a different key         -> caught
+    * ... and also renames that key in the proof               -> caught (v5)
     * a proof naming a TLS key, delivered over plain http      -> caught
     * an agent trusting a CA other than the customer's         -> no connection
 """
@@ -120,9 +121,25 @@ def test_make_ca_will_not_overwrite(ca_dir):
 
 # -- serving -------------------------------------------------------------------
 
-def tls_miner(broker, *, serve_with=None, plain=False, scope=None):
+class _Rewriting:
+    """A proxy that ends TLS under its own key and renames it in every answer,
+    so the key the client met and the key the proof names agree."""
+
+    def __init__(self, inner, fingerprint):
+        self.inner, self.fingerprint = inner, fingerprint
+
+    def handle(self, request):
+        response = self.inner.handle(request)
+        if "tls" in response.payload:
+            response.payload["tls"] = self.fingerprint
+        return response
+
+
+def tls_miner(broker, *, serve_with=None, plain=False, scope=None, rewrite=False, signed_tls=True):
     """A running miner. `serve_with` serves under a different TLS key than the
-    enclave's, as a terminating proxy would; `plain` serves http."""
+    enclave's, as a terminating proxy would; `rewrite` also renames that key in
+    every answer; `plain` serves http; `signed_tls=False` is an image before v5,
+    which named its TLS key without binding it."""
     enclave = enclave_for(broker)
     credentials = enclave.unlock(broker, RESOURCE)
     if not enclave.tls.certificate_pem:
@@ -132,7 +149,11 @@ def tls_miner(broker, *, serve_with=None, plain=False, scope=None):
         MockDatabase(credentials, columns=["id", "email", "plan"], rows=ROWS), scope=scope,
     ))
     hotkey = Keypair.create_from_uri(f"//Miner{id(enclave)}")
+    if not signed_tls:
+        enclave.attest_result = _unsigned_tls(enclave)
     handler = MinerHandler(enclave, mcp, hotkey_ss58=hotkey.ss58_address)
+    if rewrite:
+        handler = _Rewriting(handler, serve_with.fingerprint)
     context = None if plain else (serve_with or enclave.tls).server_context()
     server = make_server(handler, "127.0.0.1", 0, tls=context)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -140,6 +161,21 @@ def tls_miner(broker, *, serve_with=None, plain=False, scope=None):
     target = MinerTarget(uid=0, hotkey_ss58=hotkey.ss58_address,
                          base_url=f"{scheme}://127.0.0.1:{server.server_port}")
     return server, target, enclave
+
+
+def _unsigned_tls(enclave):
+    """attest_result as images v1 to v4 did it: TLS key named, not bound."""
+    from sentinel.attestation import bind_response
+    from sentinel.database import canonical
+    from sentinel.enclave import AttestedResponse
+
+    def attest_result(request_id, result, nonce):
+        response_hash = sha384(canonical(result))
+        report = enclave.agent.attest(
+            nonce, bind_response(request_id, response_hash, enclave.broker_fingerprint))
+        return AttestedResponse(result=result, attestation=report, response_hash=response_hash,
+                                broker=enclave.broker_fingerprint, tls=enclave.tls.fingerprint)
+    return attest_result
 
 
 def check(target, **kwargs):
@@ -194,6 +230,33 @@ def test_a_proxy_terminating_tls_with_another_key_is_caught(ca_dir):
         server.shutdown()
     assert not outcome.verified
     assert "did not end in the enclave" in outcome.error
+
+
+def test_a_proxy_that_also_renames_its_key_in_the_proof_is_caught(ca_dir):
+    """The proof's TLS name is signed by the chip, so rewriting it breaks the
+    binding. Before v5 it was not, and this attack passed every check that did
+    not pin the customer's CA."""
+    proxy = EnclaveTls()
+    proxy.self_sign()
+    server, target, _ = tls_miner(broker_with_ca(ca_dir), serve_with=proxy, rewrite=True)
+    try:
+        outcome = check(target, require_tls=True)
+        lenient = check(target, require_tls=True, accept_unsigned_tls=True)
+    finally:
+        server.shutdown()
+    assert not outcome.verified and "binding mismatch" in outcome.error
+    assert not lenient.verified and "binding mismatch" in lenient.error
+
+
+def test_an_image_before_v5_passes_only_when_unsigned_tls_is_accepted(ca_dir):
+    server, target, _ = tls_miner(broker_with_ca(ca_dir), signed_tls=False)
+    try:
+        strict = check(target, require_tls=True)
+        lenient = check(target, require_tls=True, accept_unsigned_tls=True)
+    finally:
+        server.shutdown()
+    assert not strict.verified and "binding mismatch" in strict.error
+    assert lenient.verified, lenient.error
 
 
 def test_a_tls_proof_over_plain_http_is_caught(ca_dir):

@@ -67,6 +67,28 @@ def test_a_tool_call_returns_rows_and_a_proof_that_verifies(keyed):
            expected_nonce=nonce, expected_report_data=binding)
 
 
+def test_on_tdx_the_proof_carries_the_event_log_so_it_stands_alone(keyed, monkeypatch):
+    """Which image booted is in the event log, not the quote. With the log in
+    the proof, anyone holding the answer can check it without the miner."""
+    import base64
+
+    from sentinel.tdx import decode_event_log
+
+    h, auth = keyed
+    log = b"\x01" * 300
+    monkeypatch.setattr(h.enclave.silicon, "event_log", log, raising=False)
+    r = rpc(h, auth, "tools/call", {"name": "postgres.query", "arguments": {"sql": "SELECT 1"}})
+    proof = r.payload["result"]["structuredContent"]
+    assert decode_event_log(base64.b64decode(proof["event_log"])) == log
+    assert proof["event_log"] == h.handle(Request("GET", "/health", {}, b"")).payload["event_log"]
+
+
+def test_off_tdx_the_proof_has_no_event_log(keyed):
+    h, auth = keyed
+    r = rpc(h, auth, "tools/call", {"name": "postgres.query", "arguments": {"sql": "SELECT 1"}})
+    assert "event_log" not in r.payload["result"]["structuredContent"]
+
+
 def test_without_a_nonce_the_miner_picks_one_and_says_so(keyed):
     h, auth = keyed
     r = rpc(h, auth, "tools/call", {"name": "postgres.query", "arguments": {"sql": "SELECT 1"}})

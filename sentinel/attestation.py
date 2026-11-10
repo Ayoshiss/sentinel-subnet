@@ -54,7 +54,14 @@ def bind_response(request_id: str, response_hash: str, broker: str = "", tls: st
     `broker` is the fingerprint of the broker whose credential produced the
     answer, when there is one. Binding it means a miner cannot answer from one
     broker's database while claiming another's. Empty keeps the original form.
+
+    `tls` is the fingerprint of the TLS key the answer was served under. Bound
+    so the chip vouches for it: otherwise anything between the client and the
+    enclave could end the connection under its own key and rewrite the name.
+    Miner images before v5 named it without binding it.
     """
+    if tls:
+        return sha384(f"{request_id}:{response_hash}:{broker}:{tls}".encode())
     if broker:
         return sha384(f"{request_id}:{response_hash}:{broker}".encode())
     return sha384(f"{request_id}:{response_hash}".encode())

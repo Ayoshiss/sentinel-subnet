@@ -65,6 +65,9 @@ def main(argv=None) -> int:
     p.add_argument("--probe-path",
                    help="for an API key scope: an allowed GET path to probe through "
                         "<scope>.request, e.g. /v1/balance (instead of SELECT 1)")
+    p.add_argument("--accept-unsigned-tls", action="store_true",
+                   help="accept a miner image before v5, whose proofs name the TLS key "
+                        "without the chip signing it (your CA still protects your agent)")
     p.add_argument("--key-file", default="~/.config/sentinel/checking-key",
                    help="where the local checking key lives")
     args = p.parse_args(argv)
@@ -98,6 +101,7 @@ def main(argv=None) -> int:
         tdx_mrtd=registry.tdx_mrtd, tdx_db_cert=registry.tdx_db_certs,
         expected_broker=args.expected_broker.lower(),
         require_tls=not args.allow_plain, ca_file=args.ca,
+        accept_unsigned_tls=args.accept_unsigned_tls,
         probe_tool=probe_tool,
         probe_arguments=probe_arguments,
     )

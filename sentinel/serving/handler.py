@@ -269,17 +269,13 @@ class MinerHandler:
             body["tls"] = tls.fingerprint
 
         certificates = getattr(self.enclave.silicon, "certificates", None)
-        event_log = getattr(self.enclave.silicon, "event_log", None)
+        event_log = self._event_log_b64()
         if event_log:
             # TDX has no certificates to hand out: the validator fetches Intel's
             # collateral itself. What it cannot fetch is the firmware's event
             # log, which is what explains the signed registers.
-            import base64
-
-            from ..tdx import encode_event_log
-
             body["attestation"] = "tdx"
-            body["event_log"] = base64.b64encode(encode_event_log(event_log)).decode()
+            body["event_log"] = event_log
         elif certificates:
             import base64
 
@@ -292,6 +288,20 @@ class MinerHandler:
             body["attestation"] = "mock"
             body["public_key"] = self.enclave.public_key_hex
         return Response(200, body)
+
+    def _event_log_b64(self) -> str:
+        """The TDX event log, packed. Fixed for the life of the boot, so packed once."""
+        if not hasattr(self, "_packed_log"):
+            log = getattr(self.enclave.silicon, "event_log", None)
+            packed = ""
+            if log:
+                import base64
+
+                from ..tdx import encode_event_log
+
+                packed = base64.b64encode(encode_event_log(log)).decode()
+            self._packed_log = packed
+        return self._packed_log
 
     def _call(self, request: Request, caller: Identity) -> Response:
         """Execute one MCP tool call inside the enclave and attest the result."""
@@ -384,6 +394,12 @@ class MinerHandler:
         except ToolError as exc:
             return ok({"content": [{"type": "text", "text": str(exc)}], "isError": True})
         proof = {"request_id": request_id, "nonce": nonce, **attested.to_dict()}
+        # With the event log the proof stands on its own: anyone holding it can
+        # replay which image booted, without reaching the miner. Not bound, and
+        # it need not be: it is believed only if it replays to signed registers.
+        event_log = self._event_log_b64()
+        if event_log:
+            proof["event_log"] = event_log
         return ok({
             "content": [{"type": "text", "text": json.dumps(proof.get("result"), default=str)}],
             "structuredContent": proof,
