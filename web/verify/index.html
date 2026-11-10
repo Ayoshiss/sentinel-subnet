@@ -187,7 +187,7 @@ async function run() {
   $("status").textContent = "Checking. Fetching Intel's signed documents for this machine…";
   try {
     const usingSample = sampleLoaded && sample;
-    const registry = usingSample ? sample.registry : liveRegistry;
+    const registry = usingSample && sample.registry ? sample.registry : liveRegistry;
     if (!registry) throw new Error("the approved list could not be fetched, so nothing can be checked against it");
     const result = await verifyProof(text, { registry, intel, broker: $("broker").value, nonce: $("nonce").value });
     render(result, usingSample ? sample.about : "");
@@ -205,7 +205,7 @@ $("proof").addEventListener("input", () => { sampleLoaded = false; });
 $("sample").onclick = async () => {
   if (!sample) sample = await (await fetch("./sample.json")).json();
   $("proof").value = JSON.stringify(sample.proof, null, 1);
-  $("nonce").value = sample.nonce; $("broker").value = "";
+  $("nonce").value = sample.nonce; $("broker").value = sample.broker || "";
   sampleLoaded = true;
   run();
 };

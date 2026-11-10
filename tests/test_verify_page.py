@@ -65,10 +65,19 @@ def test_the_real_answer_passes_every_check(real):
         assert r["checks"][check][0] is True, (check, r["checks"][check])
 
 
-def test_the_sample_shipped_with_the_page_is_that_answer(real):
+def test_the_sample_shipped_with_the_page_is_a_v5_answer_that_passes_the_live_list():
+    """The page's sample is checked against the published registry, so it must
+    be the captured v5 answer and pass every check against measurements.json."""
     sample = json.loads((ROOT / "web" / "verify" / "sample.json").read_text())
-    proof, registry, nonce = real
-    assert sample["proof"] == proof and sample["registry"] == registry and sample["nonce"] == nonce
+    evidence = json.loads((ROOT / "docs" / "evidence" / "tdx-v5-release-2026-11-10" / "ledger-answer.json").read_text())
+    assert "registry" not in sample
+    assert sample["proof"] == evidence["response"] and sample["nonce"] == evidence["nonce"]
+    registry = json.loads((ROOT / "measurements.json").read_text())
+    (r,) = run([{"proof": json.dumps(sample["proof"]), "registry": registry,
+                 "nonce": sample["nonce"], "broker": sample["broker"]}])["cases"]
+    assert r["ok"] is True
+    for check in ("intel", "debug", "firmware", "image", "answer", "broker", "tls", "fresh"):
+        assert r["checks"][check][0] is True, (check, r["checks"][check])
 
 
 def test_tampering_fails_where_the_validator_fails(real):
