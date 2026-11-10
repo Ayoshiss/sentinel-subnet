@@ -266,6 +266,12 @@ export async function verifyProof(proofText, opts) {
   try { proof = parseExact(proofText.trim()); } catch (e) {
     add("parse", false, "Readable proof", String(e.message)); return { ok: false, checks };
   }
+  // A full answer also carries a text copy of the result, which is what most
+  // agents read. The chip signs only the structured copy, so the text must say
+  // the same thing or a pasted answer could pass with altered text.
+  const envelope = proof && proof.result && proof.result.structuredContent ? proof.result : proof;
+  const textCopies = Array.isArray(envelope && envelope.content)
+    ? envelope.content.filter((c) => c && c.type === "text").map((c) => String(plain(c.text) ?? "")) : [];
   if (proof && proof.structuredContent) proof = proof.structuredContent;
   if (proof && proof.result && proof.result.structuredContent) proof = proof.result.structuredContent;
   const a = proof && proof.attestation;
@@ -341,6 +347,11 @@ export async function verifyProof(proofText, opts) {
     else if (tls && att.report_data === await bindResponse(rid, responseHash, broker)) tlsSigned = false;
     else throw new Error("the proof is for a different answer");
     if (uki && att.launch_measurement !== uki) throw new Error("the report names a different release than the one that booted");
+    for (const text of textCopies) {
+      let same = false;
+      try { same = canonical(parseExact(text)) === canonical(proof.result); } catch { same = false; }
+      if (!same) throw new Error("the text copy of the answer differs from the signed result");
+    }
     add("answer", true, "This proof is for this exact answer", "The chip signed this result. Changing one character of it breaks the proof.");
   } catch (e) {
     add("answer", false, "This proof is for this exact answer", String(e.message || e));

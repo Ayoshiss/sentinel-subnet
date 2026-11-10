@@ -97,6 +97,25 @@ def test_tampering_fails_where_the_validator_fails(real):
         assert r["checks"][check][0] is False, (check, r["checks"][check])
 
 
+def test_a_pasted_answer_must_say_in_text_what_the_chip_signed(real):
+    """Agents read the text copy; the chip signs the structured one. Pasted
+    whole, an answer whose text was edited must not pass."""
+    proof, registry, nonce = real
+
+    def envelope(text):
+        return {"jsonrpc": "2.0", "id": 1, "result": {
+            "content": [{"type": "text", "text": text}], "structuredContent": proof, "isError": False}}
+
+    honest = json.dumps(proof["result"], default=str)
+    edited = honest.replace(json.dumps(proof["result"]["rows"][0][0]), "999999", 1)
+    assert edited != honest
+    ok, bad = run([case(envelope(honest), registry, nonce=nonce),
+                   case(envelope(edited), registry, nonce=nonce)])["cases"]
+    assert ok["ok"] is True
+    assert bad["ok"] is False and bad["checks"]["answer"][0] is False
+    assert "text copy" in bad["checks"]["answer"][1]
+
+
 def test_an_answer_without_a_boot_log_is_not_called_verified(real):
     proof, registry, _ = real
     bare = {k: v for k, v in proof.items() if k != "event_log"}
