@@ -234,7 +234,9 @@ class RegistrySource:
                 "body": self.active.source,
             }))
         except OSError as exc:
-            logger.warning("could not write the registry cache: %s", exc)
+            # Loud: without the cache, a restart while a new registry is still
+            # pending scores against an older cached copy, or the flags.
+            logger.error("could not write the registry cache: %s", exc)
 
     # -- noise -----------------------------------------------------------------
 

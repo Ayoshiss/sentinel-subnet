@@ -26,6 +26,7 @@ ExecStart=/opt/sentinel/.venv/bin/python scripts/run_validator.py \
     --wallet ${WALLET} \
     --hotkey ${HOTKEY} \
     --network test \
+    --registry-cache /opt/sentinel/.cache/registry.json \
     --measurement ${MEASUREMENT}
 
 # A validator that stops does not merely earn less. After activity_cutoff, 5000
@@ -42,7 +43,9 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 # read-only rather than true: the hotkey is read from ~/.bittensor/wallets at
-# every start, and ProtectHome=true would hide it. Nothing here writes to home.
+# every start, and ProtectHome=true would hide it. Nothing may write to home, so
+# the registry cache lives under /opt/sentinel: in ~/.cache it was never saved,
+# and a restart while a new registry was pending fell back to a stale copy.
 ProtectHome=read-only
 ReadWritePaths=/opt/sentinel
 
