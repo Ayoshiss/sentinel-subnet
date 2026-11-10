@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check a Sentinel answer</title>
+<meta name="description" content="Check, in your own browser, that an answer came from approved Sentinel code on genuine Intel TDX.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0B0F14; --silicon: #D9D6CE; --paper: #F5F7FA;
+  --bg: var(--paper); --fg: var(--ink); --muted: #5B6470; --line: #D4D8DE; --panel: #FFFFFF;
+  --field: #FFFFFF; --strong: var(--ink); --on-strong: var(--paper);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: var(--ink); --fg: #E7E9EC; --muted: #8C949E; --line: #232A33; --panel: #11161D;
+    --field: #0E1319; --strong: var(--silicon); --on-strong: var(--ink);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: var(--ink); --fg: #E7E9EC; --muted: #8C949E; --line: #232A33; --panel: #11161D;
+  --field: #0E1319; --strong: var(--silicon); --on-strong: var(--ink);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 "IBM Plex Sans", system-ui, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 48px 16px 80px; }
+h1 { font: 700 34px/1.1 Syne, sans-serif; letter-spacing: -0.01em; margin: 0 0 12px; }
+h2 { font: 600 13px/1 "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 40px 0 12px; }
+p { margin: 0 0 12px; }
+.lede { color: var(--muted); max-width: 640px; }
+.mono, code { font-family: "IBM Plex Mono", monospace; overflow-wrap: anywhere; }
+code { font-size: 13px; }
+label { display: block; font-weight: 500; margin: 18px 0 6px; }
+label small { font-weight: 400; color: var(--muted); }
+textarea, input { width: 100%; background: var(--field); color: var(--fg); border: 1px solid var(--line); border-radius: 4px;
+  font: 12.5px/1.45 "IBM Plex Mono", monospace; padding: 10px 12px; }
+textarea { height: 170px; resize: vertical; }
+textarea:focus, input:focus { outline: 2px solid var(--fg); outline-offset: -1px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+@media (max-width: 640px) { .row { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+button { font: 500 14px "IBM Plex Sans", sans-serif; border-radius: 4px; padding: 9px 16px; cursor: pointer;
+  border: 1px solid var(--strong); background: transparent; color: var(--fg); }
+button.primary { background: var(--strong); color: var(--on-strong); }
+button:disabled { opacity: .45; cursor: default; }
+.verdict { margin-top: 28px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.verdict strong { font: 600 18px Syne, sans-serif; display: block; margin-bottom: 4px; }
+.verdict.fail { border-color: var(--fg); border-width: 2px; }
+ol.checks { list-style: none; padding: 0; margin: 16px 0 0; border-top: 1px solid var(--line); }
+ol.checks li { display: grid; grid-template-columns: 96px 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.tag { font: 500 11px/1 "IBM Plex Mono", monospace; letter-spacing: .06em; padding: 5px 0; text-align: center; border-radius: 3px; height: fit-content; }
+.tag.pass { border: 1px solid var(--fg); }
+.tag.fail { background: var(--fg); color: var(--bg); }
+.tag.na { border: 1px dashed var(--muted); color: var(--muted); }
+.title { font-weight: 600; }
+.detail { color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.status { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 1.4em; }
+.fine { font-size: 13.5px; color: var(--muted); }
+.fine li { margin-bottom: 6px; }
+footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Check a Sentinel answer</h1>
+  <p class="lede">Every answer from Sentinel carries a proof signed by the Intel chip it ran on. Paste one here to check it.
+  The check runs in your browser: nothing you paste is sent anywhere, and you do not have to trust Sentinel for any of it.</p>
+
+  <label for="proof">The answer <small>(the tool result, or just its <code>structuredContent</code>)</small></label>
+  <textarea id="proof" spellcheck="false" placeholder='{"result": …, "attestation": {…}, "event_log": "…", …}'></textarea>
+
+  <div class="row">
+    <div>
+      <label for="broker">Your key server's fingerprint <small>(optional)</small></label>
+      <input id="broker" spellcheck="false" placeholder="printed by run_broker.py at start">
+    </div>
+    <div>
+      <label for="nonce">The nonce you sent <small>(optional)</small></label>
+      <input id="nonce" spellcheck="false" placeholder="params._meta.nonce">
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="check">Check</button>
+    <button id="sample">Load a real answer</button>
+    <button id="tamper" disabled>Change one character and check again</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <section id="out" hidden>
+    <div class="verdict" id="verdict"></div>
+    <ol class="checks" id="checks"></ol>
+  </section>
+
+  <h2>What this checks, and against what</h2>
+  <ul class="fine">
+    <li><b>Intel's signature.</b> The quote is checked with Phala's dcap-qvl, the same verifier the subnet's validators use, against Intel's root certificate built into it. Intel's signed documents for the machine are fetched from <span class="mono">pccs.phala.network</span>, a relay: everything it serves is signed by Intel and checked here, so it cannot vouch for a machine that Intel does not.</li>
+    <li><b>The approved list.</b> Approved releases, firmware and Secure Boot key come from <span class="mono" id="regsrc">measurements.json</span> in the public repository. Its digest is <span class="mono" id="regsha">…</span>, which is what the subnet's owner commits on chain and every validator checks before using it.</li>
+    <li><b>The release.</b> The chip signs registers, not file names. The answer's boot log is replayed until it lands on exactly those registers, and only then is it read: which release loaded, and that Secure Boot checked it with Sentinel's key.</li>
+    <li><b>This answer.</b> The chip signed a value that commits to the result, the key server and the TLS key, so none of them can be changed after the fact.</li>
+  </ul>
+  <p class="fine">What it does not show: that your agent's connection met the TLS key named here (your client's certificate check does that), or anything about answers you did not paste. Source: <a href="https://github.com/Ayoshiss/sentinel-subnet/tree/main/web/verify">web/verify</a>.</p>
+
+  <footer>Sentinel. Trust the silicon, not the vendor.</footer>
+</main>
+
+<script type="module">
+import { verifyProof, parseExact, canonical } from "./sentinel-verify.js";
+import { getCollateral, verify, PHALA_PCCS_URL, Buffer } from "./vendor/dcap-qvl-0.7.0.js";
+
+const REGISTRY_URL = "https://raw.githubusercontent.com/Ayoshiss/sentinel-subnet/main/measurements.json";
+const $ = (id) => document.getElementById(id);
+let liveRegistry = null, sample = null, sampleLoaded = false;
+
+async function sha256hex(text) {
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+  return Array.from(d, (x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+async function loadRegistry() {
+  try {
+    const r = await fetch(REGISTRY_URL, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const text = await r.text();
+    liveRegistry = JSON.parse(text);
+    // The digest validators read from the chain: sorted keys, no whitespace,
+    // the schedule left out (sentinel/registry.py, canonical_bytes).
+    const body = parseExact(text); delete body.effective_from;
+    $("regsha").textContent = await sha256hex(canonical(body));
+  } catch (e) {
+    $("regsha").textContent = "unavailable (could not fetch the approved list)";
+  }
+}
+
+const collateral = new Map();
+async function intel(quote) {
+  const q = Buffer.from(quote);
+  // Collateral is per machine; keyed by the whole quote, which names it.
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", quote));
+  const key = Array.from(d, (x) => x.toString(16).padStart(2, "0")).join("");
+  if (!collateral.has(key)) collateral.set(key, await getCollateral(PHALA_PCCS_URL, q));
+  return verify(q, collateral.get(key), Math.floor(Date.now() / 1000));
+}
+
+function render(result, note) {
+  const out = $("out"), list = $("checks"), verdict = $("verdict");
+  list.textContent = "";
+  for (const c of result.checks) {
+    const li = document.createElement("li");
+    const tag = document.createElement("span");
+    tag.className = "tag " + (c.ok === true ? "pass" : c.ok === false ? "fail" : "na");
+    tag.textContent = c.ok === true ? "PASS" : c.ok === false ? "FAIL" : "NOT SHOWN";
+    const body = document.createElement("div");
+    const t = document.createElement("div"); t.className = "title"; t.textContent = c.title;
+    const d = document.createElement("div"); d.className = "detail"; d.textContent = c.detail;
+    body.append(t, d); li.append(tag, body); list.append(li);
+  }
+  const failed = result.checks.filter((c) => c.ok === false).length;
+  verdict.className = "verdict" + (result.ok ? "" : failed ? " fail" : "");
+  verdict.innerHTML = "";
+  const s = document.createElement("strong");
+  const p = document.createElement("div"); p.className = "detail";
+  if (result.ok) {
+    s.textContent = "Verified.";
+    p.textContent = "Approved Sentinel code on genuine Intel TDX produced exactly this answer.";
+  } else if (failed) {
+    s.textContent = "Not verified.";
+    p.textContent = `${failed} check${failed > 1 ? "s" : ""} failed. Do not rely on this answer.`;
+  } else {
+    s.textContent = "Partly shown.";
+    p.textContent = "Nothing failed, but this answer cannot show everything. See the items marked NOT SHOWN.";
+  }
+  verdict.append(s, p);
+  if (note) { const n = document.createElement("div"); n.className = "detail"; n.style.marginTop = "8px"; n.textContent = note; verdict.append(n); }
+  out.hidden = false;
+}
+
+async function run() {
+  const text = $("proof").value;
+  if (!text.trim()) { $("status").textContent = "Paste an answer first, or load a real one."; return; }
+  $("check").disabled = true;
+  $("status").textContent = "Checking. Fetching Intel's signed documents for this machine…";
+  try {
+    const usingSample = sampleLoaded && sample;
+    const registry = usingSample ? sample.registry : liveRegistry;
+    if (!registry) throw new Error("the approved list could not be fetched, so nothing can be checked against it");
+    const result = await verifyProof(text, { registry, intel, broker: $("broker").value, nonce: $("nonce").value });
+    render(result, usingSample ? sample.about : "");
+    $("tamper").disabled = false;
+    $("status").textContent = "";
+  } catch (e) {
+    $("status").textContent = "Could not check: " + (e.message || e);
+  } finally {
+    $("check").disabled = false;
+  }
+}
+
+$("check").onclick = run;
+$("proof").addEventListener("input", () => { sampleLoaded = false; });
+$("sample").onclick = async () => {
+  if (!sample) sample = await (await fetch("./sample.json")).json();
+  $("proof").value = JSON.stringify(sample.proof, null, 1);
+  $("nonce").value = sample.nonce; $("broker").value = "";
+  sampleLoaded = true;
+  run();
+};
+$("tamper").onclick = () => {
+  // Change one character inside the result, the way someone between you and
+  // the machine would, and check again.
+  const text = $("proof").value;
+  let at = text.search(/"rows"\s*:/), skip = 7;
+  if (at < 0) { at = text.search(/"result"\s*:/); skip = 9; }
+  const m = at < 0 ? null : /[a-z0-9]/i.exec(text.slice(at + skip));
+  if (!m) return;
+  const i = at + skip + m.index, ch = text[i];
+  const swap = /\d/.test(ch) ? String((Number(ch) + 1) % 10) : ch === "x" ? "y" : "x";
+  const keep = sampleLoaded;
+  $("proof").value = text.slice(0, i) + swap + text.slice(i + 1);
+  sampleLoaded = keep;
+  run();
+};
+
+$("regsrc").innerHTML = `<a href="${REGISTRY_URL}">measurements.json</a>`;
+loadRegistry();
+</script>
+</body>
+</html>
