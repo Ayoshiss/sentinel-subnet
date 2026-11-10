@@ -1,6 +1,14 @@
 {
   "measurements": [
     {
+      "image": "sentinel-miner-v4",
+      "machine_type": "c3-standard-4",
+      "measurement": "b792b9356c6d02fa3864a2982397b5221f114c2ace46c3ce52c6543e66269d4d19faa1e9f2d718259e10a238ba7efb33",
+      "note": "API keys held in the enclave (<scope>.request); built from commit 96f4137; Authenticode SHA-384 of the UKI, the same on any host",
+      "observed_in": "us-central1-a",
+      "platform": "gcp-tdx"
+    },
+    {
       "image": "sentinel-miner-v3",
       "machine_type": "c3-standard-4",
       "measurement": "2b5cf22c4f65e0f319eef34da11685e421fbd82dc31e9cee06df4c3f962843b05e65fd82cc65fcf2d4bb0784a98f3e7b",
