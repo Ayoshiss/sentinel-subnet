@@ -1,56 +1,66 @@
 # Run a Sentinel miner
 
-About an hour, most of it waiting for a VM to install packages.
+About 30 minutes. You don't install anything on the miner: you boot our signed
+image on an Intel TDX machine and configure it from outside.
 
-Read the next two sections before provisioning anything. They cover what is
-different here from other subnets, and what is not finished.
+Read the next two sections before paying for anything.
 
 ---
 
 ## What you are signing up for
 
 **Netuid 554 is on Bittensor testnet. There are no emissions.** Nothing here
-earns. The reason to run one is to evaluate the design and report what breaks.
+earns. The reason to run one is to test the design and tell us what breaks.
+Testnet miners can be subsidised; get in touch before paying for one yourself.
 
-**A Sentinel miner needs a confidential VM, not spare capacity.** Most subnets
-let you point hardware you already own at the problem. This one cannot: the
-whole design rests on an AMD SEV-SNP processor proving which code is running
-before a credential is released to it. That means a specific machine type, and
-it costs about $36 a month on GCP spot and $74 on demand: `n2d-standard-2` with
-the Confidential Computing surcharge, a 20 GB disk and an external IP, from
-Google's list prices on 2026-11-06. The Intel TDX miner that closes the
-measurement gap needs a `c3-standard-4`, about $64 a month on spot and $168 on
-demand. Testnet miners can be subsidised; get in touch before paying for one
-yourself.
+**A Sentinel miner needs an Intel TDX machine.** The validator checks a quote
+signed by the processor, so spare capacity of any other kind scores zero. These
+instructions use a Google Cloud `c3-standard-4` with TDX, about $168 a month on
+demand from Google's list prices on 2026-11-06. AMD SEV-SNP is no longer
+accepted: its measurement covers the firmware and nothing above it.
 
-**Every miner must run a byte-identical image.** The validator pins one approved
-launch measurement. A different image measures differently and scores zero. This
-is an operational burden and an open design question.
+**You run our image, unchanged.** The miner has no shell, no SSH and no guest
+agent. The validator reads the TDX boot log and accepts the machine only if it
+booted a release on the published list, signed with our key, under Secure Boot.
+A changed image fails attestation and scores zero. That is the point: the
+customer whose credential reaches your machine needs to know what code holds it.
+
+**What you control** is the configuration the image reads at boot: your hotkey,
+who may call you, and the approved values it checks itself against. All of it
+is public.
 
 ---
 
-## Known limitation: the measurement does not cover application code
+## How it works
 
-The SEV-SNP launch measurement covers the boot state of the VM, not the Python
-application on top of it. Tested on a live miner: modifying the miner's code and
-the data it served left the measurement byte-identical, and the validator still
-scored the attestation 1.0. The chip proves what *booted*, not what is *running*.
+- The image is a single signed boot file (kernel, initrd and command line) and
+  a read-only root filesystem whose hash is on that command line. TDX measures
+  the boot file into registers the processor signs.
+- At boot the miner reads its configuration from instance metadata, gets a
+  quote from the processor and releases the test database credential to
+  itself.
+- Every answer carries the quote and the boot log, bound to the validator's
+  fresh nonce. The validator checks Intel's signature, that debug mode is off,
+  the TD firmware, the boot log against the published list, and the answer.
+- The published list lives in `measurements.json`. Its hash is on chain, and a
+  change takes effect 720 blocks (about 2.4 hours) after it is published.
 
-Closing this means binding the root filesystem into the measurement. Until then,
-treat this as an incentive mechanism and a deployment path rather than a
-finished security guarantee.
+On the subnet the miner holds the test database's credential itself. That is
+fine for testnet data and not for a customer's: a customer runs their own key
+server, see `docs/pilot-install.md`.
 
 ---
 
 ## Prerequisites
 
-- A GCP project with billing enabled, and `gcloud` logged in to it.
+- A Google Cloud project with billing enabled, and `gcloud` logged in to it.
+  TDX `c3` machines are in a limited set of zones; these steps use
+  `us-central1-a`.
+- **Access to the image.** Send us the Google account you use with `gcloud`.
+  We share the current release with it and reply with the image project.
 - Python 3.11+ locally.
 - A Bittensor wallet with a little testnet TAO. Registration burn is about
   τ0.0005, so a faucet drip is plenty.
-
-Confidential VMs are available in most regions. These instructions use
-`us-central1-a`.
 
 ---
 
@@ -63,9 +73,10 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-## 2. Create a hotkey and register it on 554
+You need it on your laptop for the approved values, the checker and publishing
+your endpoint. Nothing from it is copied to the miner.
 
-The hotkey is the miner's identity. It never needs your coldkey on the server.
+## 2. Create a hotkey and register it on 554
 
 ```bash
 .venv/bin/btcli wallet new-hotkey --wallet <your-wallet> --wallet-hotkey sentinel-miner
@@ -75,265 +86,183 @@ The hotkey is the miner's identity. It never needs your coldkey on the server.
 .venv/bin/btcli subnet register --netuid 554 --network test --wallet <your-wallet> --hotkey sentinel-miner
 ```
 
-Note the ss58 address it prints. You need it twice below.
+Note the ss58 address it prints.
 
-## 3. Provision the confidential VM
+**No wallet key goes on the miner.** It never signs with the hotkey: it checks
+its callers' signatures, and its answers are signed by the processor.
+
+## 3. Reserve an address and open the port
 
 ```bash
-PROJECT=<your-gcp-project> ZONE=us-central1-a NAME=sentinel-miner-1 ./deploy/provision-gcp.sh
+gcloud compute addresses create sentinel-miner --region us-central1
+gcloud compute firewall-rules create sentinel-miner --allow tcp:8091 --target-tags sentinel-miner
 ```
 
-This creates an `n2d-standard-2` with SEV-SNP enabled, opens tcp:8091 to
-validators, and installs the miner without starting it. It prints the external
-IP. Keep it.
+The rule opens the port to everyone; the miner itself refuses callers not on
+its list (step 4).
 
-Confidential instances cannot live migrate, so the maintenance policy is
-TERMINATE and the instance is set to restart on failure. Expect it to bounce
-occasionally. That is normal and the miner comes back on its own.
+## 4. Write the configuration
 
-Confirm the hardware is genuinely what it claims before trusting any of it:
-
-```bash
-gcloud compute ssh sentinel-miner-1 --zone=us-central1-a --command 'ls -l /dev/sev-guest && sudo dmesg | grep -i sev-snp'
-```
-
-You want to see `Memory Encryption Features active: AMD SEV SEV-ES SEV-SNP`.
-
-## 4. Read the launch measurement
-
-The image has to tell you what it measures as; you cannot decide it.
+The miner refuses anyone not on `allow_hotkey`. Put the subnet's validators
+there (uid 0 is in `TESTNET.md`; check the metagraph for others with a validator
+permit), plus the checker address from step 6.
 
 ```bash
-gcloud compute ssh sentinel-miner-1 --zone=us-central1-a --command \
-  'cd /opt/sentinel && sudo .venv/bin/python scripts/run_miner.py --print-measurement'
-```
-
-If this does not match the measurement the validator has pinned, the miner will
-serve normally and score zero. Compare it against the value in TESTNET.md, and
-report a mismatch: image drift across miners is an open coordination problem.
-
-## 5. Configure and start
-
-```bash
-gcloud compute ssh sentinel-miner-1 --zone=us-central1-a
-sudo tee /etc/sentinel/miner.env <<EOF
-HOTKEY_SS58=<the ss58 from step 2>
-MEASUREMENT=<the measurement from step 4>
+.venv/bin/python - <<'EOF'
+import base64, json
+reg = json.load(open("measurements.json"))
+release = next(m for m in reg["measurements"] if m["platform"] == "gcp-tdx")
+config = {
+    "hotkey_ss58": "<your ss58 from step 2>",
+    "measurement": release["measurement"],
+    "tdx_mrtd": reg["tdx"]["mrtd"],
+    "tdx_db_cert_b64": base64.b64encode(open("image/secureboot/db.der", "rb").read()).decode(),
+    "allow_hotkey": ["5H5uDA7TRyisfPLgRJaFYhVZEQ7mhKPb2mZJVwSw6UvKo3RV"],
+    "no_allow_validators": True,
+}
+json.dump(config, open("miner-config.json", "w"), indent=1)
+print("release", release["image"])
 EOF
-sudo systemctl enable --now sentinel-miner
-journalctl -u sentinel-miner -f
 ```
 
-You should see the chip detected, then a credential released to the enclave,
-then the miner serving on 0.0.0.0:8091.
+The release it prints is the image you boot in step 5. The miner checks its own
+measurement against this file and refuses to serve if they differ.
 
-**No wallet key goes on this machine.** The miner serves under an address it
-holds no private key for. It never signs with the hotkey: it verifies its
-callers' signatures, and its own answers are signed by the chip. If the VM is
-compromised, the attacker gets a miner that answers queries, not your identity.
+`no_allow_validators` is needed because the image has no chain access to read
+the validator list itself, so the list is the one you write.
 
-### Who is allowed to call you
-
-Checking a signature proves a caller holds a hotkey. It says nothing about
-whether they should be querying your enclave, and the query tool takes SQL, so
-an unrestricted miner lets any hotkey on the network run reads against whatever
-database it is attached to.
-
-So the miner keeps an allowlist. By default that is the validators holding a
-permit on the subnet, read from chain at startup and refreshed every ten
-minutes. If the chain cannot be reached the previous list stands, because a
-miner that goes dark during an RPC outage scores zero for something that is not
-its fault.
+## 5. Boot the miner
 
 ```bash
---allow-hotkey 5Fdv...ddf    # permit a specific caller, repeatable
---no-allow-validators        # use only the hotkeys named above
---allow-any                  # permit anyone: demos only, never real data
+gcloud compute instances create sentinel-miner --zone us-central1-a \
+  --machine-type c3-standard-4 --confidential-compute-type TDX \
+  --shielded-secure-boot --maintenance-policy TERMINATE \
+  --image <release from step 4> --image-project <the image project we sent you> \
+  --address sentinel-miner --tags sentinel-miner \
+  --no-service-account --no-scopes \
+  --metadata-from-file sentinel-miner=miner-config.json
 ```
 
-With no list and no reachable chain the miner refuses to start rather than
-serving everyone. Opening it up has to be something you typed.
+TDX machines cannot live migrate, so the maintenance policy is TERMINATE and
+the machine restarts after host maintenance on its own.
 
-### Keeping it alive
-
-A SEV-SNP guest can lose attestation permanently while the process keeps
-running: a timed-out request to the AMD security processor makes the kernel
-disable the VMPCK, and only a reboot brings it back. `/health` returns 503 once
-that has happened rather than reporting healthy from cached identity.
+There is no shell, so the serial console is the only view in:
 
 ```bash
-sudo cp deploy/sentinel-watchdog.service /etc/systemd/system/
-sudo systemctl enable --now sentinel-watchdog
+gcloud compute instances get-serial-port-output sentinel-miner --zone us-central1-a | grep sentinel.miner
 ```
 
-It reboots after three consecutive 503s and stops after two reboots in an hour,
-because a host whose security processor is failing will fail again and a boot
-loop hides that. See SECURITY.md for the full detail.
+Within a minute you should see, in order:
 
-### Scoping what a caller can read
+- `Intel TDX guest detected`
+- a warning that the miner releases credentials to itself (expected on the subnet)
+- `credential released to the enclave for 'customer-db', sealed, by broker <fingerprint>`
+- `miner serving https on 0.0.0.0:8091`
 
-Attestation decides which code runs. The allowlist decides who may call. The
-read-only role decides whether they may write. None of those limit *what* can be
-read, so by default a caller reaches everything the credential reaches.
+Note the broker fingerprint. It is new on every boot.
 
-Scopes fix that. Each is its own restricted credential, unlocked by its own
-attestation, and exposed as its own tool named `<scope>.query`:
+## 6. Check it yourself
+
+`check_miner.py` runs the validator's checks from your laptop against the
+published list.
 
 ```bash
---scope analytics=postgresql://sentinel_analytics:...@host/db \
---scope support=postgresql://sentinel_support:...@host/db
+.venv/bin/python scripts/check_miner.py --url https://<your address>:8091 \
+  --miner-hotkey <your ss58> --expected-broker <fingerprint from step 5>
 ```
 
-An API key can then be limited to a subset. In the key file:
-
-```json
-{ "support-bot": { "digest": "...", "scopes": ["support"] } }
-```
-
-That key sees only `support.query` in `/tools` and is refused `analytics.query`.
-A key with a bare digest reaches every scope, which is the right default when
-there is only one database.
-
-`docs/scoping.sql` is a worked example of the views and roles a DBA creates. The
-important part is there rather than here: the enclave can only be as restricted
-as the credential it is given.
-
-### Running the broker on the customer's machine
-
-By default the miner builds the broker in its own process, which means it holds
-the database password and releases it to itself. The verification runs and proves
-nothing about custody: a customer reading the code can reasonably point out that
-the secret is the operator's own variable. That default is fine for the subnet,
-where the database is seeded test data, and wrong for anybody's real database.
-
-To separate them, the customer runs the broker and keeps the DSN there:
+The first run creates a local checking key and is refused, because that key is
+not on your list. Add the address it names to `allow_hotkey` in
+`miner-config.json`, then apply it and restart:
 
 ```bash
-python scripts/run_broker.py   --scope analytics="postgresql://sentinel_analytics:...@db/app"   --measurement <approved hex>   --bind 0.0.0.0 --port 8100
+gcloud compute instances add-metadata sentinel-miner --zone us-central1-a --metadata-from-file sentinel-miner=miner-config.json
 ```
-
-The miner then asks for the scope by name and holds no secret of its own:
 
 ```bash
-python scripts/run_miner.py --scope analytics   --measurement <approved hex>   --broker-url https://broker.customer.example:8100
+gcloud compute instances reset sentinel-miner --zone us-central1-a
 ```
 
-Notice `--scope` takes a bare name here. Passing `NAME=DSN` with `--broker-url`
-is refused, because a DSN on this host is exactly what the split exists to
-prevent.
+Read the new fingerprint from the serial log and run the check again. You want
+`"verified": true` with attestation and correctness both 1.0.
 
-Verification happens on the customer's side, using certificates the enclave
-sends with its report. That sounds like asking the accused to supply the
-evidence, and it would be, except AMD's root is pinned on the broker: a chain
-generated by the miner fails there. What it buys is verification that keeps
-working when AMD's KDS is unreachable.
+## 7. Publish the endpoint
 
-Use `https`: the released credential travels in that response body, and
-`--broker-insecure` exists only so the pair can be rehearsed over loopback.
-Terminate TLS on the broker's own machine rather than behind a proxy you do not
-control.
-
-Now the part a customer deserves to hear from you rather than discover. TLS here
-does not protect the credential from **you**, the operator of the miner's host.
-The client does not pin the broker's certificate, so it validates against the
-guest's system trust store, and you own that store. Since the launch measurement
-does not cover the root filesystem, you could add a certificate authority, proxy
-the broker and read the DSN without the measurement changing.
-
-What the split genuinely gives a customer is therefore narrower than
-"unobtainable": taking their credential stops being something you could do by
-reading a variable and becomes active interception of your own guest, which is
-deliberate, and which they can hold you to. Say it that way. Overselling it is
-how an operator loses a customer permanently, and the repository documents the
-hole either way, in `docs/threat-register.md` under T22 and T23.
-
-To rehearse both ends on one machine, give the mock chip a fixed identity so the
-broker can trust it in advance:
-
-```bash
-python scripts/run_miner.py --allow-mock --mock-chip-seed $(openssl rand -hex 32) ...
-```
-
-The miner logs the `--allow-mock-chip CHIPID=PUBKEY` line to paste into the
-broker. Real silicon needs none of this, because AMD's chain identifies the chip.
-
-### Callers who are not on Bittensor
-
-Validators authenticate with a hotkey signature. A customer running Sentinel
-over their own database has no hotkey, so for that deployment the miner also
-accepts API keys.
-
-```bash
-python scripts/make_api_key.py --label analytics-agent \
-  --keys /etc/sentinel/api-keys.json
-```
-
-The key is printed once and never stored. The file holds SHA-256 digests, so
-leaking it hands over nothing, and losing a key means minting another and
-removing the old label. Start the miner with `--api-keys /etc/sentinel/api-keys.json`
-and the caller sends `Authorization: Bearer <key>`.
-
-One difference worth understanding before choosing it. A signed request carries
-a nonce and a timestamp, so it cannot be replayed. A bearer token has no such
-property: anyone who captures a request can repeat it. Over TLS against
-read-only tools that is usually acceptable, but it is not equivalent, and on the
-subnet you should keep hotkey authentication.
-
-## 6. Publish the endpoint
-
-From your laptop, where the wallet actually lives:
+From your laptop, where the wallet lives:
 
 ```bash
 .venv/bin/python scripts/publish_axon.py --netuid 554 --network test \
-  --wallet <your-wallet> --hotkey sentinel-miner --ip <the external IP> --port 8091
+  --wallet <your-wallet> --hotkey sentinel-miner --ip <your address> --port 8091
 ```
 
-ServeAxon is rate limited per neuron, roughly 50 blocks, so this belongs at
-setup and on address changes, not in a loop.
+ServeAxon is rate limited, roughly once per 50 blocks, so do this at setup and
+on address changes only.
 
-## 7. Check you are discoverable
+## 8. Confirm the validator scores you
 
 ```bash
 .venv/bin/btcli subnets metagraph 554 --network test
 ```
 
-And that the miner answers from outside:
+A round runs about every 22 minutes. After one or two, your uid should carry
+weight. If it doesn't, tell us your uid and we'll read the validator's log.
+
+---
+
+## Moving to a new release
+
+Releases are announced before they take effect: a new list is published on
+chain and applies 720 blocks later. To move, write the configuration again
+(step 4), then delete the machine and boot it from the new image (step 5). The
+address, hotkey and registration stay the same.
 
 ```bash
-curl http://<the external IP>:8091/health
+gcloud compute instances delete sentinel-miner --zone us-central1-a
 ```
 
-That returns the chip id, the launch measurement, and AMD's certificate chain.
-Handing out the certificates is deliberate: they are public, and the chain is
-checked against a root pinned in the verifier, so verification never has to
-reach AMD's key service.
+The old release stays accepted until a list without it takes effect, so there
+is time to move.
 
 ---
 
 ## When it goes wrong
 
-**Miner exits with "launch measurement mismatch".** The image is not the one
-pinned, which is the gate working as intended. Read the running value and report
-it.
+**`sentinel-miner metadata refused`.** A key in `miner-config.json` is unknown,
+has the wrong type, or a value starts with `-`. The message names it.
 
-**`no /dev/sev-guest`.** The VM was not created as confidential. Check the
-instance was made with `--confidential-compute-type=SEV_SNP`.
+**`launch measurement mismatch`.** The image you booted is not the one in your
+configuration. Boot the release step 4 printed.
 
-**Scores zero on correctness with a valid attestation.** The database is not
-seeded, so the validator's probe hits a missing table. `scripts/miner-seed.sql`
-is applied automatically on a fresh SQLite database.
+**`Security Violation` in the serial log, nothing after.** Secure Boot refused
+the boot file. The machine was created without `--shielded-secure-boot`, or from
+an image that is not ours.
+
+**`HTTP 401 ... is not permitted`.** The caller is not on `allow_hotkey`. For
+the validator, check its hotkey against the metagraph.
+
+**`answered from broker ..., not ours`** from `check_miner`. The fingerprint is
+from an earlier boot. Read the current one from the serial log.
 
 **Nothing discovers you.** Almost always the wrong network. 554 is testnet, so
-every command needs `--network test`. Publishing to finney succeeds against the
-wrong chain and leaves you invisible with no error anywhere.
+every command needs `--network test`.
 
 ---
 
+## Honest limits
+
+- **We hold the signing key.** The published list means "images we signed".
+  The builds are reproducible: `image/release.sh build` on the release commit
+  gives the same measurement. Rebuilding one and telling us whether it matched
+  is the most useful check you can do.
+- **The subnet's test credential is held by the miner itself.** That proves
+  the mechanism, not custody. Custody is the key server on the customer's side.
+- **Payments and slashing are not built.**
+
 ## Feedback worth sending
 
-Criticism is more useful than approval. Specifically:
+Criticism is more useful than approval:
 
 - Where did this break, and how long did it take end to end?
-- Would you run a paid confidential VM for a subnet, and at what emission level?
-- Is the single-pinned-image requirement manageable or a dealbreaker?
+- Would you run a paid TDX machine for a subnet, and at what emission level?
+- Is booting an image you can't log in to acceptable to you as an operator?
 - What would stop you running one?
