@@ -1,14 +1,19 @@
 # Sentinel: confidential access for autonomous agents
 
-**v1.0, October 2026.** Releasing a database credential to a program identified
-by hardware, rather than to a person or a company.
+**v2.0, November 2026.** Releasing a credential to a program identified by
+hardware, rather than to a person or a company.
 
-Netuid 554 on Bittensor testnet, live since 2026-08-29. AMD EPYC, SEV-SNP.
+Netuid 554 on Bittensor testnet, live since 2026-08-29. Intel TDX on Google
+Cloud since 2026-11-09.
 
 > This document describes the system that exists. Section 9 separates what is
 > built from what is designed, and section 13 lists the commands that reproduce
-> every number in it. **Where this document and the code disagree, the code is
+> its claims. **Where this document and the code disagree, the code is
 > correct.**
+>
+> v1.0 (October 2026) described an AMD SEV-SNP deployment whose measurement
+> covered the firmware and nothing above it. That gap is closed on Intel TDX,
+> and section 9 says what changed and what did not.
 
 ---
 
@@ -16,15 +21,17 @@ Netuid 554 on Bittensor testnet, live since 2026-08-29. AMD EPYC, SEV-SNP.
 
 An AI agent that can act on real systems needs a credential, and a credential
 inside a running process is readable by every layer that hosts it. Sentinel
-changes the recipient: the credential is released only to code whose launch
-state a processor has measured and signed. Miners run Model Context Protocol
-servers inside AMD SEV-SNP enclaves; a broker releases a database credential only
-against an approved launch measurement; every response carries a signature from
-the chip bound to that request. Verification depends on no third party at query
-time, because AMD's root is pinned at build time rather than fetched. The network
-is a Bittensor subnet, so independent operators run the enclaves and validators
-challenge them continuously, which is what prevents the guarantee reducing to
-trust in one company.
+changes the recipient: the credential is released only to code a processor has
+measured and signed. Miners run Model Context Protocol servers inside Intel TDX
+trust domains, booted from a signed, reproducible image whose kernel, command
+line and read-only root filesystem are all in the measurement. A key server
+held by the data owner releases a credential only to an approved image, sealed
+to a key that exists only inside it. Every answer carries a quote from the
+processor bound to that request, the TLS key it was served under and the key
+server that released the credential. The network is a Bittensor subnet, so
+independent operators can run the trust domains and validators challenge them
+continuously, which is what keeps the guarantee from reducing to trust in one
+company.
 
 ---
 
@@ -33,10 +40,11 @@ trust in one company.
 A customer already has their data. What they cannot do is let an autonomous agent
 touch it.
 
-Give an agent a database credential and it lands in a running process. From that
-moment it is readable by the process itself, the host operating system, anyone
-with SSH, the logs, a memory dump, and the cloud provider. None of those readers
-is the agent, and the customer controls almost none of them.
+Give an agent a database credential or an API key and it lands in a running
+process. From that moment it is readable by the process itself, the host
+operating system, anyone with SSH, the logs, a memory dump, and the cloud
+provider. None of those readers is the agent, and the customer controls almost
+none of them.
 
 So the question is never *do I trust this agent*. It is **do I trust every layer
 underneath it**.
@@ -48,114 +56,125 @@ vendor's operations team, their cloud account, and every engineer with productio
 access. For a regulated institution the second is a disqualification rather than
 a trade.
 
+The middle answer, a vendor that holds every customer's keys and attaches them
+on the agent's behalf, moves the problem rather than solving it: the vendor's
+store becomes the target, and a breach there exposes every customer at once,
+with revocation left to each of them.
+
 ## 2. Threat model
 
 Sentinel assumes the operator of the machine is not trusted, and that the cloud
 provider hosting it is not trusted. It does not assume the processor vendor is
-untrusted: AMD's root is the anchor, and a system that distrusted it would have
-nothing to stand on.
+untrusted: Intel's root is the anchor, and a system that distrusted it would
+have nothing to stand on.
 
-**Defended.** A host or hypervisor reading enclave memory. An operator
-substituting modified code to obtain the credential. A forged certificate chain
-presented in place of AMD's. A replayed attestation. A response that did not come
-from the approved image.
+**Defended.** A host or hypervisor reading trust-domain memory. An operator
+substituting modified code, at boot or on disk, to obtain the credential or to
+answer falsely. An operator relaying the traffic between the trust domain and
+the key server, or between the agent and the trust domain. A key server run by
+the operator in place of the customer's. A replayed quote. An answer that did
+not come from an approved image.
 
-**Not defended.** An operator with root modifying the application *after* boot,
-which the launch measurement does not cover. Micro-architectural side channels. A
-vulnerability in AMD firmware below the enforced floor. Anything the customer's
-own database exposes to a legitimate query.
+**Not defended.** Micro-architectural side channels. A vulnerability in Intel's
+TDX module or the platform below the TCB level Intel reports as current. A
+compromise of our image signing key (section 9). Anything the customer's own
+database or API exposes to a legitimate request.
+
+**Trusted, and worth naming.** Intel. Google's TD firmware, whose hash (MRTD) we
+approve as observed rather than rebuild (section 9). The image signing key,
+held by us today.
 
 ## 3. Mechanism
 
-The processor computes a 48-byte measurement over everything loaded into the
-virtual machine before it starts, and signs attestation reports with a key
-derived from chip secrets and firmware version. A broker holding the customer's
-credential releases it only when that measurement equals an approved value.
+The image is one signed EFI binary carrying the kernel, the initrd and the
+kernel command line, plus a read-only root filesystem. The root filesystem is
+under dm-verity, and its root hash is on that command line. TDX measures the
+firmware into MRTD and the boot chain into runtime registers, and records each
+step in a boot log. Secure Boot runs under our own keys, so only a binary we
+signed boots, and boot entries cannot override the embedded command line.
 
-1. The chip measures what booted and signs it.
-2. The enclave sends that signed report to the customer's broker.
-3. The broker releases the credential, only on a matching measurement.
-4. The query runs inside the enclave, against the customer's own database.
-5. The answer leaves signed by the chip and bound to that exact request.
+1. The processor measures what booted and signs a quote over it.
+2. The trust domain sends that quote, with its boot log and a fresh public key,
+   to the customer's key server.
+3. The key server checks the quote and releases the credential only to an
+   approved release, encrypted to that key and signed with its own identity.
+4. The query runs inside the trust domain, against the customer's own database
+   or API, under the scope the customer set.
+5. The answer leaves with a quote bound to that exact request.
 
 Two attestations happen and they prove different things. The first controls
 access to the secret. The second makes an individual answer checkable by someone
 who was not party to the first.
 
-The response binding matters as much as the release. A valid signature over the
-wrong claim is still the wrong claim, so the report's `report_data` carries a
-hash of the request identifier and the response body.
+The answer binding matters as much as the release. A valid signature over the
+wrong claim is still the wrong claim, so the quote's `REPORT_DATA` is a hash
+over the canonical answer, the caller's nonce, the key server's identity and the
+TLS key the answer was served under. Changing any of them breaks the proof.
 
-The firmware is also policed. Sentinel enforces `TCB[SNP] >= 0x1D` on EPYC 7003,
-the level AMD names in bulletin AMD-SB-3030. A downgrade cannot be faked: the
-signing key is derived from the firmware version, so a rolled-back chip signs
-with a different key and the chain breaks before the floor is consulted.
+**TLS ends inside the trust domain.** The image makes its TLS key in memory and
+binds it into the attestation; the customer's key server certifies only that
+key. An agent that checks the certificate is talking to the approved image, not
+to a proxy in front of it. Captured traffic between agent and miner contained
+the API key, the query and the results zero times.
 
-## 4. Verification without a trusted third party
+The firmware is also policed. The verifier accepts only quotes whose TCB status
+Intel reports as `UpToDate`, rejects debug trust domains, and accepts only
+approved MRTD values.
 
-A report is verified through AMD's chain: the chip-unique VCEK, signed by the AMD
-SEV key, signed by the AMD root. The host supplies those certificates alongside
-the report, which sounds like asking the suspect for the evidence. It is not,
-because the root is compared against a public-key hash compiled into the
-verifier. A substituted root fails before any field of the report is read.
+## 4. Verification without trusting us
 
-That design was forced by an outage: AMD's key distribution service refused
-connections during development, which would have meant a validator unable to
-score honest miners because a third party was down. Verification now contacts
-nobody at query time.
+A quote is verified against Intel's root with Phala's dcap-qvl: the PCK
+certificate chain, Intel's revocation lists, and Intel's signed TCB and quoting
+enclave documents. Those documents are fetched from Intel or a caching relay
+and cached; everything they contain is signed by Intel and checked, so a relay
+cannot vouch for a machine Intel does not.
 
-**A forged chain used to pass.** An earlier version checked only that the root
-was self-signed, and anyone can self-sign, including with AMD's exact subject
-line. An attacker-generated root, intermediate, leaf and report claiming any
-measurement verified completely. Roots are now pinned by SPKI hash and unpinned
-product lines fail closed. Found internally, before deployment.
+Then the boot log is replayed into the registers the quote signs. The replay
+has to match exactly, and the log must show Secure Boot on, our certificate in
+the signature database, and an approved release loaded. A log that does not
+replay is rejected, whatever it claims.
 
-## 5. Attestation state synchronisation
+The same checks run in three places: the validator, the customer's key server
+before it releases a credential, and `scripts/check_miner.py`, which a customer
+runs against a miner before trusting it. A fourth copy runs in a browser:
+**sentinelsubnet.com/verify** takes a pasted answer and runs every check
+locally, with the approved list fetched from the public repository. It is
+tested against the Python verifier on the same captured answers.
 
-A verifier needs to know which measurements are approved. That sounds
-administrative and is the hardest unsolved problem in running a decentralised
-confidential network, because the measurement is not derivable from source.
+## 5. The approved list
 
-AMD's specification builds the launch digest from inputs the hypervisor supplies:
-page contents, page type, permissions, guest physical address, insertion order,
-and the saved CPU state, which means the vCPU count is in it. The firmware the
-hypervisor loads is not part of the operator's disk image.
+A verifier needs to know which releases are approved. On AMD this was the
+hardest unsolved problem in running the network, because the measurement was
+not derivable from source: the same disk on two hosts measured differently.
 
-We observed the consequence directly. The same boot disk, restored from a
-snapshot and started on a different host, produced a different measurement, and
-the miner correctly refused to serve:
+On TDX it is derivable. The release measurement is the Authenticode SHA-384 of
+the signed boot file, the same on any host, and the build is reproducible: two
+independent builds of the same commit produced the same measurement. So anyone
+can rebuild a release and check that the published value is honest, rather
+than take it from whoever published it.
 
-```
-2d24cf96…c773  →  ccdc5cf0…26fa
-same disk, same commit, different host firmware
-```
-
-So a single pinned value describes one machine, not a fleet. Two honest operators
-running identical images on hosts at different firmware levels measure
-differently, and a validator pinning one scores the other zero. Under Yuma that
-validator then accrues no bond in the miner everyone else rewards, and because
-bonds are an exponential moving average the loss outlives the mistake.
-
-The registry answers it. A manifest on chain carries a SHA-256 of the approved
+The registry carries it. A manifest on chain holds a SHA-256 of the approved
 list and an **effective block height**; the list itself is served as a file and
-checked against that digest. Two separate problems need two mechanisms: the
-effective height means every validator switches at the same block rather than
-whenever it polled, and **block-pinned reads** mean two validators polling
-seconds apart across an update see identical bytes. Reading at an epoch boundary
-substitutes for neither, because the epoch fire block is not deterministic in
-advance.
+checked against that digest. The effective height means every validator switches
+at the same block rather than whenever it polled, and block-pinned reads mean
+two validators polling seconds apart see identical bytes. A change takes effect
+720 blocks (about 2.4 hours) after it is published, so miners and validators see
+it coming.
 
-Each entry carries the recipe that produced it: image name, machine type, and
-where it was observed. That is what makes the list verifiable rather than merely
-authoritative. Whoever controls the list controls who can mine, and publishing
+Each entry carries the recipe that produced it: the image, the commit, the
+machine type. Whoever controls the list controls who can mine, and publishing
 the recipe is how that power is made checkable instead of hidden.
+
+In practice: five releases have gone through this, v1 to v5. Moving the subnet
+from v3 to v5 on 2026-11-12 took one machine at a time, each scored 1.00 by the
+validator before the next, then a list with v5 alone.
 
 ## 6. Incentive mechanism
 
-Validators challenge miners with a fresh nonce, verify the attestation, and score
-five axes: attestation, cache hygiene, nonce discipline, correctness and latency.
-Weights are submitted under timelock commit-reveal, so no validator can copy
-another's round before it reveals.
+Validators challenge miners with a fresh nonce about every 22 minutes, verify the
+attestation, and score five axes: attestation, cache hygiene, nonce discipline,
+correctness and latency. Weights are submitted under timelock commit-reveal, so
+no validator can copy another's round before it reveals.
 
 The first version averaged all five, and the benchmark showed that was wrong:
 getting caught forfeited only the points for the axis that caught you.
@@ -174,16 +193,17 @@ they **gate**: fail one and the miner earns nothing. Latency still scores.
 
 Correctness is decided by agreement between miners, which makes it a vote rather
 than a fact, so it gates only once a round has three or more verified miners.
-
-The flaw survived for weeks because the tests asserted that cheats were
-*detected* and never what detection *cost*. Detection was always 100 percent. The
-penalty was the bug.
+On AMD it was the only thing that caught a miner running edited code. On TDX,
+edited code fails the attestation gate itself, and consensus is a second line.
 
 ## 7. Results
 
-Nine miners, two honest, one honest but slow, and six attacks: a backdoored
-image, a replayed report, a corrupt signature, fabricated rows, cacheable
-attested replies, and an unreachable endpoint.
+Full method and numbers for each are in `docs/results.md`, with the raw
+evidence under `docs/evidence/`.
+
+**Simulated rounds.** Nine miners, two honest, one honest but slow, and six
+attacks: a backdoored image, a replayed report, a corrupt signature, fabricated
+rows, cacheable attested replies, and an unreachable endpoint.
 
 ```
 detection rate                   100.0%
@@ -192,139 +212,97 @@ false rejections                 0  (0.0%)
 honest mean weight               1.0000
 degraded (slow) mean weight      0.8874
 dishonest mean weight            0.0000
-worst honest / best dishonest    1.0000 / 0.0000
 ```
 
-**The honest limit of this result:** every attacker in that field was written by
-us, so it demonstrates the defences catch what we anticipated. In September an
-independent operator running his own validator on 554 found a defect we had not:
-the miner verified a caller's signature but never checked whether that caller was
-permitted, so any keypair could query the enclave. Fixed and deployed the same
-day.
+Every attacker in that field was written by us, so it shows the defences catch
+what we anticipated. In September an independent operator running their own
+validator found a defect we had not: the miner checked a caller's signature but
+not whether that caller was permitted. Fixed and deployed the same day.
+
+**On Intel TDX hardware, November 2026.**
+
+| Date | Experiment | Result |
+|---|---|---|
+| 2026-10-05 | The command-line change that left the AMD measurement identical | Moved two TDX registers |
+| 2026-11-06 | One character changed in the signed boot file's command line | Different measurement, identical across two zones |
+| 2026-11-06 | A boot entry overriding the command line | Accepted with Secure Boot off; ignored under our keys |
+| 2026-11-06 | Unsigned and Microsoft-signed binaries | Refused under our keys |
+| 2026-11-06 | One file changed on the root filesystem | Refused by the kernel; the miner never served |
+| 2026-11-06 | Two independent builds of one commit | Same measurement |
+| 2026-11-07 | An operator relaying all traffic to the key server | Credential seen zero times |
+| 2026-11-07 | A miner pointed at the operator's own key server | Refused by the customer's check |
+| 2026-11-08 | Captured agent-to-miner traffic | API key, query and results seen zero times |
+| 2026-11-10 | API key held in the enclave, off-list requests | Key never in a response; off-list refused |
+| 2026-11-12 | Subnet moved to v5, then to a v5-only list | Every round since: all three miners 1.00 |
+
+**A gap we found in our own work.** Until v5, each answer named its TLS key but
+the processor did not sign the name, so a proxy could have renamed it in the
+proof. Agents set up as our pilot guide describes were never exposed, because
+their certificate check pins the key. Fixed in v5, tested on hardware, recorded
+as part of T25 in the threat register.
 
 ## 8. Operating confidential hardware
 
-Two behaviours matter in production and appear in neither the marketing nor the
-specification sheets.
+**The image has no shell.** No SSH, no guest agent, no login. What an operator
+chooses (their hotkey, who may call them, the approved values the miner checks
+itself against) arrives as instance metadata, read as data and never as code:
+unknown keys, wrong types and values that look like flags are refused, and the
+miner does not start. Upgrading means booting the next release, not editing the
+running one.
 
-**Attestation can die while the process lives.** A request to the AMD security
-processor timed out, and the kernel disabled the guest's message key permanently
-rather than risk reusing an initialisation vector after an ambiguous failure:
+**Capacity and cost.** A TDX miner is a `c3-standard-4`, about $168 a month on
+demand from Google's list prices on 2026-11-06. TDX machines cannot live
+migrate, so they restart after host maintenance; the miner comes back on its
+own.
 
-```
-sev-guest: Detected error from ASP request. rc: -110
-sev-guest: Disabling vmpck_id 0 to prevent IV reuse.
-```
+**Firmware rotates.** Google updated its TD firmware between October and
+November, changing MRTD. The approved list holds overlapping firmware values
+for exactly this, and a rotation is a list update, not an outage.
 
-That decision is correct, and the consequence is that attestation is dead until
-the guest reboots while the service keeps answering. Ours reported healthy for
-ten hours in that state, because health served cached identity and never asked
-whether the chip still answered. Health now fails closed, and a watchdog reboots
-after repeated failures and stops after two reboots in an hour rather than
-looping on degraded hardware. It has since recovered a miner unattended.
-
-**Capacity is scarce and the measurement follows the host.** SEV-SNP instances
-are available in a minority of cloud zones and a zone can refuse. Moving a miner
-is routine, and moving a miner changes its measurement, which is why section 5
-exists.
+**Lessons carried over from AMD.** Attestation can die while the process lives:
+on SEV-SNP a timed-out request to the security processor disabled the guest's
+message key until reboot, and health served cached identity for ten hours. On AMD, health
+now asks the hardware on every check and fails closed.
 
 ## 9. What is not built
 
 Stated plainly, because a reader can check the repository in minutes.
 
-**Application integrity, and in fact everything above the firmware.** The launch
-measurement is computed at launch. On the confidential VMs we run, the boot chain
-is shim, then GRUB, then the kernel, all read from the disk after launch, with
-Secure Boot disabled; `/proc/cmdline` carries `BOOT_IMAGE=`, which is GRUB's
-signature. So the measurement does not cover the kernel, the initrd, the kernel
-command line, the bootloader, or the root filesystem. Checked on our own host on
-2026-10-04 rather than inferred from documentation, and the earlier version of this
-paragraph understated it by naming only the command line.
+**We hold the signing key.** The approved list means "images we signed". The
+builds are reproducible, so the list is checkable, but no one outside has
+rebuilt a release and compared yet. Moving the key to an arrangement we do not
+solely control is open.
 
-What the attestation therefore establishes is narrower than a reader will assume:
-a genuine AMD processor, running SEV-SNP at VMPL0, in a given firmware state. It
-makes no statement about which operating system or application is running. We
-demonstrated the consequence against our own live miner, twice: full marks while
-serving fabricated rows, and on 2026-10-04 a miner with edited code passing
-attestation with `attest=1.00` and being caught only by consensus (section 7).
+**Google's TD firmware is approved as observed.** MRTD covers the firmware
+Google ships; we approve the values we see on their machines and do not build
+that firmware ourselves.
 
-dm-verity is not the fix, and nor is a root hash in the kernel command line, since
-that is unmeasured too. The boot chain itself has to change so that kernel, initrd
-and command line hashes land in the launch measurement before the guest runs:
-measured direct boot, or a unified kernel image measured before launch. Whether our
-provider offers either for a confidential VM is unestablished. The guest has a vTPM
-that does measure the chain into PCRs, but the host emulates it, and section 2 does
-not trust the host.
+**Independent miners.** Every miner on 554 is ours. Consensus between three
+machines we run is not consensus between independent operators. The mining
+guide (`docs/mining.md`) exists to change that.
 
-Credential scoping (section 10) bounds the damage without closing the hole, and
-consensus (section 6) catches a miner that lies about data, though not one that
-answers correctly and leaks.
+**Custody on the subnet.** Subnet miners release the test database credential
+to themselves. That proves the mechanism, not custody. Custody comes from a key
+server the customer runs, which is how the pilot deployment works.
 
-**Payment.** There is no payment path. The design is in section 11; no code
-implements it. Validators challenge miners and miners earn emissions.
-
-**Collateral and slashing.** Not implemented, and section 11 notes that the
-original slashing design assumed the measurement catches a tampered application,
-which it does not. Dishonesty costs a miner its weight and nothing more.
+**Agents that trust only public certificate authorities.** The certificate
+comes from the customer's own authority, so a hosted agent platform that cannot
+add one cannot connect to a miner yet.
 
 **Correctness beyond consensus.** Correctness is decided by miners agreeing with
-each other, which requires them to hold identical data. Real customers break that
-by definition.
+each other, which requires identical data. Real customers break that by
+definition.
 
-**Independent miners.** One independent validator is running. There are no
-independent miners, because mining requires a confidential VM somebody must pay
-for.
+**Payment, collateral and slashing.** Not implemented. Section 11 has the
+design. Dishonesty costs a miner its weight and nothing more.
 
-**The broker and the enclave are separable but the split is not yet deployed on
-the subnet.** `scripts/run_broker.py` runs the broker as its own daemon and
-`run_miner.py --broker-url` makes the miner obtain its credential from it over
-the network, verified across the boundary against AMD's pinned root using
-certificates the enclave hands over. Exercised end to end between two processes, with the
-transcript in `docs/split-proof.md` and the script in CI, including the
-forged-chain case, where a miner that supplies its own root is refused. Also run on real silicon across two VMs on 2026-10-04: an
-EPYC 7B13 enclave attested to a broker on another host, which verified the VCEK
-chain the enclave handed it against AMD's pinned root, and refused the same chip
-when it approved a different measurement. What has not happened is a run with the
-broker on a machine the miner's operator does not control, which is the only
-configuration that demonstrates custody rather than describing it, and a run over
-TLS rather than inside a private network. The default remains self-brokering, and the
-miner logs a warning when it starts that way.
+**External security review.** None yet. The scope is the image and its build,
+the key server, and the verifier.
 
-**The released credential can still be intercepted by the miner's operator.**
-This is the sharpest remaining hole and it is worth stating precisely, because a
-milder version of it would be flattering and wrong. The broker client does not
-pin the broker's certificate, so TLS is validated against the guest's own trust
-store, and the operator of that guest owns that store. Since the launch
-measurement does not cover the root filesystem, the operator can install a
-certificate authority, proxy the broker, and read the credential without the
-measurement changing.
-
-The consequence for the claim: separating the broker raises the cost of taking
-the credential from reading a local variable to actively intercepting one's own
-guest, which is a real improvement and leaves evidence a customer can act on. It
-does not yet make the credential unobtainable, and this paper does not claim it
-does.
-
-Three fixes, in dependency order, none built. First, the root filesystem has to
-be covered by measured state, which is the same blocker as the application
-integrity gap above and is not merely a matter of enabling dm-verity: a root hash
-is only as trustworthy as the thing carrying it, and on our cloud the kernel
-command line that would carry it is not measured on **AMD SEV-SNP**. It needs an
-anchor that is, and as of 2026-10-05 we know where one is, without changing cloud:
-**Intel TDX on the same provider measures the guest boot chain** into runtime
-measurement registers carried inside the hardware-signed quote. The experiment
-that found this gap on AMD was repeated on TDX, where the identical command-line
-change moved two registers rather than none (section 7). Because the command line
-is measured there, a dm-verity root hash placed on it is anchored, and the
-standard fix becomes viable. The cost is reimplementing `sentinel/sevsnp/` against
-Intel's quote format and PCK chain, which is a module, not a migration. Second, a pinned broker
-certificate inside that measured image, so TLS stops being validated against a
-trust store the operator owns. Third, encryption of the released credential to an
-ephemeral key carried in the attestation report.
-
-The third is the one usually quoted as the fix, and on its own it is close to
-decoration: whoever can edit the code can read what it decrypts. The ordering is
-the point, and the first item is the expensive one.
+**AMD SEV-SNP.** The gap described in v1.0 stands on AMD: the launch
+measurement covers the firmware and nothing above it, so an operator with root
+can change the code without changing the measurement. That is why the subnet
+requires TDX. The AMD verifier is kept and tested.
 
 ## 10. Limiting what a caller can read
 
@@ -332,115 +310,93 @@ Attestation decides which code runs. The allowlist decides who may call.
 Read-only decides whether they may write. None of those limit the scope of a
 read.
 
-Scopes do. Each is its own restricted credential, unlocked by its own
-attestation, exposed as its own tool `<scope>.query`. An API key can be limited
-to a subset, and a caller's tool list is filtered to exactly what it may reach.
-`docs/scoping.sql` is a worked example of the views and roles a DBA creates.
+Scopes do. Each is its own credential, released by its own attestation and
+exposed as its own tool. A database scope is a restricted role, exposed as
+`<scope>.query`; `docs/scoping.sql` is a worked example of the views and roles a
+DBA creates. An API scope is a key plus the methods and paths it may be used
+for, exposed as `<scope>.request`; anything off the list is refused before the
+key is used, and the key never appears in a response.
 
 This is also the answer to "how does the system know which data is sensitive". It
 does not, and it does not need to: data out of scope is unreachable rather than
 merely unrequested.
 
 Callers who are not on Bittensor authenticate with an API key rather than a
-hotkey signature, since an enterprise customer has no hotkey. Only digests are
-stored, comparison is constant time, and a rejected key never falls through to
-the signature path. A bearer token carries no replay protection, unlike a signed
-request; that is a real difference and an operator should choose it knowingly.
+hotkey signature. Only digests are stored, comparison is constant time, and a
+rejected key never falls through to the signature path. A bearer token carries
+no replay protection, unlike a signed request; an operator should choose it
+knowingly.
 
 ## 11. Payment, as designed and not as built
 
-> **None of this section is implemented.** There is no payment code in the
-> repository. It is included because a subnet that intends to earn external
-> revenue rather than farm emissions owes a reader the mechanism it means to
-> use, and because the design predates and survives the implementation gap.
+> **None of this section is implemented.** It is included because a subnet that
+> intends to earn external revenue rather than farm emissions owes a reader the
+> mechanism it means to use.
 
-The intent is per-query settlement in USDC over **x402**, so that reaching a
-tool costs a few cents at the moment of use rather than a contract and an
-onboarding cycle. The analogy that fits is a metro card rather than a gym
-membership: tap per turnstile, no account beyond a wallet.
-
-A gateway sits between the agent and the enclave and handles settlement, so the
-miner is never in the payment path:
+The intent is per-query settlement over **x402**, so that reaching a tool costs
+a few cents at the moment of use rather than a contract and an onboarding cycle.
+A gateway sits between the agent and the trust domain and handles settlement, so
+the miner is never in the payment path:
 
 ```
-agent                 gateway                enclave              customer db
+agent                 gateway                trust domain         customer system
   │  POST tool call      │                      │                      │
   │ ───────────────────► │                      │                      │
   │  402 Payment Required│                      │                      │
   │ ◄─────────────────── │                      │                      │
-  │  retry + PAYMENT-SIG │                      │                      │
+  │  retry + payment     │                      │                      │
   │ ───────────────────► │ verify + settle      │                      │
-  │                      │ ──────────────────►  │  execute in enclave   │
+  │                      │ ──────────────────►  │  execute              │
   │                      │                      │ ───────────────────► │
   │                      │                      │ ◄─────────────────── │
-  │                      │                      │  sign + attest        │
-  │  200 + result + attestation                 │                      │
+  │                      │                      │  quote + answer       │
+  │  200 + result + proof                       │                      │
   │ ◄─────────────────────────────────────────  │                      │
 ```
 
-Settlement is budgeted at roughly 60ms inside a round trip of about 420ms with a
-cached attestation, or about 800ms with a fresh attestation per request. That
-makes settlement the most expensive single segment; everything else is
-single-digit milliseconds of work plus network hops.
-
-Three properties the design depends on. The agent signs but does not pay gas,
-because a facilitator covers it. Fees are sub-cent on the chains considered.
-And there is no account to create, since any wallet holding USDC can transact,
-which is what makes machine-to-machine purchase plausible at all.
-
-**Miner collateral** belongs to the same unbuilt layer: TAO posted on-chain and
-slashed when a miner is caught. Today the only penalty for dishonesty is scoring
-zero, which costs a miner that round's emissions and nothing else.
-
-**One claim from the original design is now known to be wrong**, and it is worth
-correcting rather than quietly dropping. It held that a miner tampering with its
-container image would change the launch measurement and be slashed. It would
-not. The measurement covers what booted, so tampering *after* boot leaves it
-unchanged, which is the limitation in section 9. A slashing design that assumes
-the measurement catches a modified application is assuming something false.
+**Miner collateral** belongs to the same unbuilt layer: stake posted on chain
+and slashed when a miner is caught. On TDX this design is sound in a way it was
+not on AMD, where a tampered application left the measurement unchanged and so
+could not have been slashed for.
 
 **Why none of it is built yet.** A payment rail meters demand, and there is no
-demand to meter: no paying agents, and no independent miners to pay. Collateral
-has the same problem from the other side, since testnet alpha is worth nothing
-and there is no mainnet registration, so a slashed miner loses nothing it minds
-losing. Both become real work the moment either side of that market exists, and
-neither teaches anything before then.
-
-Note also that the self-hosted deployment in the next section needs none of it.
-A customer running Sentinel over their own database pays under a contract, not
-per query.
+demand to meter yet. The self-hosted deployment in the next section needs none
+of it: a customer running Sentinel over their own systems pays under a
+contract.
 
 ## 12. Two deployment shapes
 
-The same software serves two situations with different trust properties, and
-conflating them causes most of the confusion about what Sentinel is.
+**Pilot, for one customer.** One script boots an approved release on TDX
+against a key server the customer runs on their own machine. Their agent calls
+the miner with an API key; the customer checks the miner with `check_miner.py`
+before trusting it. Only the customer's ranges reach the port. Rehearsed end to
+end against a real Postgres database (`docs/pilot-install.md`).
 
-**Self-hosted.** A customer runs the broker and the enclave over their own
-database. The operator is the customer's own infrastructure team, so section 9's
-first limitation does not apply to them: the threat they are buying protection
-against is the cloud provider reading their memory, and that is covered.
-
-**Subnet.** Independent operators run enclaves and validators challenge them.
-This is where the open problems live, and also where the argument for
-decentralisation is real: if one company operated every enclave, the customer
-would be trusting that company, which is what the product exists to remove.
+**Subnet.** Independent operators run trust domains and validators challenge
+them. This is where decentralisation earns its place: if one company operated
+every machine, the customer would be trusting that company, which is what the
+product exists to remove.
 
 The decentralised case pays when the data owner and the agent owner are different
 parties who do not trust each other. Where they are the same party, a single
-enclave is sufficient and simpler.
+trust domain is sufficient and simpler.
 
-## 13. Reproducing every claim
+## 13. Reproducing the claims
 
 ```bash
 git clone https://github.com/Ayoshiss/sentinel-subnet
-python -m pytest -q                       # 247 passing
-python -m pytest tests/test_sevsnp.py -q  # real report, AMD chain, offline
-python scripts/benchmark.py --rounds 100  # the table in section 6
+cd sentinel-subnet
+python -m pytest -q                                   # 483 passing
+python -m pytest tests/test_tdx_verifier.py tests/test_verify_page.py -q
+python scripts/benchmark.py --rounds 100              # the table in section 6
 btcli subnets metagraph 554 --network test
 ```
 
-A captured attestation report and AMD's real certificate chain are committed as
-fixtures, so the hardware verification re-runs without hardware.
+Captured TDX quotes, boot logs and Intel's signed documents are committed as
+fixtures, so the hardware verification re-runs without hardware. To check a
+real answer in a browser, open **sentinelsubnet.com/verify** and load the
+sample. To check a release, build it (`image/release.sh build` on its commit)
+and compare the measurement with `measurements.json`.
 
-The approved launch measurement, the firmware floor and the registry are in
-`TESTNET.md` and `measurements.json`. Known limitations are in `SECURITY.md`.
+The approved list is `measurements.json`, its on-chain hash is published by the
+subnet owner, and known threats are in `docs/threat-register.md`.
