@@ -2,7 +2,7 @@
 
 **The trust layer for the AI agent economy.**
 
-Sentinel is a Bittensor subnet where AI agents reach real systems through **hardware-attested confidential compute**, starting with read-only PostgreSQL. Miners run [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers inside AMD SEV-SNP confidential VMs. A credential is released only to a VM that attests on a genuine chip, and every response is bound to a fresh report signed by the chip itself, checkable against AMD's root without contacting AMD or us. Validators re-attest every miner continuously under Yuma Consensus. What that attestation covers today, and what it does not, is stated below.
+Sentinel is a Bittensor subnet where AI agents reach real systems through **hardware-attested confidential compute**: read-only PostgreSQL, and HTTPS APIs called with a key the operator never sees. Miners run [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers inside Intel TDX trust domains, booted from a signed, reproducible image. A credential is released only to an image the processor proves is on the published list, and every answer is bound to a fresh quote signed by the processor, checkable against Intel's root without trusting us. Validators re-attest every miner continuously under Yuma Consensus. What that covers today, and what it does not, is stated below.
 
 > Trust the silicon, not the vendor.
 
@@ -10,58 +10,48 @@ Sentinel is a Bittensor subnet where AI agents reach real systems through **hard
 
 ## Status
 
-**Live on Bittensor testnet as netuid 554, with attestation verified on real AMD
-silicon.** The protocol, attestation, credential release, attested tool execution,
-independent verification, runs today under 426 tests, CI green on every push.
+**Live on Bittensor testnet as netuid 554. Every miner runs a signed, measured
+image on Intel TDX, and the validator checks which image booted, not just which
+chip.** 483 tests, CI green on every push.
 
 Three things you can check without asking us for anything:
 
 ```bash
 btcli subnets metagraph 554 --network test   # the subnet exists (bittensor >= 11)
 python scripts/benchmark.py --rounds 100     # designed attacks zeroed, 0 false rejections
-python -m pytest tests/test_sevsnp.py -q     # a real AMD-signed report, verified offline
+python -m pytest tests/test_tdx_verifier.py tests/test_verify_page.py -q   # real TDX quotes, verified offline
 ```
 
 | Area | State |
 |---|---|
-| Attestation core | **Working** (`sentinel/attestation.py`), Ed25519, publicly verifiable |
-| Key Broker (credential release) | **Working** (`sentinel/kbs.py`), every refusal path tested |
-| Broker on a separate machine | **Working, including on real silicon.** Two VMs, EPYC 7B13 enclave attesting to a broker on another host which verified the VCEK chain it was handed; transcript and negative control in `docs/split-proof.md`, `bash scripts/demo_split.sh` in CI. TLS and third-party custody still unproven |
-| MCP `postgres.query` tool | **Working** (`sentinel/mcp/`), read-only by default |
-| Attested query, end to end | **Working** (`scripts/demo_mcp.py`), CI on every push |
-| **SEV-SNP hardware** | **Verified on real silicon**, AMD EPYC 7B13, VCEK → ASK → ARK → report signature, offline, against a pinned AMD root |
-| Intel TDX | **Miner, validator and measured image built, run on hardware 2026-11-06, not deployed.** `sentinel/tdx/`: Intel's signature and TCB status via dcap-qvl, approved TD firmware, the firmware event log replayed to the signed registers, Secure Boot under our key, only the approved image loaded, quote bound to the rows. A real TDX miner scored 1.0; checked offline in CI. `image/` builds a reproducible image with a dm-verity root on the measured command line; two independent builds matched, and tampered code was refused by the kernel. Test keys only |
+| Intel TDX attestation | **Live on every miner since 2026-11-09** (`sentinel/tdx/`). Intel's signature and TCB status via dcap-qvl, debug off, approved TD firmware, the boot log replayed to the signed registers, Secure Boot under our key, an approved release booted, the quote bound to the answer |
+| Measured image | **Released** (`image/`). Kernel, initrd and command line in one signed boot file; read-only root under dm-verity, its hash on the measured command line. Reproducible: two builds of the same commit give the same measurement. A disk with changed code was refused by the kernel |
+| Signed releases | **Five so far**, v1 to v5, each built from a commit and signed with our Secure Boot key. The approved list is `measurements.json`; its hash is published on chain and a change takes effect 720 blocks later |
+| Credential release | **Sealed to the enclave.** The key server encrypts the credential to a key that exists only inside the attested image, and signs every release; each answer names the key server (`sentinel/sealing.py`). An operator relaying the traffic saw the credential zero times |
+| TLS | **Ends inside the enclave** (`sentinel/tls.py`). The image makes its TLS key in memory, the customer's key server certifies only that key, and since v5 the processor signs the key's name in every answer |
+| MCP tools | `postgres.query`, read-only by default, one tool per scoped credential; `<scope>.request` for HTTPS APIs, limited to the methods and paths the customer lists |
+| Browser verifier | **Built, not yet published** (`web/verify/`). A reviewer pastes an answer and runs the same checks in their own browser |
 | Miner / validator neurons | **Working**, bittensor v11, weights land via timelock commit |
-| Testnet | **Live**, netuid 554 since 2026-08-29 |
+| Consensus catching a tampered miner | **Demonstrated 2026-10-04**, and now a second line: on TDX, changed code fails attestation itself |
+| AMD SEV-SNP | **No longer accepted for mining.** On GCP its measurement covers the firmware and nothing above it (`docs/results.md`). The verifier (`sentinel/sevsnp/`) is kept and tested |
 | Payments, slashing | **Not built.** No Sentinel query is paid for, and no miner posts collateral |
-| What the measurement covers | **Measured, not assumed.** AMD SEV-SNP on GCP covers firmware only; the same change moves two Intel TDX registers on the same cloud. `scripts/probe_measurement_scope.sh`, results in `docs/results.md` |
-| Consensus catching a tampered miner | **Demonstrated on hardware 2026-10-04.** Three miner processes on one VM, all operated by us; one with edited code passed attestation (`attest=1.00`) and was zeroed by consensus (`correct=0.00`). Three processes we run are not three independent operators. See `docs/results.md` |
-| Published results | `docs/results.md`: 100 rounds, 1,000 challenges, simulated silicon. Every designed-detectable attack zeroed. The exfiltrator, which answers correctly while copying data, scores 1.0: no scoring rule can see it |
-| Gateway stack | **Live, but separate** (`gateway/`, `sidecar/`), inherited from TAO Gateway, routes paid inference to SN64. Its x402 support covers the gateway's own scan endpoint and is not wired to Sentinel queries |
-| Architecture, threat register, Yuma mechanics, whitepaper | Complete (`docs/`) |
+| Gateway stack | **Live, but separate** (`gateway/`, `sidecar/`), inherited from TAO Gateway. Not wired to Sentinel queries |
+| Results, threat register, whitepaper | `docs/results.md` (every hardware run, method and numbers), `docs/threat-register.md` (25 threats) |
 
-Run `python scripts/demo_mcp.py` to watch a miner running modified code be refused
-a customer credential.
+**Honest limits.**
 
-**The honest gap.** On the GCP AMD platform the launch measurement covers the
-firmware and nothing above it: kernel, command line and root filesystem are all
-unmeasured, established by experiment in `docs/results.md`. An operator with root
-can change the miner's code and still produce a valid attestation: tested on our own
-live miner, which scored full marks while serving fabricated data. Two consequences
-follow. The guarantee holds against the host and the infrastructure, not against the
-operator. And a credential released to that VM, by our broker or a customer's, is
-reachable by the operator, since the guest trust store is theirs to change
-(threat register T20, T22, T23). That is still true of every live miner on 554,
-which run on AMD. **The fix exists on Intel TDX and has been run once on
-hardware:** `image/` builds a reproducible miner image whose read-only root is
-covered by the measured boot, and a copy with changed code was refused by the kernel
-and never served. On that image the credential is sealed to the enclave's attested
-key, so an operator's relay between miner and broker saw only ciphertext, and a
-miner pointed at the operator's own broker names it in every answer, which the
-customer refuses (T20, T22). None of it is deployed, and the Secure Boot keys were
-test keys.
-
-**No design partners and no independent miners yet.** Every miner on 554 is ours.
+- **We hold the signing key.** The approved list means "images we signed".
+  The builds are reproducible, so anyone can rebuild a release and compare the
+  measurement, but no one outside has done that yet.
+- **Every miner on 554 is ours.** Consensus between three machines we run is
+  not consensus between independent operators.
+- **On the subnet, the miner holds the test credential itself.** Custody comes
+  from a key server run by the customer (`docs/pilot-install.md`).
+- **AMD SEV-SNP still has the measurement gap,** which is why Sentinel
+  requires TDX.
+- **Hosted agent platforms that trust only public certificate authorities**
+  cannot connect to a miner yet.
+- **No external security review, no design partners yet.**
 
 ---
 
@@ -103,7 +93,7 @@ Confidential computing for agents is a validated, emerging field. What does not 
 
 ## Architecture at a glance
 
-Five layers, with the customer at the top and AMD silicon at the bottom as the only trusted parties. Everything between (gateway, network, cloud host) is deliberately untrusted and constrained by cryptography. The miner operator is the exception today: see the honest gap above, since the measurement does not yet cover the application they run.
+Five layers, with the customer at the top and Intel silicon at the bottom as the only trusted parties. Everything between (gateway, network, cloud host, miner operator) is deliberately untrusted and constrained by cryptography. The image itself is trusted because its measurement is checked, and today that means trusting our signing key (see the limits above).
 
 ```
 Customer AI Agent            (trusted)
@@ -114,14 +104,14 @@ Bittensor Subnet             (untrusted, decentralised)
       │
 Miner Host + Hypervisor      (untrusted)
    ┌──────────────────────┐
-   │  SEV-SNP Enclave      │ (trusted)
+   │  TDX trust domain     │ (trusted: measured)
    │   MCP server          │
    │   Credential store    │
    │   Attestation agent   │
-   │   Ephemeral TEE keys  │
+   │   TLS + sealing keys  │
    └──────────────────────┘
       │
-AMD EPYC Hardware            (trusted: root of trust)
+Intel Xeon (TDX) Hardware    (trusted: root of trust)
 ```
 
 Full component inventory, request/payment/attestation flows, failure modes, and deployment topology are in [`docs/architecture.md`](docs/architecture.md).
@@ -147,14 +137,20 @@ sentinel/
 │   └── tools/postgres.py     # postgres.query, read-only by default
 ├── serving/                  # miner HTTP layer, hotkey auth, replay protection
 ├── validating/               # challenge → verify → score → submit weights
-└── sevsnp/                   # real AMD attestation
+├── sealing.py                # credentials sealed to the enclave's attested key
+├── tls.py                    # TLS key made in the enclave, bound into attestation
+├── registry.py               # the approved-image list, its on-chain hash
+├── tdx/                      # Intel TDX: quote verification, boot log replay, guest
+└── sevsnp/                   # AMD attestation (verifier kept; no longer accepted for mining)
     ├── report.py             # binary report parsing
     ├── certs.py              # AMD chain, root public key pinned
     ├── certtable.py          # host certificates from the extended report
     ├── verifier.py           # the five checks a report must pass
     └── guest.py              # /dev/sev-guest ioctls, standard and extended
 tests/                        # weighted toward the refusal paths
-└── fixtures/                 # a genuine AMD-signed report and AMD's real chain
+└── fixtures/                 # genuine AMD and Intel TDX evidence
+image/                        # the measured miner image: build, sign, release
+web/verify/                   # the browser verifier
 scripts/
 ├── demo.py                   # attestation, verification, tamper detection
 ├── demo_mcp.py               # credential release → attested query → refusals
@@ -167,7 +163,7 @@ scripts/
 ├── publish_axon.py           # ServeAxon, run where the hotkey lives, not on the VM
 ├── set_subnet_identity.py    # full on-chain identity, fields btcli cannot reach
 └── launch_testnet.py         # subnet creation and registration
-deploy/                       # GCP provisioning, startup script, systemd unit
+deploy/                       # pilot script, key server and validator units
 ```
 
 **Inherited gateway stack, carried forward from TAO Gateway**
@@ -184,7 +180,9 @@ Dockerfile.fly · docker-compose.yml · fly.toml · supervisord.conf
 docs/
 ├── architecture.md           # full engineering spec
 ├── whitepaper.md             # what the system is, and what is not built
-├── threat-register.md        # 24 threats, scored impact × likelihood
+├── threat-register.md        # 25 threats, scored impact × likelihood
+├── results.md                # every hardware run, method and numbers
+├── mining.md · validating.md · pilot-install.md · key-custody.md
 ├── bittensor-mechanics.md    # Yuma, commit-reveal, emissions, Taoflow
 └── development.md            # setup, tests, demos, how the pieces fit
 ROADMAP.md                    # milestone plan and what is still open
@@ -194,7 +192,7 @@ ROADMAP.md                    # milestone plan and what is still open
 
 ## Incentive mechanism
 
-Validators challenge every miner with a fresh nonce every 360 blocks (~72 min) and score on five axes:
+Validators challenge every miner with a fresh nonce about every 22 minutes and score on five axes:
 
 | Axis | Weight | Behaviour |
 |---|---|---|
@@ -214,7 +212,7 @@ itself, so it only gates when there are enough participants for a vote to mean
 something. Full numbers and the before/after are in
 [`docs/results.md`](docs/results.md).
 
-Weights are aggregated by Yuma Consensus with stake-weighted median clipping. Commit-reveal (v3) prevents weight-copying. Only attestation-verified miners are discoverable, so every miner must run on a genuine confidential VM. That does not prove miners belong to different people: one operator can run several. Failing attestation zeroes a miner's weight; there is no slashing. See [`docs/bittensor-mechanics.md`](docs/bittensor-mechanics.md).
+Weights are aggregated by Yuma Consensus with stake-weighted median clipping. Commit-reveal (v3) prevents weight-copying. Only attestation-verified miners earn, so every miner must boot an approved release on genuine Intel TDX. That does not prove miners belong to different people: one operator can run several. Failing attestation zeroes a miner's weight; there is no slashing. See [`docs/bittensor-mechanics.md`](docs/bittensor-mechanics.md).
 
 ---
 
@@ -224,9 +222,9 @@ Ordered by what blocks what. Nothing below is promised by a date.
 
 | Step | What | Unblocks |
 |---|---|---|
-| 1 | Measured application on Intel TDX: kernel, command line and read-only root filesystem in the signed measurement, image built reproducibly from this repository. **Built and run on hardware 2026-11-06 (`image/`); production keys, registry entries and deployment remain** | Closes T23; makes a signed response proof that the approved code produced it |
-| 2 | Credential release bound to an attested key, broker identity attested in every answer. **Built and run on hardware 2026-11-07** | Closes T20 and T22 on TDX |
-| 3 | Miners run by independent operators | Correctness by vote means something |
+| 1 | Measured application on Intel TDX. **Done:** released, on every miner since 2026-11-09 | Closed T23 on TDX |
+| 2 | Credential sealed to the enclave, key server named in every answer, TLS ending inside the enclave. **Done:** v1 to v5 | Closed T20, T22 and T25 on TDX |
+| 3 | Miners run by independent operators. **Next:** guide in `docs/mining.md` | Correctness by vote means something |
 | 4 | External security review | Real credentials on third-party hardware |
 | 5 | Payments | Only once someone is using it |
 
